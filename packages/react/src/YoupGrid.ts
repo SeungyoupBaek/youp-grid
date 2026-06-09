@@ -2207,10 +2207,14 @@ function handleCellKeyDown<TRow>(context: {
     return;
   }
 
-  if (isPrintableKey(context.event)) {
+  if (isTextEditingKey(context.event)) {
     if (context.cell.editable && context.cell.column.editor !== "checkbox") {
-      context.event.preventDefault();
-      context.startEditing(createEditingCell(context.cell, context.event.key));
+      if (canUseKeyAsInitialDraft(context.event)) {
+        context.event.preventDefault();
+        context.startEditing(createEditingCell(context.cell, context.event.key));
+      } else {
+        context.startEditing(createEditingCell(context.cell, ""));
+      }
     }
     return;
   }
@@ -2899,10 +2903,36 @@ function getCellTitle(
   return undefined;
 }
 
-function isPrintableKey(
+function isTextEditingKey(
   event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
 ): boolean {
-  return event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
+  if (event.metaKey || event.ctrlKey || event.altKey) {
+    return false;
+  }
+
+  return event.key.length === 1 || isCompositionEditingKey(event);
+}
+
+function canUseKeyAsInitialDraft(
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+): boolean {
+  return event.key.length === 1 && isAsciiPrintableKey(event.key) && !isCompositionEditingKey(event);
+}
+
+function isCompositionEditingKey(
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+): boolean {
+  return (
+    event.nativeEvent.isComposing ||
+    event.key === "Process" ||
+    event.key === "Dead" ||
+    event.key === "Unidentified" ||
+    event.keyCode === 229
+  );
+}
+
+function isAsciiPrintableKey(key: string): boolean {
+  return key >= " " && key <= "~";
 }
 
 function isUndoShortcut(
