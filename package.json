@@ -1,0 +1,30 @@
+{
+  "name": "youp-grid",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
+  },
+  "homepage": "https://github.com/SeungyoupBaek/youp-grid#readme",
+  "scripts": {
+    "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react",
+    "clean": "rm -rf packages/core/dist packages/react/dist",
+    "pack:dry-run": "npm pack --workspaces --dry-run",
+    "publish:dry-run": "npm publish -w @youp-grid/core --access public --dry-run && npm publish -w @youp-grid/react --access public --dry-run",
+    "test": "npm run test:core",
+    "test:core": "node --test packages/core/test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "react": "^18.2.0",
+    "typescript": "^6.0.3"
+  }
+}

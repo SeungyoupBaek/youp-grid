@@ -1,0 +1,29 @@
+{
+  "name": "@youp-grid/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic data grid core for Youp Grid.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

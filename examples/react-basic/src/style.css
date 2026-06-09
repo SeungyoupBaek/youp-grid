@@ -1,0 +1,48 @@
+.demo-shell {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 32px;
+}
+
+.demo-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.demo-toolbar h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.demo-row-event {
+  min-width: 120px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.demo-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.demo-actions button {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 4px;
+  color: #172033;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+}
+
+.demo-actions button[aria-pressed="true"] {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
