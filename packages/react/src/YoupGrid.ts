@@ -16,6 +16,8 @@ import {
   serializeGridRange,
   undoValueHistory,
   type AggregationResult,
+  type ColumnEditorOption,
+  type ColumnEditorOptionValue,
   type ColumnPin,
   type CursorPaginationState,
   type GridCellRange,
@@ -42,8 +44,11 @@ import type {
 } from "react";
 
 import type {
+  YoupGridCellEditCommitReason,
   YoupGridCellContext,
+  YoupGridCellMeta,
   YoupGridCellValueChangeSource,
+  YoupGridCellsValueChangeSource,
   YoupGridDensity,
   YoupGridHeaderContext,
   YoupGridProps,
@@ -71,6 +76,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const viewportHeight = normalizeHeight(props.height) ?? 420;
   const loading = props.loading ?? controller.state.remoteRequest?.status === "loading";
   const infiniteScrollLoading = props.infiniteScrollLoading ?? loading;
+  const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
   const skipNextBlurCommitRef = useRef(false);
@@ -84,6 +90,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
+  const gridEditable = (props.editable ?? true) && !props.readOnly;
   const displayRows = rowModel.displayRows;
   const virtualRange = useMemo(() => {
     return getVirtualRange({
@@ -170,6 +177,61 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return row ? { row, displayIndex: item.index } : undefined;
     })
     .filter((item): item is { row: RowDisplayNode<TRow>; displayIndex: number } => Boolean(item));
+  const getCellEditContext = (
+    row: RowNode<TRow>,
+    rowIndex: number,
+    column: ResolvedColumnDef<TRow>,
+  ) => {
+    return {
+      row: row.original,
+      rowNode: row,
+      rowId: row.id,
+      rowIndex,
+      column,
+      columnId: column.id,
+      value: column.accessor(row.original),
+    };
+  };
+  const canEditGridCell = (
+    row: RowNode<TRow>,
+    rowIndex: number,
+    column: ResolvedColumnDef<TRow>,
+  ) => {
+    if (!gridEditable || column.editable === false) {
+      return false;
+    }
+
+    return props.canEditCell?.(getCellEditContext(row, rowIndex, column)) ?? true;
+  };
+  const getGridCellMeta = (
+    row: RowNode<TRow>,
+    rowIndex: number,
+    column: ResolvedColumnDef<TRow>,
+  ) => {
+    return (
+      props.getCellMeta?.(getCellEditContext(row, rowIndex, column)) ??
+      props.cellMeta?.[`${row.id}:${column.id}`]
+    );
+  };
+  const createGridCellValueChange = (cell: CellRenderState<TRow>, value: unknown) => {
+    if (!cell.editable) {
+      return undefined;
+    }
+
+    if (Object.is(value, cell.value)) {
+      return undefined;
+    }
+
+    return {
+      row: cell.row.original,
+      rowId: cell.row.id,
+      rowIndex: cell.rowIndex,
+      column: cell.column,
+      columnId: cell.column.id,
+      value,
+      previousValue: cell.value,
+    };
+  };
 
   useEffect(() => {
     if (focusedRowIndex >= rowModel.visibleRows.length) {
@@ -232,7 +294,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return;
     }
 
-    if (source === "edit" || source === "paste" || source === "fill") {
+    if (source === "edit" || source === "paste" || source === "fill" || source === "delete") {
       valueHistoryRef.current = pushValueHistoryEntry(
         valueHistoryRef.current,
         {
@@ -248,12 +310,30 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       );
     }
 
-    for (const change of changes) {
-      props.onCellValueChange?.({
-        ...change,
-        source,
+    const emittedChanges = changes.map((change) => ({
+      ...change,
+      source,
+    }));
+
+    for (const change of emittedChanges) {
+      props.onCellValueChange?.(change);
+    }
+
+    if (source === "paste" || source === "fill") {
+      props.onCellsValueChange?.({
+        changes: emittedChanges,
+        source: source as YoupGridCellsValueChangeSource,
       });
     }
+  };
+  const applyCellValue = (cell: CellRenderState<TRow>, value: unknown) => {
+    const change = createGridCellValueChange(cell, value);
+
+    if (!change) {
+      return;
+    }
+
+    applyCellValueChanges([change], "edit");
   };
   const applyValueHistoryEntry = (
     entry: GridValueHistoryEntry,
@@ -264,6 +344,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         entry,
         rowModel,
         source,
+        canEditCell: canEditGridCell,
       }),
       source,
     );
@@ -292,21 +373,36 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     return true;
   };
-  const commitEditingValue = (cell: EditingCell, source: "keyboard" | "blur" = "keyboard") => {
-    if (source === "blur" && skipNextBlurCommitRef.current) {
+  const commitEditingValue = (
+    cell: EditingCell,
+    reason: YoupGridCellEditCommitReason = "enter",
+  ) => {
+    if (reason === "blur" && skipNextBlurCommitRef.current) {
       skipNextBlurCommitRef.current = false;
       return;
     }
 
-    if (source === "keyboard") {
+    if (reason !== "blur") {
       skipNextBlurCommitRef.current = true;
     }
 
-    commitEditingCell({
+    const change = commitEditingCell({
       cell,
       rowModel,
-      applyCellValueChanges,
+      canEditCell: canEditGridCell,
     });
+
+    if (change) {
+      if (!Object.is(change.value, change.previousValue)) {
+        applyCellValueChanges([change], "edit");
+      }
+
+      props.onCellEditCommit?.({
+        ...change,
+        reason,
+      });
+    }
+
     setEditingCell(undefined);
   };
   const setFocusedCell = (cell: FocusedCell, extendSelection = false, selectionAnchor?: FocusedCell) => {
@@ -342,7 +438,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   return createElement(
     "div",
     {
-      className: ["youp-grid", `youp-grid--density-${density}`, props.className].filter(Boolean).join(" "),
+      className: [
+        "youp-grid",
+        `youp-grid--density-${density}`,
+        !gridEditable ? "youp-grid--read-only" : "",
+        props.className,
+      ].filter(Boolean).join(" "),
       style: gridStyle,
     },
     renderColumnToolbar({
@@ -367,6 +468,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         });
       },
     }),
+    renderDisabledReason({
+      enabled: !gridEditable,
+      reason: props.disabledReason,
+    }),
     createElement(
       "div",
       {
@@ -375,6 +480,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         "aria-rowcount": displayRows.length,
         "aria-colcount": rowModel.visibleColumns.length + (showRowSelectionColumn ? 1 : 0),
         "aria-busy": loading || undefined,
+        "aria-readonly": !gridEditable || undefined,
         onCopy: (event: ReactClipboardEvent<HTMLDivElement>) => {
           if (editingCell) {
             return;
@@ -389,7 +495,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           });
         },
         onPaste: (event: ReactClipboardEvent<HTMLDivElement>) => {
-          if (editingCell) {
+          if (editingCell || !gridEditable) {
             return;
           }
 
@@ -399,13 +505,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             selectionRange,
             rows: rowModel.visibleRows,
             columns: visibleColumns,
+            canEditCell: canEditGridCell,
             applyCellValueChanges,
           });
         },
       },
       createElement(
         "div",
-        { className: "youp-grid__header", role: "rowgroup" },
+        { className: "youp-grid__header", role: "rowgroup", ref: headerRef },
         hasHeaderGroups
           ? createElement(
               "div",
@@ -467,6 +574,13 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           ref: bodyRef,
           style: { height: viewportHeight },
           onScroll: (event: ReactUIEvent<HTMLDivElement>) => {
+            if (headerRef.current) {
+              headerRef.current.style.setProperty(
+                "--youp-grid-header-scroll-left",
+                `${event.currentTarget.scrollLeft}px`,
+              );
+            }
+
             setScrollTop(event.currentTarget.scrollTop);
           },
         },
@@ -514,10 +628,17 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   selectionRange,
                   fillRange,
                   editingCell,
-                  editable: props.editable ?? true,
+                  editable: gridEditable,
+                  disabledReason: props.disabledReason,
+                  canEditCell: canEditGridCell,
+                  getCellMeta: getGridCellMeta,
                   setRowSelected: (selected) => controller.setRowSelected(row.id, selected),
                   setFocusedCell,
                   startFillHandle: (event) => {
+                    if (!gridEditable) {
+                      return;
+                    }
+
                     const sourceRange = normalizeCellRange(selectionRange ?? {
                       anchor: focusedCell,
                       focus: focusedCell,
@@ -535,6 +656,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                           targetRange,
                           rows: rowModel.visibleRows,
                           columns: visibleColumns,
+                          canEditCell: canEditGridCell,
                           applyCellValueChanges,
                         });
 
@@ -545,6 +667,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                       },
                     });
                   },
+                  applyCellValue,
                   startEditing: startEditingCell,
                   updateEditingDraft: (draftValue) => {
                     setEditingCell((current) => current ? { ...current, draftValue } : current);
@@ -567,6 +690,17 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                       startEditing: startEditingCell,
                       commitEditing: commitEditingValue,
                       cancelEditing: cancelEditingCell,
+                      applyCellValue,
+                      deleteCellValues: () => {
+                        deleteGridCellValues({
+                          focusedCell,
+                          selectionRange,
+                          rows: rowModel.visibleRows,
+                          columns: visibleColumns,
+                          canEditCell: canEditGridCell,
+                          applyCellValueChanges,
+                        });
+                      },
                       undoCellValueChange,
                       redoCellValueChange,
                       toggleSelected: () => controller.toggleRowSelected(row.id),
@@ -629,6 +763,21 @@ function renderGridOverlay(context: {
   }
 
   return undefined;
+}
+
+function renderDisabledReason(context: {
+  enabled: boolean;
+  reason?: ReactNode;
+}) {
+  if (!context.enabled || context.reason == null) {
+    return undefined;
+  }
+
+  return createElement(
+    "div",
+    { className: "youp-grid__disabled-reason", role: "status" },
+    context.reason,
+  );
 }
 
 function renderAggregationFooter<TRow>(context: {
@@ -1050,16 +1199,27 @@ function renderRow<TRow>(context: {
   fillRange?: NormalizedGridCellRange;
   editingCell?: EditingCell;
   editable: boolean;
+  disabledReason?: ReactNode;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
+  getCellMeta: (
+    row: RowNode<TRow>,
+    rowIndex: number,
+    column: ResolvedColumnDef<TRow>,
+  ) => YoupGridCellMeta | undefined;
   setRowSelected: (selected: boolean) => void;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
+  applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
   updateEditingDraft: (draftValue: string) => void;
   cancelEditing: () => void;
-  commitEditing: (cell: EditingCell, source?: "keyboard" | "blur") => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
-  onCellKeyDown: (event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>, cell: CellRenderState<TRow>) => void;
+  onCellKeyDown: (
+    event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
 }) {
   return createElement(
@@ -1108,8 +1268,11 @@ function renderRow<TRow>(context: {
       const fillTargeted = context.fillRange
         ? isCellInNormalizedRange(context.rowIndex, columnIndex, context.fillRange)
         : false;
+      const editable = context.canEditCell(context.row, context.rowIndex, layout.column);
+      const meta = context.getCellMeta(context.row, context.rowIndex, layout.column);
       const showFillHandle =
         !context.editingCell &&
+        editable &&
         context.rowIndex === activeRange.endRowIndex &&
         columnIndex === activeRange.endColumnIndex;
 
@@ -1125,9 +1288,12 @@ function renderRow<TRow>(context: {
         showFillHandle,
         editing,
         editingCell: context.editingCell,
-        editable: context.editable,
+        editable,
+        disabledReason: context.disabledReason,
+        meta,
         setFocusedCell: context.setFocusedCell,
         startFillHandle: context.startFillHandle,
+        applyCellValue: context.applyCellValue,
         startEditing: context.startEditing,
         updateEditingDraft: context.updateEditingDraft,
         cancelEditing: context.cancelEditing,
@@ -1206,24 +1372,32 @@ function renderCell<TRow>(context: {
   editing: boolean;
   editingCell?: EditingCell;
   editable: boolean;
+  disabledReason?: ReactNode;
+  meta?: YoupGridCellMeta;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
+  applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
   updateEditingDraft: (draftValue: string) => void;
   cancelEditing: () => void;
-  commitEditing: (cell: EditingCell, source?: "keyboard" | "blur") => void;
-  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>, cell: CellRenderState<TRow>) => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
+  onKeyDown: (
+    event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
 }) {
   const column = context.layout.column;
   const value = column.accessor(context.row.original);
-  const editable = context.editable && column.editable !== false;
+  const editable = context.editable;
   const cellContext = {
     row: context.row,
     column,
     value,
     editing: context.editing,
     focused: context.focused,
+    editable,
+    meta: context.meta,
   };
   const cellState = {
     row: context.row,
@@ -1232,10 +1406,16 @@ function renderCell<TRow>(context: {
     columnIndex: context.columnIndex,
     value,
     editable,
+    meta: context.meta,
   };
   const cellContent = context.renderCell
     ? context.renderCell(cellContext)
-    : formatCellValue(column, context.row.original, value);
+    : renderDefaultCellContent({
+        cell: cellState,
+        row: context.row.original,
+        disabledReason: context.disabledReason,
+        applyCellValue: context.applyCellValue,
+      });
 
   return createElement(
     "div",
@@ -1248,12 +1428,16 @@ function renderCell<TRow>(context: {
           context.selected ? "youp-grid__cell--range-selected" : "",
           context.fillTargeted ? "youp-grid__cell--fill-target" : "",
           context.editing ? "youp-grid__cell--editing" : "",
+          !editable ? "youp-grid__cell--disabled" : "",
+          context.meta ? `youp-grid__cell--status-${context.meta.status}` : "",
         ].filter(Boolean).join(" "),
         context.layout,
       ),
       role: "gridcell",
       tabIndex: context.focused && !context.editing ? 0 : -1,
+      title: getCellTitle(context.meta, context.disabledReason, editable),
       "aria-colindex": context.columnIndex + context.ariaColumnOffset + 1,
+      "aria-readonly": !editable || undefined,
       "data-youp-row-index": context.rowIndex,
       "data-youp-column-index": context.columnIndex,
       "data-youp-column-id": column.id,
@@ -1267,31 +1451,25 @@ function renderCell<TRow>(context: {
       },
       onDoubleClick: () => {
         if (editable) {
-          context.startEditing(createEditingCell(cellState, value));
+          if (column.editor === "checkbox") {
+            context.applyCellValue(cellState, !Boolean(value));
+          } else {
+            context.startEditing(createEditingCell(cellState, value));
+          }
         }
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => context.onKeyDown(event, cellState),
     },
     context.editing
-      ? createElement("input", {
-          className: "youp-grid__cell-editor",
-          value: context.editingCell?.draftValue ?? "",
-          autoFocus: true,
-          onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
-            context.updateEditingDraft(event.currentTarget.value);
-          },
-          onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
-            context.commitEditing(
-              createEditingCell(cellState, event.currentTarget.value),
-              "blur",
-            );
-          },
-          onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
-            event.stopPropagation();
-            context.onKeyDown(event, cellState);
-          },
+      ? renderCellEditor({
+          cell: cellState,
+          editingCell: context.editingCell,
+          updateEditingDraft: context.updateEditingDraft,
+          commitEditing: context.commitEditing,
+          onKeyDown: context.onKeyDown,
         })
       : cellContent,
+    renderCellStatus(context.meta),
     !context.editing && context.showFillHandle
       ? createElement("span", {
           className: "youp-grid__fill-handle",
@@ -1301,6 +1479,127 @@ function renderCell<TRow>(context: {
         })
       : undefined,
   );
+}
+
+function renderDefaultCellContent<TRow>(context: {
+  cell: CellRenderState<TRow>;
+  row: TRow;
+  disabledReason?: ReactNode;
+  applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
+}) {
+  if (context.cell.column.editor === "checkbox") {
+    return createElement("input", {
+      className: "youp-grid__cell-checkbox",
+      type: "checkbox",
+      checked: Boolean(context.cell.value),
+      disabled: !context.cell.editable,
+      title: getCellTitle(context.cell.meta, context.disabledReason, context.cell.editable),
+      "aria-label": context.cell.column.headerName,
+      onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+        context.applyCellValue(context.cell, event.currentTarget.checked);
+      },
+      onClick: (event: ReactMouseEvent<HTMLInputElement>) => {
+        event.stopPropagation();
+      },
+      onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+        event.stopPropagation();
+      },
+    });
+  }
+
+  const text = formatCellValue(context.cell.column, context.row, context.cell.value);
+  const placeholder = context.cell.column.placeholder;
+  const hasPlaceholder = text.length === 0 && Boolean(placeholder);
+
+  return createElement(
+    "span",
+    { className: hasPlaceholder ? "youp-grid__cell-placeholder" : undefined },
+    hasPlaceholder ? placeholder : text,
+  );
+}
+
+function renderCellEditor<TRow>(context: {
+  cell: CellRenderState<TRow>;
+  editingCell?: EditingCell;
+  updateEditingDraft: (draftValue: string) => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
+  onKeyDown: (
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
+}) {
+  if (context.cell.column.editor === "select") {
+    const options = normalizeEditorOptions(context.cell.column.options);
+
+    return createElement(
+      "select",
+      {
+        className: "youp-grid__cell-editor youp-grid__cell-editor--select",
+        value: context.editingCell?.draftValue ?? "",
+        autoFocus: true,
+        disabled: !context.cell.editable,
+        onChange: (event: ReactChangeEvent<HTMLSelectElement>) => {
+          context.updateEditingDraft(event.currentTarget.value);
+        },
+        onBlur: (event: ReactFocusEvent<HTMLSelectElement>) => {
+          context.commitEditing(
+            createEditingCell(context.cell, event.currentTarget.value),
+            "blur",
+          );
+        },
+        onKeyDown: (event: ReactKeyboardEvent<HTMLSelectElement>) => {
+          event.stopPropagation();
+          context.onKeyDown(event, context.cell);
+        },
+      },
+      context.cell.column.placeholder
+        ? createElement(
+            "option",
+            { key: "__placeholder", value: "", disabled: true },
+            context.cell.column.placeholder,
+          )
+        : undefined,
+      options.map((option) => createElement(
+        "option",
+        { key: option.inputValue, value: option.inputValue },
+        option.label,
+      )),
+    );
+  }
+
+  return createElement("input", {
+    className: "youp-grid__cell-editor",
+    type: context.cell.column.editor === "number" ? "number" : "text",
+    value: context.editingCell?.draftValue ?? "",
+    placeholder: context.cell.column.placeholder,
+    autoFocus: true,
+    disabled: !context.cell.editable,
+    onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+      context.updateEditingDraft(event.currentTarget.value);
+    },
+    onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+      context.commitEditing(
+        createEditingCell(context.cell, event.currentTarget.value),
+        "blur",
+      );
+    },
+    onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      event.stopPropagation();
+      context.onKeyDown(event, context.cell);
+    },
+  });
+}
+
+function renderCellStatus(meta?: YoupGridCellMeta) {
+  if (!meta) {
+    return undefined;
+  }
+
+  return createElement("span", {
+    className: `youp-grid__cell-status youp-grid__cell-status--${meta.status}`,
+    title: typeof meta.message === "string" ? meta.message : undefined,
+    "aria-hidden": true,
+  });
 }
 
 function renderColumnToolbar<TRow>(context: {
@@ -1785,6 +2084,7 @@ type CellRenderState<TRow> = {
   columnIndex: number;
   value: unknown;
   editable: boolean;
+  meta?: YoupGridCellMeta;
 };
 
 type PendingCellValueChange<TRow> = {
@@ -1798,7 +2098,7 @@ type PendingCellValueChange<TRow> = {
 };
 
 function handleCellKeyDown<TRow>(context: {
-  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>;
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>;
   cell: CellRenderState<TRow>;
   rowCount: number;
   columnCount: number;
@@ -1808,8 +2108,10 @@ function handleCellKeyDown<TRow>(context: {
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
   selectionRange?: GridCellRange;
   startEditing: (cell: EditingCell) => void;
-  commitEditing: (cell: EditingCell) => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   cancelEditing: () => void;
+  applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
+  deleteCellValues: () => void;
   undoCellValueChange: () => boolean;
   redoCellValueChange: () => boolean;
   toggleSelected: () => void;
@@ -1819,7 +2121,7 @@ function handleCellKeyDown<TRow>(context: {
   }
 
   const editingCell = context.event.currentTarget.classList.contains("youp-grid__cell-editor")
-    ? createEditingCell(context.cell, (context.event.currentTarget as HTMLInputElement).value)
+    ? createEditingCell(context.cell, (context.event.currentTarget as HTMLInputElement | HTMLSelectElement).value)
     : undefined;
 
   if (editingCell) {
@@ -1832,11 +2134,11 @@ function handleCellKeyDown<TRow>(context: {
 
     if (context.event.key === "Enter") {
       context.event.preventDefault();
-      context.commitEditing(editingCell);
+      context.commitEditing(editingCell, "enter");
       moveFocusedCell({
         ...context,
         nextCell: {
-          rowIndex: clamp(context.cell.rowIndex + 1, 0, context.rowCount - 1),
+          rowIndex: clamp(context.cell.rowIndex + (context.event.shiftKey ? -1 : 1), 0, context.rowCount - 1),
           columnIndex: context.cell.columnIndex,
         },
       });
@@ -1845,7 +2147,7 @@ function handleCellKeyDown<TRow>(context: {
 
     if (context.event.key === "Tab") {
       context.event.preventDefault();
-      context.commitEditing(editingCell);
+      context.commitEditing(editingCell, "tab");
       moveFocusedCell({
         ...context,
         nextCell: getNextTabCell(context.cell, context.rowCount, context.columnCount, context.event.shiftKey),
@@ -1858,26 +2160,45 @@ function handleCellKeyDown<TRow>(context: {
 
   if (isUndoShortcut(context.event)) {
     context.event.preventDefault();
-    context.undoCellValueChange();
+    if (context.cell.editable) {
+      context.undoCellValueChange();
+    }
     return;
   }
 
   if (isRedoShortcut(context.event)) {
     context.event.preventDefault();
-    context.redoCellValueChange();
+    if (context.cell.editable) {
+      context.redoCellValueChange();
+    }
+    return;
+  }
+
+  if (context.event.key === "Delete") {
+    context.event.preventDefault();
+    context.deleteCellValues();
     return;
   }
 
   if (context.event.key === "Enter" || context.event.key === "F2") {
     if (context.cell.editable) {
       context.event.preventDefault();
-      context.startEditing(createEditingCell(context.cell, context.cell.value));
+      if (context.cell.column.editor === "checkbox") {
+        context.applyCellValue(context.cell, !Boolean(context.cell.value));
+      } else {
+        context.startEditing(createEditingCell(context.cell, context.cell.value));
+      }
     }
     return;
   }
 
   if (context.event.key === " ") {
     context.event.preventDefault();
+    if (context.cell.column.editor === "checkbox" && context.cell.editable) {
+      context.applyCellValue(context.cell, !Boolean(context.cell.value));
+      return;
+    }
+
     if (context.event.shiftKey) {
       context.setFocusedCell(context.cell, true);
     } else {
@@ -1887,7 +2208,7 @@ function handleCellKeyDown<TRow>(context: {
   }
 
   if (isPrintableKey(context.event)) {
-    if (context.cell.editable) {
+    if (context.cell.editable && context.cell.column.editor !== "checkbox") {
       context.event.preventDefault();
       context.startEditing(createEditingCell(context.cell, context.event.key));
     }
@@ -1913,7 +2234,7 @@ function handleCellKeyDown<TRow>(context: {
 }
 
 function getNextNavigationCell<TRow>(context: {
-  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>;
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>;
   cell: CellRenderState<TRow>;
   rowCount: number;
   columnCount: number;
@@ -2111,41 +2432,27 @@ function isEditingCell<TRow>(
 function commitEditingCell<TRow>(context: {
   cell: EditingCell;
   rowModel: { visibleRows: RowNode<TRow>[]; visibleColumns: ResolvedColumnDef<TRow>[] };
-  applyCellValueChanges: (
-    changes: PendingCellValueChange<TRow>[],
-    source: YoupGridCellValueChangeSource,
-  ) => void;
-}) {
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
+}): PendingCellValueChange<TRow> | undefined {
   const row = context.rowModel.visibleRows[context.cell.rowIndex];
   const column = context.rowModel.visibleColumns.find((item) => item.id === context.cell.columnId);
 
-  if (!row || !column) {
-    return;
+  if (!row || !column || !context.canEditCell(row, context.cell.rowIndex, column)) {
+    return undefined;
   }
 
   const previousValue = column.accessor(row.original);
-  const value = column.valueParser
-    ? column.valueParser(context.cell.draftValue, row.original)
-    : context.cell.draftValue;
+  const value = parseDraftValue(column, row.original, context.cell.draftValue);
 
-  if (Object.is(value, previousValue)) {
-    return;
-  }
-
-  context.applyCellValueChanges(
-    [
-      {
-        row: row.original,
-        rowId: row.id,
-        rowIndex: context.cell.rowIndex,
-        column,
-        columnId: column.id,
-        value,
-        previousValue,
-      },
-    ],
-    "edit",
-  );
+  return {
+    row: row.original,
+    rowId: row.id,
+    rowIndex: context.cell.rowIndex,
+    column,
+    columnId: column.id,
+    value,
+    previousValue,
+  };
 }
 
 function handleGridCopy<TRow>(context: {
@@ -2179,6 +2486,7 @@ function handleGridPaste<TRow>(context: {
     changes: PendingCellValueChange<TRow>[],
     source: YoupGridCellValueChangeSource,
   ) => void;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
 }) {
   const values = parseClipboardText(context.event.clipboardData.getData("text/plain"));
 
@@ -2211,12 +2519,12 @@ function handleGridPaste<TRow>(context: {
     const row = context.rows[cell.rowIndex];
     const column = context.columns[cell.columnIndex];
 
-    if (!row || !column || column.editable === false) {
+    if (!row || !column || !context.canEditCell(row, cell.rowIndex, column)) {
       continue;
     }
 
     const previousValue = column.accessor(row.original);
-    const value = column.valueParser ? column.valueParser(cell.value, row.original) : cell.value;
+    const value = parseDraftValue(column, row.original, cell.value);
 
     if (Object.is(value, previousValue)) {
       continue;
@@ -2234,6 +2542,54 @@ function handleGridPaste<TRow>(context: {
   }
 
   context.applyCellValueChanges(changes, "paste");
+}
+
+function deleteGridCellValues<TRow>(context: {
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
+  rows: readonly RowNode<TRow>[];
+  columns: readonly ResolvedColumnDef<TRow>[];
+  applyCellValueChanges: (
+    changes: PendingCellValueChange<TRow>[],
+    source: YoupGridCellValueChangeSource,
+  ) => void;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
+}) {
+  const range = normalizeCellRange(context.selectionRange ?? {
+    anchor: context.focusedCell,
+    focus: context.focusedCell,
+  });
+  const changes: PendingCellValueChange<TRow>[] = [];
+
+  for (let rowIndex = range.startRowIndex; rowIndex <= range.endRowIndex; rowIndex += 1) {
+    for (let columnIndex = range.startColumnIndex; columnIndex <= range.endColumnIndex; columnIndex += 1) {
+      const row = context.rows[rowIndex];
+      const column = context.columns[columnIndex];
+
+      if (!row || !column || !context.canEditCell(row, rowIndex, column)) {
+        continue;
+      }
+
+      const previousValue = column.accessor(row.original);
+      const value = getEmptyCellValue(column, row.original);
+
+      if (Object.is(value, previousValue)) {
+        continue;
+      }
+
+      changes.push({
+        row: row.original,
+        rowId: row.id,
+        rowIndex,
+        column,
+        columnId: column.id,
+        value,
+        previousValue,
+      });
+    }
+  }
+
+  context.applyCellValueChanges(changes, "delete");
 }
 
 function startFillHandleDrag(context: {
@@ -2290,6 +2646,7 @@ function applyFillHandleValues<TRow>(context: {
     changes: PendingCellValueChange<TRow>[],
     source: YoupGridCellValueChangeSource,
   ) => void;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
 }) {
   const changes: PendingCellValueChange<TRow>[] = [];
 
@@ -2306,7 +2663,7 @@ function applyFillHandleValues<TRow>(context: {
     const row = context.rows[cell.rowIndex];
     const column = context.columns[cell.columnIndex];
 
-    if (!row || !column || column.editable === false) {
+    if (!row || !column || !context.canEditCell(row, cell.rowIndex, column)) {
       continue;
     }
 
@@ -2400,6 +2757,7 @@ function getHistoryEntryValueChanges<TRow>(context: {
   entry: GridValueHistoryEntry;
   rowModel: RowModel<TRow>;
   source: Extract<YoupGridCellValueChangeSource, "undo" | "redo">;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
 }): PendingCellValueChange<TRow>[] {
   const changes: PendingCellValueChange<TRow>[] = [];
 
@@ -2413,6 +2771,13 @@ function getHistoryEntryValueChanges<TRow>(context: {
       continue;
     }
 
+    const visibleRowIndex = context.rowModel.visibleRows.findIndex((item) => item.id === row.id);
+    const rowIndex = visibleRowIndex >= 0 ? visibleRowIndex : row.index;
+
+    if (!context.canEditCell(row, rowIndex, column)) {
+      continue;
+    }
+
     const value = context.source === "undo" ? historyChange.previousValue : historyChange.value;
     const previousValue = column.accessor(row.original);
 
@@ -2420,12 +2785,10 @@ function getHistoryEntryValueChanges<TRow>(context: {
       continue;
     }
 
-    const visibleRowIndex = context.rowModel.visibleRows.findIndex((item) => item.id === row.id);
-
     changes.push({
       row: row.original,
       rowId: row.id,
-      rowIndex: visibleRowIndex >= 0 ? visibleRowIndex : row.index,
+      rowIndex,
       column,
       columnId: column.id,
       value,
@@ -2441,18 +2804,116 @@ function formatCellValue<TRow>(
   row: TRow,
   value: unknown,
 ): string {
-  return column.valueFormatter ? column.valueFormatter(value, row) : String(value ?? "");
+  if (column.valueFormatter) {
+    return column.valueFormatter(value, row);
+  }
+
+  if (column.editor === "select") {
+    const option = normalizeEditorOptions(column.options).find((item) => Object.is(item.value, value));
+
+    if (option) {
+      return option.label;
+    }
+  }
+
+  return String(value ?? "");
 }
 
-function isPrintableKey(event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>): boolean {
+function parseDraftValue<TRow>(
+  column: ResolvedColumnDef<TRow>,
+  row: TRow,
+  draftValue: string,
+): unknown {
+  if (column.valueParser) {
+    return column.valueParser(draftValue, row);
+  }
+
+  if (column.editor === "number") {
+    return draftValue === "" ? undefined : Number(draftValue);
+  }
+
+  if (column.editor === "checkbox") {
+    return draftValue === "true";
+  }
+
+  if (column.editor === "select") {
+    const option = normalizeEditorOptions(column.options).find((item) => item.inputValue === draftValue);
+
+    return option ? option.value : draftValue;
+  }
+
+  return draftValue;
+}
+
+function getEmptyCellValue<TRow>(column: ResolvedColumnDef<TRow>, row: TRow): unknown {
+  if (column.valueParser) {
+    return column.valueParser("", row);
+  }
+
+  if (column.editor === "checkbox") {
+    return false;
+  }
+
+  if (column.editor === "number") {
+    return undefined;
+  }
+
+  return "";
+}
+
+type NormalizedEditorOption = {
+  value: ColumnEditorOptionValue;
+  label: string;
+  inputValue: string;
+};
+
+function normalizeEditorOptions(options?: readonly ColumnEditorOption[]): NormalizedEditorOption[] {
+  return (options ?? []).map((option) => {
+    const value = getEditorOptionValue(option);
+
+    return {
+      value,
+      label: typeof option === "object" ? option.label : String(option),
+      inputValue: String(value),
+    };
+  });
+}
+
+function getEditorOptionValue(option: ColumnEditorOption): ColumnEditorOptionValue {
+  return typeof option === "object" ? option.value : option;
+}
+
+function getCellTitle(
+  meta: YoupGridCellMeta | undefined,
+  disabledReason: ReactNode | undefined,
+  editable: boolean,
+): string | undefined {
+  if (typeof meta?.message === "string") {
+    return meta.message;
+  }
+
+  if (!editable && typeof disabledReason === "string") {
+    return disabledReason;
+  }
+
+  return undefined;
+}
+
+function isPrintableKey(
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+): boolean {
   return event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
 }
 
-function isUndoShortcut(event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>): boolean {
+function isUndoShortcut(
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+): boolean {
   return (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "z";
 }
 
-function isRedoShortcut(event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement>): boolean {
+function isRedoShortcut(
+  event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) {
     return false;
   }

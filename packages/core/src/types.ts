@@ -45,6 +45,17 @@ export type ValueParser<TValue = unknown, TRow = unknown> = (
   row: TRow,
 ) => TValue;
 
+export type ColumnEditor = "text" | "number" | "checkbox" | "select";
+
+export type ColumnEditorOptionValue = string | number | boolean;
+
+export type ColumnEditorOption =
+  | ColumnEditorOptionValue
+  | {
+      value: ColumnEditorOptionValue;
+      label: string;
+    };
+
 export type ColumnDef<TRow, TValue = unknown> = {
   id?: string;
   field?: Extract<keyof TRow, string> | string;
@@ -63,6 +74,9 @@ export type ColumnDef<TRow, TValue = unknown> = {
   filterPredicate?: ColumnFilterPredicate<TValue, TRow>;
   valueFormatter?: ValueFormatter<TValue, TRow>;
   valueParser?: ValueParser<TValue, TRow>;
+  editor?: ColumnEditor;
+  options?: readonly ColumnEditorOption[];
+  placeholder?: string;
 };
 
 export type ResolvedColumnDef<TRow, TValue = unknown> = Omit<

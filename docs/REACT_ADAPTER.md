@@ -438,12 +438,76 @@ function fetchRowsForState(nextState: GridState) {
 
 Cells are keyboard-focusable and editable when both the grid and column allow it:
 
-- `editable` on `YoupGrid` enables editing globally.
+- `editable` on `YoupGrid` enables editing globally; `readOnly` disables all write paths.
+- `canEditCell` can block editing per row and column.
+- `disabledReason` shows a read-only reason above the grid and is used as a cell title when it is plain text.
 - `editable: true` or `editable: false` on a column controls individual columns.
+- `editor` can be `"text"`, `"number"`, `"checkbox"`, or `"select"`.
+- `options` supplies select values, and `placeholder` renders guidance for empty non-editing cells.
 - `valueParser` converts editor text into the row value type.
 - `onCellValueChange` is the only write path; consumers update their own row state.
-- `onCellValueChange.source` is `edit`, `paste`, `fill`, `undo`, or `redo`.
+- `onCellEditCommit` fires for edited cells with `reason: "enter"`, `"tab"`, or `"blur"`.
+- `onCellValueChange.source` is `edit`, `paste`, `fill`, `delete`, `undo`, or `redo`.
+- `onCellsValueChange` emits one batch for paste and fill operations.
 - Undo/redo replays through `onCellValueChange`; the adapter does not mutate row objects.
+- Delete clears the focused cell or current range through `onCellValueChange` and stores it as one undoable history entry.
+- Read-only cells cannot enter editing, paste, fill, delete, or replay undo/redo changes.
+
+```tsx
+const columns: ColumnDef<SqlColumn>[] = [
+  { field: "logicalName", headerName: "Logical", editor: "text" },
+  { field: "physicalName", headerName: "Physical", editor: "text", placeholder: "Auto suggestion" },
+  { field: "length", headerName: "Length", editor: "number" },
+  {
+    field: "dataType",
+    headerName: "Type",
+    editor: "select",
+    options: ["VARCHAR", "BIGINT", "TIMESTAMP"],
+    placeholder: "Auto suggestion",
+  },
+  { field: "nullable", headerName: "Nullable", editor: "checkbox" },
+];
+
+<YoupGrid
+  rows={rows}
+  columns={columns}
+  editable={canEdit}
+  readOnly={!canEdit}
+  canEditCell={({ row }) => canEdit && !row.locked}
+  disabledReason={!canEdit ? "You do not have permission to edit." : undefined}
+  cellMeta={{
+    "3:logicalName": { status: "error", message: "Forbidden term" },
+    "3:physicalName": { status: "loading" },
+    "4:dataType": { status: "warning", message: "No standard data type" },
+  }}
+  onCellValueChange={({ rowId, columnId, value }) => {
+    setRows((current) =>
+      current.map((row) => row.id === rowId ? { ...row, [columnId]: value } : row),
+    );
+  }}
+  onCellEditCommit={async ({ rowId, columnId, value, reason }) => {
+    if (columnId !== "logicalName" || reason !== "enter") {
+      return;
+    }
+
+    const suggestion = await fetchSqlColumnSuggestion(String(value));
+
+    setRows((current) =>
+      current.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+
+        return {
+          ...row,
+          physicalName: row.physicalName || suggestion.physicalName,
+          dataType: row.dataType || suggestion.dataType,
+        };
+      }),
+    );
+  }}
+/>
+```
 
 ## Clipboard
 

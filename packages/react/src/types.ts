@@ -30,7 +30,40 @@ export type YoupGridCellValueChange<TRow> = {
   source: YoupGridCellValueChangeSource;
 };
 
-export type YoupGridCellValueChangeSource = "edit" | "paste" | "fill" | "undo" | "redo";
+export type YoupGridCellValueChangeSource = "edit" | "paste" | "fill" | "delete" | "undo" | "redo";
+
+export type YoupGridCellEditCommitReason = "enter" | "tab" | "blur";
+
+export type YoupGridCellEditCommit<TRow> = Omit<
+  YoupGridCellValueChange<TRow>,
+  "source"
+> & {
+  reason: YoupGridCellEditCommitReason;
+};
+
+export type YoupGridCellsValueChangeSource = "paste" | "fill";
+
+export type YoupGridCellsValueChange<TRow> = {
+  changes: YoupGridCellValueChange<TRow>[];
+  source: YoupGridCellsValueChangeSource;
+};
+
+export type YoupGridCellMetaStatus = "loading" | "error" | "warning" | "success";
+
+export type YoupGridCellMeta = {
+  status: YoupGridCellMetaStatus;
+  message?: ReactNode;
+};
+
+export type YoupGridCanEditCellContext<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowId: GridRowId;
+  rowIndex: number;
+  column: ResolvedColumnDef<TRow>;
+  columnId: string;
+  value: unknown;
+};
 
 export type YoupGridDensity = "compact" | "standard" | "comfortable";
 
@@ -106,6 +139,9 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   style?: CSSProperties;
   height?: number | string;
   editable?: boolean;
+  readOnly?: boolean;
+  canEditCell?: (context: YoupGridCanEditCellContext<TRow>) => boolean;
+  disabledReason?: ReactNode;
   showColumnChooser?: boolean;
   showColumnMenu?: boolean;
   showCsvExport?: boolean;
@@ -122,9 +158,13 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   loadingContent?: ReactNode;
   error?: boolean;
   errorContent?: ReactNode;
+  cellMeta?: Record<string, YoupGridCellMeta | undefined>;
+  getCellMeta?: (context: YoupGridCanEditCellContext<TRow>) => YoupGridCellMeta | undefined;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
+  onCellEditCommit?: (commit: YoupGridCellEditCommit<TRow>) => void;
+  onCellsValueChange?: (change: YoupGridCellsValueChange<TRow>) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowsEndReached?: (event: YoupGridRowsEndReachedEvent<TRow>) => void;
@@ -137,6 +177,8 @@ export type YoupGridCellContext<TRow> = {
   value: unknown;
   editing: boolean;
   focused: boolean;
+  editable: boolean;
+  meta?: YoupGridCellMeta;
 };
 
 export type YoupGridHeaderContext<TRow> = {

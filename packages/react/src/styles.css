@@ -64,6 +64,15 @@
   background: #fff;
 }
 
+.youp-grid__disabled-reason {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--youp-grid-border);
+  color: var(--youp-grid-muted);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .youp-grid__density-control {
   display: inline-flex;
   align-items: center;
@@ -149,6 +158,15 @@
 
 .youp-grid__row:hover {
   background: var(--youp-grid-row-hover);
+}
+
+.youp-grid__header {
+  --youp-grid-header-scroll-left: 0px;
+}
+
+.youp-grid__header .youp-grid__cell--header:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right):not(.youp-grid__selection-cell),
+.youp-grid__header .youp-grid__cell--header-group:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right):not(.youp-grid__selection-cell) {
+  transform: translateX(calc(-1 * var(--youp-grid-header-scroll-left)));
 }
 
 .youp-grid__row--header {
@@ -268,6 +286,10 @@
   white-space: nowrap;
 }
 
+.youp-grid--read-only .youp-grid__cell {
+  cursor: default;
+}
+
 .youp-grid__cell:focus {
   outline: none;
 }
@@ -287,6 +309,70 @@
 .youp-grid__cell--fill-target {
   background: #e0f2fe;
   box-shadow: inset 0 0 0 1px #0ea5e9;
+}
+
+.youp-grid__cell--disabled {
+  color: var(--youp-grid-muted);
+  background: #f8fafc;
+}
+
+.youp-grid__cell--status-loading {
+  background: #eff6ff;
+}
+
+.youp-grid__cell--status-error {
+  background: #fef2f2;
+}
+
+.youp-grid__cell--status-warning {
+  background: #fffbeb;
+}
+
+.youp-grid__cell--status-success {
+  background: #f0fdf4;
+}
+
+.youp-grid__cell-placeholder {
+  color: #94a3b8;
+}
+
+.youp-grid__cell-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.youp-grid__cell-checkbox:disabled {
+  cursor: not-allowed;
+}
+
+.youp-grid__cell-status {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.youp-grid__cell-status--loading {
+  background: #2563eb;
+}
+
+.youp-grid__cell-status--error {
+  background: #dc2626;
+}
+
+.youp-grid__cell-status--warning {
+  background: #d97706;
+}
+
+.youp-grid__cell-status--success {
+  background: #16a34a;
 }
 
 .youp-grid__cell--focused.youp-grid__cell--fill-target {
@@ -320,6 +406,16 @@
   font: inherit;
   background: #fff;
   outline: none;
+}
+
+.youp-grid__cell-editor--select {
+  padding-right: 24px;
+}
+
+.youp-grid__cell-editor:disabled {
+  color: var(--youp-grid-muted);
+  cursor: not-allowed;
+  background: #f1f5f9;
 }
 
 .youp-grid__cell--pinned-left,
@@ -361,6 +457,31 @@
 .youp-grid__cell--pinned-left.youp-grid__cell--fill-target,
 .youp-grid__cell--pinned-right.youp-grid__cell--fill-target {
   background: #e0f2fe;
+}
+
+.youp-grid__cell--pinned-left.youp-grid__cell--disabled,
+.youp-grid__cell--pinned-right.youp-grid__cell--disabled {
+  background: #f8fafc;
+}
+
+.youp-grid__cell--pinned-left.youp-grid__cell--status-loading,
+.youp-grid__cell--pinned-right.youp-grid__cell--status-loading {
+  background: #eff6ff;
+}
+
+.youp-grid__cell--pinned-left.youp-grid__cell--status-error,
+.youp-grid__cell--pinned-right.youp-grid__cell--status-error {
+  background: #fef2f2;
+}
+
+.youp-grid__cell--pinned-left.youp-grid__cell--status-warning,
+.youp-grid__cell--pinned-right.youp-grid__cell--status-warning {
+  background: #fffbeb;
+}
+
+.youp-grid__cell--pinned-left.youp-grid__cell--status-success,
+.youp-grid__cell--pinned-right.youp-grid__cell--status-success {
+  background: #f0fdf4;
 }
 
 .youp-grid__cell--focused.youp-grid__cell--left-last {
