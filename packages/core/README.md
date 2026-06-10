@@ -16,7 +16,8 @@ import { buildRowModel, type ColumnDef } from "@youp-grid/core";
 - row model generation
 - sorting, filtering, and pagination helpers
 - selection and column state helpers
-- clipboard, fill handle, history, CSV, aggregation, and grouping utilities
+- tree data and row grouping helpers
+- clipboard, fill handle, history, CSV, and aggregation utilities
 
 UI adapters should reuse this package instead of duplicating data semantics.
 

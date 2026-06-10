@@ -7,7 +7,7 @@ Framework-agnostic data grid core for building UI adapters such as React, Vue, A
 
 Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
 
-This repository starts with the minimum reusable engine:
+This repository starts with a reusable engine and a React adapter:
 
 - column normalization
 - typed row model generation
@@ -16,15 +16,16 @@ This repository starts with the minimum reusable engine:
 - pagination
 - fixed-size virtualization range calculation
 - serializable grid state helpers
+- reusable React editing, selection, tooltip, and row operation UI
 
-The first goal is not to copy every AG Grid feature. The goal is to establish a small, stable core that adapters can render without owning data semantics.
+The first goal is not to copy every AG Grid feature. The goal is to keep reusable grid behavior small and stable so application screens can adopt it incrementally.
 
 ## Packages
 
 | Package | Purpose |
 | --- | --- |
-| `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, and data helpers. |
-| `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, and bundled styles. |
+| `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, tree data, and data helpers. |
+| `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, row actions, tooltips, and bundled styles. |
 
 ## Installation
 
@@ -32,7 +33,12 @@ The first goal is not to copy every AG Grid feature. The goal is to establish a 
 npm install @youp-grid/core @youp-grid/react
 ```
 
-## MVP API
+```tsx
+import { YoupGrid } from "@youp-grid/react";
+import "@youp-grid/react/styles.css";
+```
+
+## Core API
 
 ```ts
 import {
@@ -68,6 +74,54 @@ const model = buildRowModel({
 });
 ```
 
+## React Usage
+
+```tsx
+import type { ColumnDef } from "@youp-grid/core";
+import { YoupGrid } from "@youp-grid/react";
+import "@youp-grid/react/styles.css";
+
+type SqlColumn = {
+  id: string;
+  logicalName: string;
+  physicalName: string;
+  length: number | "";
+  nullable: boolean;
+};
+
+const columns: ColumnDef<SqlColumn>[] = [
+  { field: "logicalName", headerName: "Logical", editable: true, editor: "text" },
+  { field: "physicalName", headerName: "Physical", editable: true, placeholder: "Auto suggestion" },
+  { field: "length", headerName: "Length", editable: true, editor: "number", align: "right" },
+  { field: "nullable", headerName: "Nullable", editable: true, editor: "checkbox", align: "center" },
+];
+
+<YoupGrid
+  rows={rows}
+  columns={columns}
+  getRowId={(row) => row.id}
+  editable={canEdit}
+  readOnly={!canEdit}
+  showRowNumberColumn
+  showCellContextMenu
+  cellTooltip={{ mode: "rich", autoOpenCellKey }}
+  onCellEditCommit={({ rowId, columnId, value, reason }) => {
+    // Commit reason is "enter", "tab", or "blur".
+  }}
+  onCellValueChange={({ rowId, columnId, value }) => {
+    // Keep row data controlled in the application.
+  }}
+  createRow={() => ({
+    id: crypto.randomUUID(),
+    logicalName: "",
+    physicalName: "",
+    length: "",
+    nullable: true,
+  })}
+  onRowsChange={({ rows }) => setRows(rows)}
+/>;
+```
+
 ## Current Boundary
 
 Implemented now:
@@ -78,17 +132,24 @@ Implemented now:
 - fixed-height virtualized React body renderer
 - built-in header filters
 - pagination controls
-- column resize handles
+- column resize handles and double-click auto-size
 - column chooser with visibility controls
 - column menu for sort, pin, hide, and filter actions
 - grouped headers
 - density control
 - checkbox selection column
+- row number column
+- cell context menu for copy, paste, clear, row selection, row insert/delete, and auto-size
 - row click and double-click events
 - custom cell and header renderers
 - pinned left/right columns
 - keyboard cell navigation and selection
 - inline cell editing
+- edit commit events with enter, tab, and blur reasons
+- text, number, checkbox, and select editors
+- cell placeholders and column alignment
+- cell status metadata with native or rich tooltips
+- read-only and per-cell edit guards
 - range selection
 - TSV clipboard copy/paste
 - fill handle for repeated cell values
@@ -106,10 +167,6 @@ Implemented now:
 - Vite React demo
 - static HTML preview
 - npm package publishing setup
-
-Next implementation step:
-
-- add expandable rows
 
 ## Development
 
