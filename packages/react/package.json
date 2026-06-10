@@ -2,6 +2,7 @@
   "name": "@youp-grid/react",
   "version": "0.2.2",
   "description": "React adapter for Youp Grid.",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

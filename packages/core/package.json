@@ -2,6 +2,7 @@
   "name": "@youp-grid/core",
   "version": "0.2.2",
   "description": "Framework-agnostic data grid core for Youp Grid.",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
