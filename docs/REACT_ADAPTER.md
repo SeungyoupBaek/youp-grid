@@ -31,7 +31,9 @@ The adapter should not own data semantics. Sorting, filtering, pagination, row s
 - column menu
 - grouped headers
 - density control
+- row number column
 - checkbox selection column
+- cell context menu
 - row click and double-click events
 - column chooser panel
 - pinned left and right columns
@@ -106,7 +108,9 @@ function TradeGrid({ rows }: { rows: Trade[] }) {
       showDensityControl
       showFilters
       showPagination
+      showRowNumberColumn
       showRowSelectionColumn
+      showCellContextMenu
       defaultDensity="standard"
       loading={false}
       error={false}
@@ -183,6 +187,31 @@ The React adapter can render a pinned checkbox column for row selection.
 - Row checkbox changes update `GridState.selectedRowIds`.
 - The header checkbox selects or clears the current visible rows.
 - Keyboard row selection with `Space` still works without the checkbox column.
+
+## Row Number Column And Cell Context Menu
+
+```tsx
+<YoupGrid
+  rows={rows}
+  columns={columns}
+  showRowNumberColumn
+  showCellContextMenu
+  createRow={({ rowIndex }) => ({
+    id: crypto.randomUUID(),
+    name: "",
+    sortOrder: rowIndex + 1,
+  })}
+  onRowsChange={({ rows }) => setRows(rows)}
+/>
+```
+
+- `showRowNumberColumn` renders a read-only row number column on the far left.
+- `showCellContextMenu` enables the cell right-click menu.
+- The menu supports copy, paste, clear contents, select row, clear row selection, row insert, row delete, and auto-size column.
+- Row insert requires `createRow` so each app can define its own empty row shape.
+- Row insert and delete emit `onRowsChange` with the next controlled `rows` array and a `changes` list.
+- `rowIndex` is the source `rows` index, and `visibleRowIndex` is the current visible grid index.
+- Row hiding is intentionally not included.
 
 ## Row Events
 

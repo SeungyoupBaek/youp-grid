@@ -55,6 +55,7 @@ import type {
   YoupGridHeaderContext,
   YoupGridProps,
   YoupGridRowEvent,
+  YoupGridRowInsertPosition,
 } from "./types.ts";
 import { useYoupGrid } from "./useYoupGrid.ts";
 
@@ -65,6 +66,7 @@ const DENSITY_ROW_HEIGHTS: Record<YoupGridDensity, number> = {
   standard: 38,
   comfortable: 46,
 };
+const ROW_NUMBER_COLUMN_WIDTH = 44;
 const SELECTION_COLUMN_WIDTH = 44;
 const AUTOSIZE_CELL_EXTRA_WIDTH = 8;
 const AUTOSIZE_CELL_BORDER_THRESHOLD = 6;
@@ -95,9 +97,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [editingCell, setEditingCell] = useState<EditingCell | undefined>();
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
+  const [cellContextMenu, setCellContextMenu] = useState<CellContextMenuState | undefined>();
   const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
+  const showRowNumberColumn = props.showRowNumberColumn ?? false;
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
   const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
+  const showCellContextMenu = props.showCellContextMenu ?? false;
   const cellTooltipMode = props.cellTooltip?.mode ?? "native";
   const gridEditable = (props.editable ?? true) && !props.readOnly;
   const displayRows = rowModel.displayRows;
@@ -144,11 +149,15 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const selectedVisibleRowCount = visibleRowIds.filter((rowId) => selectedRowIds.has(rowId)).length;
   const allVisibleRowsSelected = visibleRowIds.length > 0 && selectedVisibleRowCount === visibleRowIds.length;
   const someVisibleRowsSelected = selectedVisibleRowCount > 0 && !allVisibleRowsSelected;
+  const rowNumberColumnOffset = showRowNumberColumn ? ROW_NUMBER_COLUMN_WIDTH : 0;
+  const selectionColumnOffset = showRowSelectionColumn && pinRowSelectionColumn ? rowNumberColumnOffset : 0;
+  const pinnedColumnOffset =
+    rowNumberColumnOffset + (showRowSelectionColumn && pinRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0);
   const columnLayouts = useMemo(() => {
     return getColumnLayouts(rowModel.visibleColumns, {
-      leftOffset: showRowSelectionColumn && pinRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0,
+      leftOffset: pinnedColumnOffset,
     });
-  }, [pinRowSelectionColumn, rowModel.visibleColumns, showRowSelectionColumn]);
+  }, [pinnedColumnOffset, rowModel.visibleColumns]);
   const visibleColumns = useMemo(() => columnLayouts.map((layout) => layout.column), [columnLayouts]);
   const visibleRowIndexById = useMemo(() => {
     return new Map(rowModel.visibleRows.map((row, index) => [row.id, index]));
@@ -259,6 +268,29 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       setColumnMenuOpenId(undefined);
     }
   }, [columnMenuOpenId, visibleColumns]);
+
+  useEffect(() => {
+    if (!cellContextMenu) {
+      return;
+    }
+
+    const closeMenu = () => setCellContextMenu(undefined);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    document.addEventListener("click", closeMenu);
+    document.addEventListener("contextmenu", closeMenu);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("click", closeMenu);
+      document.removeEventListener("contextmenu", closeMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [cellContextMenu]);
 
   useEffect(() => {
     if (cellTooltipMode !== "rich") {
@@ -470,6 +502,236 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     const visibleRowIdSet = new Set(visibleRowIds);
     controller.setSelectedRows(currentSelectedRowIds.filter((rowId) => !visibleRowIdSet.has(rowId)));
   };
+  const openCellContextMenu = (
+    event: ReactMouseEvent<HTMLDivElement>,
+    cell: CellRenderState<TRow>,
+  ) => {
+    if (!showCellContextMenu || editingCell) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const insideSelection = selectionRange
+      ? isCellInRange(cell.rowIndex, cell.columnIndex, selectionRange)
+      : false;
+
+    if (!insideSelection) {
+      setSelectionRange(undefined);
+    }
+
+    setFocusedRowIndex(cell.rowIndex);
+    setFocusedColumnIndex(cell.columnIndex);
+    setCellContextMenu({
+      rowIndex: cell.rowIndex,
+      columnIndex: cell.columnIndex,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      anchor: event.currentTarget,
+    });
+  };
+  const getCellContextMenuRange = () => {
+    if (!cellContextMenu || !selectionRange) {
+      return undefined;
+    }
+
+    return isCellInRange(cellContextMenu.rowIndex, cellContextMenu.columnIndex, selectionRange)
+      ? selectionRange
+      : undefined;
+  };
+  const copyCellContextMenuSelection = () => {
+    if (!cellContextMenu) {
+      return;
+    }
+
+    void writeClipboardText(getGridClipboardText({
+      focusedCell: {
+        rowIndex: cellContextMenu.rowIndex,
+        columnIndex: cellContextMenu.columnIndex,
+      },
+      selectionRange: getCellContextMenuRange(),
+      rows: rowModel.visibleRows,
+      columns: visibleColumns,
+    })).catch(() => undefined);
+  };
+  const pasteCellContextMenuSelection = () => {
+    if (!cellContextMenu || !gridEditable) {
+      return;
+    }
+
+    void readClipboardText()
+      .then((text) => {
+        applyGridClipboardText({
+          text,
+          focusedCell: {
+            rowIndex: cellContextMenu.rowIndex,
+            columnIndex: cellContextMenu.columnIndex,
+          },
+          selectionRange: getCellContextMenuRange(),
+          rows: rowModel.visibleRows,
+          columns: visibleColumns,
+          canEditCell: canEditGridCell,
+          applyCellValueChanges,
+        });
+      })
+      .catch(() => undefined);
+  };
+  const clearCellContextMenuSelection = () => {
+    if (!cellContextMenu || !gridEditable) {
+      return;
+    }
+
+    deleteGridCellValues({
+      focusedCell: {
+        rowIndex: cellContextMenu.rowIndex,
+        columnIndex: cellContextMenu.columnIndex,
+      },
+      selectionRange: getCellContextMenuRange(),
+      rows: rowModel.visibleRows,
+      columns: visibleColumns,
+      canEditCell: canEditGridCell,
+      applyCellValueChanges,
+    });
+  };
+  const selectCellContextMenuRow = () => {
+    if (!cellContextMenu) {
+      return;
+    }
+
+    const row = rowModel.visibleRows[cellContextMenu.rowIndex];
+
+    if (row) {
+      controller.setRowSelected(row.id, true);
+    }
+  };
+  const getCellContextMenuTargetRows = () => {
+    if (!cellContextMenu) {
+      return [];
+    }
+
+    const row = rowModel.visibleRows[cellContextMenu.rowIndex];
+
+    if (!row || isRowGroupNode(row)) {
+      return [];
+    }
+
+    if (selectedRowIds.has(row.id)) {
+      return rowModel.visibleRows.filter((visibleRow): visibleRow is RowNode<TRow> => {
+        return !isRowGroupNode(visibleRow) && selectedRowIds.has(visibleRow.id);
+      });
+    }
+
+    return [row];
+  };
+  const getCellContextMenuDeleteRowCount = () => getCellContextMenuTargetRows().length;
+  const insertCellContextMenuRow = (position: YoupGridRowInsertPosition) => {
+    if (!cellContextMenu || !gridEditable || !props.createRow || !props.onRowsChange) {
+      return;
+    }
+
+    const anchorRow = rowModel.visibleRows[cellContextMenu.rowIndex];
+
+    if (!anchorRow || isRowGroupNode(anchorRow)) {
+      return;
+    }
+
+    const rowIndex = anchorRow.index + (position === "below" ? 1 : 0);
+    const visibleRowIndex = cellContextMenu.rowIndex + (position === "below" ? 1 : 0);
+    const row = props.createRow({
+      rows: props.rows,
+      rowIndex,
+      visibleRowIndex,
+      position,
+      anchorRow: anchorRow.original,
+      anchorRowId: anchorRow.id,
+      anchorRowIndex: anchorRow.index,
+    });
+    const rows = [
+      ...props.rows.slice(0, rowIndex),
+      row,
+      ...props.rows.slice(rowIndex),
+    ];
+
+    props.onRowsChange({
+      rows,
+      changes: [{
+        type: "insert",
+        row,
+        rowIndex,
+        visibleRowIndex,
+        position,
+        anchorRow: anchorRow.original,
+        anchorRowId: anchorRow.id,
+        anchorRowIndex: anchorRow.index,
+      }],
+      source: "context-menu",
+    });
+    setSelectionRange(undefined);
+    setFocusedRowIndex(visibleRowIndex);
+  };
+  const deleteCellContextMenuRows = () => {
+    if (!gridEditable || !props.onRowsChange) {
+      return;
+    }
+
+    const targetRows = getCellContextMenuTargetRows();
+
+    if (targetRows.length === 0) {
+      return;
+    }
+
+    const visibleRowIndexByRowId = new Map<GridRowId, number>();
+
+    rowModel.visibleRows.forEach((row, index) => {
+      if (!isRowGroupNode(row)) {
+        visibleRowIndexByRowId.set(row.id, index);
+      }
+    });
+
+    const deleteRowIds = new Set(targetRows.map((row) => row.id));
+    const deleteRowIndexes = new Set(targetRows.map((row) => row.index));
+    const rows = props.rows.filter((_, index) => !deleteRowIndexes.has(index));
+
+    props.onRowsChange({
+      rows,
+      changes: targetRows
+        .slice()
+        .sort((left, right) => left.index - right.index)
+        .map((row) => ({
+          type: "delete",
+          row: row.original,
+          rowId: row.id,
+          rowIndex: row.index,
+          visibleRowIndex: visibleRowIndexByRowId.get(row.id) ?? row.index,
+        })),
+      source: "context-menu",
+    });
+    controller.setSelectedRows(currentSelectedRowIds.filter((rowId) => !deleteRowIds.has(rowId)));
+    setSelectionRange(undefined);
+    setFocusedRowIndex(Math.min(
+      cellContextMenu?.rowIndex ?? 0,
+      Math.max(0, rowModel.visibleRows.length - targetRows.length - 1),
+    ));
+  };
+  const autoSizeCellContextMenuColumn = () => {
+    if (!cellContextMenu) {
+      return;
+    }
+
+    const column = visibleColumns[cellContextMenu.columnIndex];
+
+    if (column) {
+      controller.setColumnWidth(
+        column.id,
+        getAutoSizeColumnWidth({
+          anchor: cellContextMenu.anchor,
+          column,
+          rows: rowModel.visibleRows,
+        }),
+      );
+    }
+  };
 
   return createElement(
     "div",
@@ -478,6 +740,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         "youp-grid",
         `youp-grid--density-${density}`,
         !gridEditable ? "youp-grid--read-only" : "",
+        showRowNumberColumn ? "youp-grid--row-number-column" : "",
         pinRowSelectionColumn ? "youp-grid--selection-column-pinned" : "",
         props.className,
       ].filter(Boolean).join(" "),
@@ -515,7 +778,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         className: "youp-grid__viewport",
         role: "grid",
         "aria-rowcount": displayRows.length,
-        "aria-colcount": rowModel.visibleColumns.length + (showRowSelectionColumn ? 1 : 0),
+        "aria-colcount": rowModel.visibleColumns.length + (showRowNumberColumn ? 1 : 0) + (showRowSelectionColumn ? 1 : 0),
         "aria-busy": loading || undefined,
         "aria-readonly": !gridEditable || undefined,
         onCopy: (event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -554,8 +817,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           ? createElement(
               "div",
               { className: "youp-grid__row youp-grid__row--header-group", role: "row" },
+              showRowNumberColumn
+                ? renderRowNumberHeaderGroupCell()
+                : undefined,
               showRowSelectionColumn
-                ? renderSelectionHeaderGroupCell()
+                ? renderSelectionHeaderGroupCell(selectionColumnOffset)
                 : undefined,
               headerGroupLayouts.map((layout) => renderHeaderGroupCell(layout)),
             )
@@ -563,11 +829,15 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         createElement(
           "div",
           { className: "youp-grid__row youp-grid__row--header", role: "row" },
+          showRowNumberColumn
+            ? renderRowNumberHeaderCell()
+            : undefined,
           showRowSelectionColumn
             ? renderSelectionHeaderCell({
                 checked: allVisibleRowsSelected,
                 indeterminate: someVisibleRowsSelected,
                 disabled: visibleRowIds.length === 0,
+                leftOffset: selectionColumnOffset,
                 toggleSelected: setVisibleRowsSelected,
               })
             : undefined,
@@ -650,7 +920,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   return renderGroupRow({
                     row,
                     columns: columnLayouts,
+                    showRowNumberColumn,
                     showSelectionColumn: showRowSelectionColumn,
+                    selectionColumnOffset,
                     rowHeight,
                     toggleExpanded: controller.toggleRowGroupExpanded,
                   });
@@ -662,7 +934,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   row,
                   columns: columnLayouts,
                   selected: selectedRowIds.has(row.id),
+                  showRowNumberColumn,
                   showSelectionColumn: showRowSelectionColumn,
+                  selectionColumnOffset,
                   displayIndex,
                   rowIndex,
                   rowHeight,
@@ -735,6 +1009,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   closeCellTooltip: (cellKey) => {
                     setActiveTooltipCellKey((current) => current === cellKey ? undefined : current);
                   },
+                  openCellContextMenu: showCellContextMenu ? openCellContextMenu : undefined,
                   onRowClick: props.onRowClick,
                   onRowDoubleClick: props.onRowDoubleClick,
                   onCellKeyDown: (event, cell) => {
@@ -783,9 +1058,29 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         enabled: showAggregationFooter,
         aggregation: rowModel.aggregation,
         columns: columnLayouts,
+        showRowNumberColumn,
         showSelectionColumn: showRowSelectionColumn,
+        selectionColumnOffset,
       }),
     ),
+    renderCellContextMenu({
+      state: cellContextMenu,
+      editable: gridEditable,
+      hasSelectedRows: selectedRowIds.size > 0,
+      canInsertRows: gridEditable && Boolean(props.createRow && props.onRowsChange),
+      canDeleteRows: gridEditable && Boolean(props.onRowsChange && getCellContextMenuDeleteRowCount() > 0),
+      deleteRowLabel: getCellContextMenuDeleteRowCount() > 1 ? "Delete selected rows" : "Delete row",
+      copy: copyCellContextMenuSelection,
+      paste: pasteCellContextMenuSelection,
+      clearContents: clearCellContextMenuSelection,
+      selectRow: selectCellContextMenuRow,
+      clearRowSelection: () => controller.setSelectedRows([]),
+      insertRowAbove: () => insertCellContextMenuRow("above"),
+      insertRowBelow: () => insertCellContextMenuRow("below"),
+      deleteRows: deleteCellContextMenuRows,
+      autoSizeColumn: autoSizeCellContextMenuColumn,
+      closeMenu: () => setCellContextMenu(undefined),
+    }),
     renderPagination({
       enabled: props.showPagination ?? true,
       cursorPagination: controller.state.cursorPagination,
@@ -845,7 +1140,9 @@ function renderAggregationFooter<TRow>(context: {
   enabled: boolean;
   aggregation: readonly AggregationResult[];
   columns: readonly ColumnLayout<TRow>[];
+  showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
+  selectionColumnOffset: number;
 }) {
   if (!context.enabled) {
     return undefined;
@@ -859,7 +1156,8 @@ function renderAggregationFooter<TRow>(context: {
     createElement(
       "div",
       { className: "youp-grid__row youp-grid__row--aggregation", role: "row" },
-      context.showSelectionColumn ? renderSelectionAggregationCell() : undefined,
+      context.showRowNumberColumn ? renderRowNumberAggregationCell() : undefined,
+      context.showSelectionColumn ? renderSelectionAggregationCell(context.selectionColumnOffset) : undefined,
       context.columns.map((layout) => {
         const results = aggregationByColumn.get(layout.column.id) ?? [];
 
@@ -878,13 +1176,22 @@ function renderAggregationFooter<TRow>(context: {
   );
 }
 
-function renderSelectionAggregationCell() {
+function renderRowNumberAggregationCell() {
+  return createElement("div", {
+    className: "youp-grid__cell youp-grid__row-number-cell youp-grid__row-number-cell--aggregation",
+    role: "gridcell",
+    style: getRowNumberCellStyle(),
+    "aria-hidden": true,
+  });
+}
+
+function renderSelectionAggregationCell(leftOffset: number) {
   return createElement(
     "div",
     {
       className: "youp-grid__selection-cell youp-grid__selection-cell--aggregation",
       role: "gridcell",
-      style: getSelectionCellStyle(),
+      style: getSelectionCellStyle(leftOffset),
       "aria-hidden": true,
     },
   );
@@ -934,13 +1241,37 @@ function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>) {
   );
 }
 
-function renderSelectionHeaderGroupCell() {
+function renderRowNumberHeaderGroupCell() {
+  return createElement("div", {
+    key: "__row-number-group",
+    className: "youp-grid__cell youp-grid__cell--header-group youp-grid__row-number-cell youp-grid__row-number-cell--header-group",
+    role: "columnheader",
+    "aria-hidden": true,
+    style: getRowNumberCellStyle(),
+  });
+}
+
+function renderRowNumberHeaderCell() {
+  return createElement(
+    "div",
+    {
+      key: "__row-number",
+      className: "youp-grid__cell youp-grid__cell--header youp-grid__row-number-cell youp-grid__row-number-cell--header",
+      role: "columnheader",
+      "aria-label": "Row number",
+      style: getRowNumberCellStyle(),
+    },
+    "#",
+  );
+}
+
+function renderSelectionHeaderGroupCell(leftOffset: number) {
   return createElement("div", {
     key: "__selection-group",
     className: "youp-grid__cell youp-grid__cell--header-group youp-grid__selection-cell youp-grid__selection-cell--header-group",
     role: "columnheader",
     "aria-hidden": true,
-    style: getSelectionCellStyle(),
+    style: getSelectionCellStyle(leftOffset),
   });
 }
 
@@ -948,6 +1279,7 @@ function renderSelectionHeaderCell(context: {
   checked: boolean;
   indeterminate: boolean;
   disabled: boolean;
+  leftOffset: number;
   toggleSelected: (selected: boolean) => void;
 }) {
   return createElement(
@@ -956,7 +1288,7 @@ function renderSelectionHeaderCell(context: {
       key: "__selection",
       className: "youp-grid__cell youp-grid__cell--header youp-grid__selection-cell youp-grid__selection-cell--header",
       role: "columnheader",
-      style: getSelectionCellStyle(),
+      style: getSelectionCellStyle(context.leftOffset),
     },
     createElement(SelectionHeaderCheckbox, context),
   );
@@ -1194,10 +1526,104 @@ function renderColumnMenuButton(context: {
   );
 }
 
+function renderCellContextMenu(context: {
+  state?: CellContextMenuState;
+  editable: boolean;
+  hasSelectedRows: boolean;
+  canInsertRows: boolean;
+  canDeleteRows: boolean;
+  deleteRowLabel: string;
+  copy: () => void;
+  paste: () => void;
+  clearContents: () => void;
+  selectRow: () => void;
+  clearRowSelection: () => void;
+  insertRowAbove: () => void;
+  insertRowBelow: () => void;
+  deleteRows: () => void;
+  autoSizeColumn: () => void;
+  closeMenu: () => void;
+}) {
+  if (!context.state) {
+    return undefined;
+  }
+
+  const runAction = (action: () => void) => {
+    action();
+    context.closeMenu();
+  };
+
+  return createElement(
+    "div",
+    {
+      className: "youp-grid__cell-context-menu",
+      role: "menu",
+      style: {
+        left: context.state.clientX,
+        top: context.state.clientY,
+      },
+      onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+      },
+      onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+    },
+    renderColumnMenuButton({
+      label: "Copy",
+      onClick: () => runAction(context.copy),
+    }),
+    renderColumnMenuButton({
+      label: "Paste",
+      disabled: !context.editable,
+      onClick: () => runAction(context.paste),
+    }),
+    renderColumnMenuButton({
+      label: "Clear contents",
+      disabled: !context.editable,
+      onClick: () => runAction(context.clearContents),
+    }),
+    createElement("div", { className: "youp-grid__column-menu-separator", role: "separator" }),
+    renderColumnMenuButton({
+      label: "Select row",
+      onClick: () => runAction(context.selectRow),
+    }),
+    renderColumnMenuButton({
+      label: "Clear row selection",
+      disabled: !context.hasSelectedRows,
+      onClick: () => runAction(context.clearRowSelection),
+    }),
+    createElement("div", { className: "youp-grid__column-menu-separator", role: "separator" }),
+    renderColumnMenuButton({
+      label: "Insert row above",
+      disabled: !context.canInsertRows,
+      onClick: () => runAction(context.insertRowAbove),
+    }),
+    renderColumnMenuButton({
+      label: "Insert row below",
+      disabled: !context.canInsertRows,
+      onClick: () => runAction(context.insertRowBelow),
+    }),
+    renderColumnMenuButton({
+      label: context.deleteRowLabel,
+      disabled: !context.canDeleteRows,
+      onClick: () => runAction(context.deleteRows),
+    }),
+    createElement("div", { className: "youp-grid__column-menu-separator", role: "separator" }),
+    renderColumnMenuButton({
+      label: "Auto-size column",
+      onClick: () => runAction(context.autoSizeColumn),
+    }),
+  );
+}
+
 function renderGroupRow<TRow>(context: {
   row: RowGroupNode;
   columns: readonly ColumnLayout<TRow>[];
+  showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
+  selectionColumnOffset: number;
   rowHeight: number;
   toggleExpanded: (groupId: string) => void;
 }) {
@@ -1212,7 +1638,8 @@ function renderGroupRow<TRow>(context: {
       "aria-rowindex": context.row.index + 1,
       style: { height: context.rowHeight },
     },
-    context.showSelectionColumn ? renderSelectionGroupCell() : undefined,
+    context.showRowNumberColumn ? renderRowNumberGroupCell() : undefined,
+    context.showSelectionColumn ? renderSelectionGroupCell(context.selectionColumnOffset) : undefined,
     createElement(
       "div",
       {
@@ -1241,11 +1668,20 @@ function renderGroupRow<TRow>(context: {
   );
 }
 
-function renderSelectionGroupCell() {
+function renderRowNumberGroupCell() {
+  return createElement("div", {
+    className: "youp-grid__cell youp-grid__row-number-cell youp-grid__row-number-cell--group",
+    role: "gridcell",
+    style: getRowNumberCellStyle(),
+    "aria-hidden": true,
+  });
+}
+
+function renderSelectionGroupCell(leftOffset: number) {
   return createElement("div", {
     className: "youp-grid__selection-cell youp-grid__selection-cell--group",
     role: "gridcell",
-    style: getSelectionCellStyle(),
+    style: getSelectionCellStyle(leftOffset),
     "aria-hidden": true,
   });
 }
@@ -1254,7 +1690,9 @@ function renderRow<TRow>(context: {
   row: RowNode<TRow>;
   columns: readonly ColumnLayout<TRow>[];
   selected: boolean;
+  showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
+  selectionColumnOffset: number;
   displayIndex: number;
   rowIndex: number;
   rowHeight: number;
@@ -1285,6 +1723,10 @@ function renderRow<TRow>(context: {
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
   onCellKeyDown: (
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
+  openCellContextMenu?: (
+    event: ReactMouseEvent<HTMLDivElement>,
     cell: CellRenderState<TRow>,
   ) => void;
   cellTooltipMode: YoupGridCellTooltipMode;
@@ -1319,11 +1761,19 @@ function renderRow<TRow>(context: {
         }
       },
     },
+    context.showRowNumberColumn
+      ? renderRowNumberCell({
+          rowIndex: context.rowIndex,
+          displayIndex: context.displayIndex,
+        })
+      : undefined,
     context.showSelectionColumn
       ? renderSelectionCell({
           rowIndex: context.rowIndex,
           selected: context.selected,
           setSelected: context.setRowSelected,
+          leftOffset: context.selectionColumnOffset,
+          ariaColIndex: context.showRowNumberColumn ? 2 : 1,
         })
       : undefined,
     context.columns.map((layout, columnIndex) => {
@@ -1352,7 +1802,7 @@ function renderRow<TRow>(context: {
         layout,
         rowIndex: context.rowIndex,
         columnIndex,
-        ariaColumnOffset: context.showSelectionColumn ? 1 : 0,
+        ariaColumnOffset: (context.showRowNumberColumn ? 1 : 0) + (context.showSelectionColumn ? 1 : 0),
         focused,
         selected,
         fillTargeted,
@@ -1373,6 +1823,7 @@ function renderRow<TRow>(context: {
         cancelEditing: context.cancelEditing,
         commitEditing: context.commitEditing,
         onKeyDown: context.onCellKeyDown,
+        openContextMenu: context.openCellContextMenu,
         cellTooltipMode: context.cellTooltipMode,
         activeTooltipCellKey: context.activeTooltipCellKey,
         openCellTooltip: context.openCellTooltip,
@@ -1383,18 +1834,37 @@ function renderRow<TRow>(context: {
   );
 }
 
+function renderRowNumberCell(context: {
+  rowIndex: number;
+  displayIndex: number;
+}) {
+  return createElement(
+    "div",
+    {
+      className: "youp-grid__cell youp-grid__row-number-cell",
+      role: "gridcell",
+      "aria-colindex": 1,
+      "aria-label": `Row ${context.rowIndex + 1}`,
+      style: getRowNumberCellStyle(),
+    },
+    context.displayIndex + 1,
+  );
+}
+
 function renderSelectionCell(context: {
   rowIndex: number;
   selected: boolean;
   setSelected: (selected: boolean) => void;
+  leftOffset: number;
+  ariaColIndex: number;
 }) {
   return createElement(
     "div",
     {
       className: "youp-grid__cell youp-grid__selection-cell",
       role: "gridcell",
-      "aria-colindex": 1,
-      style: getSelectionCellStyle(),
+      "aria-colindex": context.ariaColIndex,
+      style: getSelectionCellStyle(context.leftOffset),
     },
     createElement("input", {
       className: "youp-grid__selection-checkbox",
@@ -1464,6 +1934,10 @@ function renderCell<TRow>(context: {
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onKeyDown: (
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
+  openContextMenu?: (
+    event: ReactMouseEvent<HTMLDivElement>,
     cell: CellRenderState<TRow>,
   ) => void;
   cellTooltipMode: YoupGridCellTooltipMode;
@@ -1572,6 +2046,9 @@ function renderCell<TRow>(context: {
         }
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => context.onKeyDown(event, cellState),
+      onContextMenu: context.openContextMenu
+        ? (event: ReactMouseEvent<HTMLDivElement>) => context.openContextMenu?.(event, cellState)
+        : undefined,
       onMouseEnter: () => {
         if (hasRichTooltip) {
           context.openCellTooltip(cellKey);
@@ -2124,9 +2601,17 @@ function getHeaderGroupStyle<TRow>(layout: HeaderGroupLayout<TRow>): CSSProperti
   return style;
 }
 
-function getSelectionCellStyle(): CSSProperties {
+function getRowNumberCellStyle(): CSSProperties {
   return {
     left: 0,
+    width: ROW_NUMBER_COLUMN_WIDTH,
+    flex: `0 0 ${ROW_NUMBER_COLUMN_WIDTH}px`,
+  };
+}
+
+function getSelectionCellStyle(leftOffset = 0): CSSProperties {
+  return {
+    left: leftOffset,
     width: SELECTION_COLUMN_WIDTH,
     flex: `0 0 ${SELECTION_COLUMN_WIDTH}px`,
   };
@@ -2435,6 +2920,12 @@ function getPixelValue(value: string): number {
 type FocusedCell = {
   rowIndex: number;
   columnIndex: number;
+};
+
+type CellContextMenuState = FocusedCell & {
+  clientX: number;
+  clientY: number;
+  anchor: HTMLElement;
 };
 
 type EditingCell = FocusedCell & {
@@ -2832,18 +3323,26 @@ function handleGridCopy<TRow>(context: {
   rows: readonly RowNode<TRow>[];
   columns: readonly ResolvedColumnDef<TRow>[];
 }) {
+  context.event.preventDefault();
+  context.event.clipboardData.setData("text/plain", getGridClipboardText(context));
+}
+
+function getGridClipboardText<TRow>(context: {
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
+  rows: readonly RowNode<TRow>[];
+  columns: readonly ResolvedColumnDef<TRow>[];
+}) {
   const range = context.selectionRange ?? {
     anchor: context.focusedCell,
     focus: context.focusedCell,
   };
-  const text = serializeGridRange({
+
+  return serializeGridRange({
     rows: context.rows,
     columns: context.columns,
     range,
   });
-
-  context.event.preventDefault();
-  context.event.clipboardData.setData("text/plain", text);
 }
 
 function handleGridPaste<TRow>(context: {
@@ -2858,10 +3357,37 @@ function handleGridPaste<TRow>(context: {
   ) => void;
   canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
 }) {
-  const values = parseClipboardText(context.event.clipboardData.getData("text/plain"));
+  const applied = applyGridClipboardText({
+    text: context.event.clipboardData.getData("text/plain"),
+    focusedCell: context.focusedCell,
+    selectionRange: context.selectionRange,
+    rows: context.rows,
+    columns: context.columns,
+    applyCellValueChanges: context.applyCellValueChanges,
+    canEditCell: context.canEditCell,
+  });
+
+  if (applied) {
+    context.event.preventDefault();
+  }
+}
+
+function applyGridClipboardText<TRow>(context: {
+  text: string;
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
+  rows: readonly RowNode<TRow>[];
+  columns: readonly ResolvedColumnDef<TRow>[];
+  applyCellValueChanges: (
+    changes: PendingCellValueChange<TRow>[],
+    source: YoupGridCellValueChangeSource,
+  ) => void;
+  canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
+}) {
+  const values = parseClipboardText(context.text);
 
   if (values.length === 0) {
-    return;
+    return false;
   }
 
   const normalizedRange = context.selectionRange ? normalizeCellRange(context.selectionRange) : undefined;
@@ -2874,8 +3400,6 @@ function handleGridPaste<TRow>(context: {
   const fillRange = normalizedRange && values.length === 1 && values[0]?.length === 1
     ? normalizedRange
     : undefined;
-
-  context.event.preventDefault();
 
   const changes: PendingCellValueChange<TRow>[] = [];
 
@@ -2912,6 +3436,23 @@ function handleGridPaste<TRow>(context: {
   }
 
   context.applyCellValueChanges(changes, "paste");
+  return true;
+}
+
+function writeClipboardText(text: string): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return Promise.resolve();
+  }
+
+  return navigator.clipboard.writeText(text);
+}
+
+function readClipboardText(): Promise<string> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.readText) {
+    return Promise.resolve("");
+  }
+
+  return navigator.clipboard.readText();
 }
 
 function deleteGridCellValues<TRow>(context: {

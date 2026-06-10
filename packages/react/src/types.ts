@@ -48,6 +48,49 @@ export type YoupGridCellsValueChange<TRow> = {
   source: YoupGridCellsValueChangeSource;
 };
 
+export type YoupGridRowsChangeSource = "context-menu";
+
+export type YoupGridRowInsertPosition = "above" | "below";
+
+export type YoupGridCreateRowContext<TRow> = {
+  rows: readonly TRow[];
+  rowIndex: number;
+  visibleRowIndex: number;
+  position: YoupGridRowInsertPosition;
+  anchorRow: TRow;
+  anchorRowId: GridRowId;
+  anchorRowIndex: number;
+};
+
+export type YoupGridRowInsertChange<TRow> = {
+  type: "insert";
+  row: TRow;
+  rowIndex: number;
+  visibleRowIndex: number;
+  position: YoupGridRowInsertPosition;
+  anchorRow: TRow;
+  anchorRowId: GridRowId;
+  anchorRowIndex: number;
+};
+
+export type YoupGridRowDeleteChange<TRow> = {
+  type: "delete";
+  row: TRow;
+  rowId: GridRowId;
+  rowIndex: number;
+  visibleRowIndex: number;
+};
+
+export type YoupGridRowChange<TRow> =
+  | YoupGridRowInsertChange<TRow>
+  | YoupGridRowDeleteChange<TRow>;
+
+export type YoupGridRowsChange<TRow> = {
+  rows: TRow[];
+  changes: YoupGridRowChange<TRow>[];
+  source: YoupGridRowsChangeSource;
+};
+
 export type YoupGridCellMetaStatus = "loading" | "error" | "warning" | "success";
 
 export type YoupGridCellMeta = {
@@ -161,8 +204,10 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showFilters?: boolean;
   showAggregationFooter?: boolean;
   showPagination?: boolean;
+  showRowNumberColumn?: boolean;
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
+  showCellContextMenu?: boolean;
   csvFileName?: string;
   density?: YoupGridDensity;
   defaultDensity?: YoupGridDensity;
@@ -179,6 +224,8 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
   onCellEditCommit?: (commit: YoupGridCellEditCommit<TRow>) => void;
   onCellsValueChange?: (change: YoupGridCellsValueChange<TRow>) => void;
+  createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
+  onRowsChange?: (change: YoupGridRowsChange<TRow>) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowsEndReached?: (event: YoupGridRowsEndReachedEvent<TRow>) => void;
