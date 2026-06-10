@@ -3,7 +3,15 @@
   "version": "0.2.2",
   "description": "Framework-agnostic data grid core for Youp Grid.",
   "license": "MIT",
+  "author": "SeungyoupBaek",
   "type": "module",
+  "keywords": [
+    "data-grid",
+    "grid",
+    "typescript",
+    "table",
+    "headless"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,13 +22,18 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
     "directory": "packages/core"
   },
+  "bugs": {
+    "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
+  },
+  "homepage": "https://github.com/SeungyoupBaek/youp-grid/tree/main/packages/core#readme",
   "publishConfig": {
     "access": "public"
   },

@@ -2,8 +2,17 @@
   "name": "youp-grid",
   "version": "0.2.2",
   "private": true,
+  "description": "Reusable TypeScript data grid core and React adapter.",
   "license": "MIT",
+  "author": "SeungyoupBaek",
   "type": "module",
+  "keywords": [
+    "data-grid",
+    "grid",
+    "react",
+    "typescript",
+    "table"
+  ],
   "workspaces": [
     "packages/*"
   ],

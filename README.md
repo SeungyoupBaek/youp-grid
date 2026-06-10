@@ -2,6 +2,8 @@
 
 Framework-agnostic data grid core for building UI adapters such as React, Vue, Angular, Svelte, Vanilla JS, or Web Components.
 
+Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
+
 This repository starts with the minimum reusable engine:
 
 - column normalization
@@ -13,6 +15,19 @@ This repository starts with the minimum reusable engine:
 - serializable grid state helpers
 
 The first goal is not to copy every AG Grid feature. The goal is to establish a small, stable core that adapters can render without owning data semantics.
+
+## Packages
+
+| Package | Purpose |
+| --- | --- |
+| `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, and data helpers. |
+| `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, and bundled styles. |
+
+## Installation
+
+```sh
+npm install @youp-grid/core @youp-grid/react
+```
 
 ## MVP API
 
@@ -88,15 +103,31 @@ Implemented now:
 - static HTML preview
 - npm package publishing setup
 
-## Installation
-
-```sh
-npm install @youp-grid/core @youp-grid/react
-```
-
 Next implementation step:
 
 - add tree data
 
+## Development
+
+```sh
+npm install
+npm test
+npm run build
+npm run pack:dry-run
+```
+
+## Project Maintenance
+
+- Issues and feature requests are tracked in GitHub Issues.
+- Pull requests should include focused changes and a short validation note.
+- Releases follow semantic versioning while the public API stabilizes.
+- Security reports should follow [SECURITY.md](SECURITY.md).
+
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the phased implementation plan.
 See [docs/REACT_ADAPTER.md](docs/REACT_ADAPTER.md) for React usage.
+See [docs/RELEASE.md](docs/RELEASE.md) for the release checklist.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and contribution rules.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

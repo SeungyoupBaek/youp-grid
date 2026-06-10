@@ -9,3 +9,17 @@ npm install @youp-grid/core
 ```ts
 import { buildRowModel, type ColumnDef } from "@youp-grid/core";
 ```
+
+## What It Owns
+
+- column normalization
+- row model generation
+- sorting, filtering, and pagination helpers
+- selection and column state helpers
+- clipboard, fill handle, history, CSV, aggregation, and grouping utilities
+
+UI adapters should reuse this package instead of duplicating data semantics.
+
+## License
+
+MIT. See the repository license.
