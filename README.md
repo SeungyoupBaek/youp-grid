@@ -1,7 +1,7 @@
 # Youp Grid
 
-[![npm core](https://img.shields.io/npm/v/@youp-grid/core?label=@youp-grid/core)](https://www.npmjs.com/package/@youp-grid/core)
-[![npm react](https://img.shields.io/npm/v/@youp-grid/react?label=@youp-grid/react)](https://www.npmjs.com/package/@youp-grid/react)
+[![npm core](https://img.shields.io/npm/v/@youp-grid/core?label=@youp-grid/core&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/core)
+[![npm react](https://img.shields.io/npm/v/@youp-grid/react?label=@youp-grid/react&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/react)
 
 Framework-agnostic data grid core for building UI adapters such as React, Vue, Angular, Svelte, Vanilla JS, or Web Components.
 
