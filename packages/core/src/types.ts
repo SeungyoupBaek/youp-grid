@@ -132,6 +132,10 @@ export type RowGroupingState = {
   collapsedGroupIds?: string[];
 };
 
+export type TreeDataState = {
+  expandedRowIds?: GridRowId[];
+};
+
 export type PaginationState = {
   pageIndex: number;
   pageSize: number;
@@ -168,6 +172,7 @@ export type GridState = {
   filters?: FilterRule[];
   aggregation?: AggregationRule[];
   rowGrouping?: RowGroupingState;
+  treeData?: TreeDataState;
   pagination?: PaginationState;
   cursorPagination?: CursorPaginationState;
   remoteRequest?: RemoteRequestState;
@@ -179,6 +184,10 @@ export type RowNode<TRow> = {
   id: GridRowId;
   index: number;
   original: TRow;
+  depth?: number;
+  parentId?: GridRowId;
+  hasChildren?: boolean;
+  expanded?: boolean;
 };
 
 export type RowGroupNode = {
@@ -201,6 +210,8 @@ export type BuildRowModelOptions<TRow> = {
   columns: readonly ColumnDef<TRow>[];
   state?: GridState;
   getRowId?: (row: TRow, index: number) => GridRowId;
+  treeData?: boolean;
+  getParentRowId?: (row: TRow, index: number) => GridRowId | null | undefined;
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;

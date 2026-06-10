@@ -31,6 +31,8 @@ export { applyPagination } from "./pagination.ts";
 export { buildRowModel } from "./row-model.ts";
 export { applyRowGrouping, isRowGroupNode } from "./row-grouping.ts";
 export { applySorting } from "./sorting.ts";
+export { applyTreeData } from "./tree-data.ts";
+export type { ApplyTreeDataOptions } from "./tree-data.ts";
 export { clearSelection, setRowSelected, setSelectedRows, toggleRowSelected } from "./selection.ts";
 export {
   clearFilter,
@@ -52,8 +54,10 @@ export {
   setRemoteCache,
   setRowGrouping,
   setSort,
+  setTreeExpandedRows,
   startRemoteRequest,
   toggleRowGroupExpanded,
+  toggleTreeRowExpanded,
   toggleSort,
 } from "./state.ts";
 export { getVirtualRange } from "./virtualizer.ts";
@@ -104,6 +108,7 @@ export type {
   RowNode,
   SortDirection,
   SortRule,
+  TreeDataState,
   ValueFormatter,
   ValueParser,
   VirtualItem,

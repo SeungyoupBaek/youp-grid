@@ -355,6 +355,89 @@
   color: #94a3b8;
 }
 
+.youp-grid__cell-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youp-grid__cell--tree {
+  display: flex;
+  align-items: center;
+}
+
+.youp-grid__cell-tree-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youp-grid__cell-tree-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youp-grid__tree-toggle,
+.youp-grid__tree-toggle-spacer {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.youp-grid__tree-toggle {
+  padding: 0;
+  border: 0;
+  color: var(--youp-grid-muted);
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+}
+
+.youp-grid__tree-toggle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.youp-grid__tree-caret {
+  width: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
+.youp-grid__cell--tooltip-open {
+  z-index: 8;
+  overflow: visible;
+}
+
+.youp-grid__cell-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: var(--youp-grid-cell-inline-padding);
+  z-index: 20;
+  width: max-content;
+  min-width: 120px;
+  max-width: 260px;
+  padding: 6px 8px;
+  border: 1px solid #0f172a;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  background: #0f172a;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+}
+
 .youp-grid__cell-checkbox {
   width: 16px;
   height: 16px;

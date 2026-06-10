@@ -99,13 +99,14 @@ Implemented now:
 - cache invalidation contract
 - aggregation
 - row grouping
+- tree data
 - Vite React demo
 - static HTML preview
 - npm package publishing setup
 
 Next implementation step:
 
-- add tree data
+- add expandable rows
 
 ## Development
 

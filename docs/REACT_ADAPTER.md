@@ -434,6 +434,24 @@ function fetchRowsForState(nextState: GridState) {
 }
 ```
 
+## Tree Data
+
+`treeData` renders hierarchical rows from a flat row list. Provide `getParentRowId` and control expansion through grid state or the controller helpers.
+
+```tsx
+<YoupGrid
+  rows={rows}
+  columns={columns}
+  treeData
+  getRowId={(row) => row.id}
+  getParentRowId={(row) => row.parentId}
+  state={state}
+  onStateChange={({ state }) => setState(state)}
+/>
+```
+
+The first visible column receives the tree indentation and expand/collapse control. Child rows are collapsed until their parent id is included in `state.treeData.expandedRowIds`.
+
 ## Cell Editing
 
 Cells are keyboard-focusable and editable when both the grid and column allow it:
@@ -450,6 +468,7 @@ Cells are keyboard-focusable and editable when both the grid and column allow it
 - `onCellEditCommit` fires for edited cells with `reason: "enter"`, `"tab"`, or `"blur"`.
 - `onCellValueChange.source` is `edit`, `paste`, `fill`, `delete`, `undo`, or `redo`.
 - `onCellsValueChange` emits one batch for paste and fill operations.
+- `cellMeta` keys use `rowId:columnId`; `cellTooltip.mode: "rich"` shows `cellMeta.message` through a custom tooltip on hover or focus.
 - Undo/redo replays through `onCellValueChange`; the adapter does not mutate row objects.
 - Delete clears the focused cell or current range through `onCellValueChange` and stores it as one undoable history entry.
 - Read-only cells cannot enter editing, paste, fill, delete, or replay undo/redo changes.
@@ -480,6 +499,11 @@ const columns: ColumnDef<SqlColumn>[] = [
     "3:logicalName": { status: "error", message: "Forbidden term" },
     "3:physicalName": { status: "loading" },
     "4:dataType": { status: "warning", message: "No standard data type" },
+  }}
+  cellTooltip={{
+    mode: "rich",
+    autoOpenCellKey: latestIssueCellKey,
+    autoOpenDurationMs: 2500,
   }}
   onCellValueChange={({ rowId, columnId, value }) => {
     setRows((current) =>

@@ -55,6 +55,14 @@ export type YoupGridCellMeta = {
   message?: ReactNode;
 };
 
+export type YoupGridCellTooltipMode = "native" | "rich" | "none";
+
+export type YoupGridCellTooltipOptions = {
+  mode?: YoupGridCellTooltipMode;
+  autoOpenCellKey?: string | null;
+  autoOpenDurationMs?: number;
+};
+
 export type YoupGridCanEditCellContext<TRow> = {
   row: TRow;
   rowNode: RowNode<TRow>;
@@ -91,6 +99,8 @@ export type YoupGridOptions<TRow> = {
   defaultState?: GridState;
   onStateChange?: (change: YoupGridStateChange<TRow>) => void;
   getRowId?: (row: TRow, index: number) => GridRowId;
+  treeData?: boolean;
+  getParentRowId?: (row: TRow, index: number) => GridRowId | null | undefined;
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;
@@ -132,6 +142,8 @@ export type YoupGridController<TRow> = {
   setRowSelected: (rowId: GridRowId, selected: boolean) => void;
   setSelectedRows: (rowIds: readonly GridRowId[]) => void;
   toggleRowSelected: (rowId: GridRowId) => void;
+  setTreeExpandedRows: (rowIds: readonly GridRowId[]) => void;
+  toggleTreeRowExpanded: (rowId: GridRowId) => void;
 };
 
 export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
@@ -161,6 +173,7 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   errorContent?: ReactNode;
   cellMeta?: Record<string, YoupGridCellMeta | undefined>;
   getCellMeta?: (context: YoupGridCanEditCellContext<TRow>) => YoupGridCellMeta | undefined;
+  cellTooltip?: YoupGridCellTooltipOptions;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
@@ -180,6 +193,9 @@ export type YoupGridCellContext<TRow> = {
   focused: boolean;
   editable: boolean;
   meta?: YoupGridCellMeta;
+  treeDepth?: number;
+  hasChildren?: boolean;
+  expanded?: boolean;
 };
 
 export type YoupGridHeaderContext<TRow> = {

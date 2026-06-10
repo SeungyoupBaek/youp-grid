@@ -45,8 +45,10 @@ import {
   setRowGrouping,
   setRowSelected,
   setSort,
+  setTreeExpandedRows,
   startRemoteRequest,
   toggleRowGroupExpanded,
+  toggleTreeRowExpanded,
   toggleSort,
   undoValueHistory,
   type ColumnDef,
@@ -276,6 +278,87 @@ test("row grouping state helpers keep collapsed ids serializable", () => {
       rowGrouping: { columnIds: ["city"], collapsedGroupIds: ["group:city:Seoul"] },
     }).rowGrouping?.collapsedGroupIds,
     ["group:city:Seoul"],
+  );
+});
+
+type TreeRow = {
+  id: string;
+  parentId?: string;
+  name: string;
+};
+
+const treeRows: TreeRow[] = [
+  { id: "root", name: "Root" },
+  { id: "child", parentId: "root", name: "Child" },
+  { id: "grandchild", parentId: "child", name: "Grandchild" },
+  { id: "sibling", name: "Sibling" },
+];
+
+const treeColumns: ColumnDef<TreeRow>[] = [{ field: "name" }];
+
+test("tree data keeps rows collapsed until expanded", () => {
+  const collapsed = buildRowModel({
+    rows: treeRows,
+    columns: treeColumns,
+    state: {},
+    treeData: true,
+    getRowId: (row) => row.id,
+    getParentRowId: (row) => row.parentId,
+  });
+
+  assert.deepEqual(collapsed.displayRows.map((row) => row.id), ["root", "sibling"]);
+  assert.equal(collapsed.displayRows[0]?.depth, 0);
+  assert.equal(collapsed.displayRows[0]?.hasChildren, true);
+  assert.equal(collapsed.displayRows[0]?.expanded, false);
+
+  const expandedRoot = buildRowModel({
+    rows: treeRows,
+    columns: treeColumns,
+    state: { treeData: { expandedRowIds: ["root"] } },
+    treeData: true,
+    getRowId: (row) => row.id,
+    getParentRowId: (row) => row.parentId,
+  });
+
+  assert.deepEqual(expandedRoot.displayRows.map((row) => row.id), ["root", "child", "sibling"]);
+  assert.equal(expandedRoot.displayRows[1]?.depth, 1);
+  assert.equal(expandedRoot.displayRows[1]?.hasChildren, true);
+  assert.equal(expandedRoot.displayRows[1]?.expanded, false);
+
+  const expandedNested = buildRowModel({
+    rows: treeRows,
+    columns: treeColumns,
+    state: { treeData: { expandedRowIds: ["root", "child"] } },
+    treeData: true,
+    getRowId: (row) => row.id,
+    getParentRowId: (row) => row.parentId,
+  });
+
+  assert.deepEqual(
+    expandedNested.displayRows.map((row) => row.id),
+    ["root", "child", "grandchild", "sibling"],
+  );
+  assert.equal(expandedNested.displayRows[2]?.depth, 2);
+});
+
+test("tree data state helpers keep expanded ids serializable", () => {
+  let state: GridState = {};
+
+  state = setTreeExpandedRows(state, ["root"]);
+  assert.deepEqual(state.treeData, { expandedRowIds: ["root"] });
+
+  state = toggleTreeRowExpanded(state, "child");
+  assert.deepEqual(state.treeData?.expandedRowIds, ["root", "child"]);
+
+  state = toggleTreeRowExpanded(state, "root");
+  assert.deepEqual(state.treeData?.expandedRowIds, ["child"]);
+
+  const cloned = createGridState({ treeData: { expandedRowIds: ["root"] } });
+  cloned.treeData?.expandedRowIds?.push("child");
+
+  assert.deepEqual(
+    createGridState({ treeData: { expandedRowIds: ["root"] } }).treeData?.expandedRowIds,
+    ["root"],
   );
 });
 

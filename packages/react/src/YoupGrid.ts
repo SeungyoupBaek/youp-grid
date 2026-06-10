@@ -48,6 +48,7 @@ import type {
   YoupGridCellEditCommitReason,
   YoupGridCellContext,
   YoupGridCellMeta,
+  YoupGridCellTooltipMode,
   YoupGridCellValueChangeSource,
   YoupGridCellsValueChangeSource,
   YoupGridDensity,
@@ -94,8 +95,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [editingCell, setEditingCell] = useState<EditingCell | undefined>();
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
+  const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
   const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
+  const cellTooltipMode = props.cellTooltip?.mode ?? "native";
   const gridEditable = (props.editable ?? true) && !props.readOnly;
   const displayRows = rowModel.displayRows;
   const virtualRange = useMemo(() => {
@@ -216,7 +219,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   ) => {
     return (
       props.getCellMeta?.(getCellEditContext(row, rowIndex, column)) ??
-      props.cellMeta?.[`${row.id}:${column.id}`]
+      props.cellMeta?.[getCellKey(row.id, column.id)]
     );
   };
   const createGridCellValueChange = (cell: CellRenderState<TRow>, value: unknown) => {
@@ -256,6 +259,33 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       setColumnMenuOpenId(undefined);
     }
   }, [columnMenuOpenId, visibleColumns]);
+
+  useEffect(() => {
+    if (cellTooltipMode !== "rich") {
+      setActiveTooltipCellKey(undefined);
+      return;
+    }
+
+    const cellKey = props.cellTooltip?.autoOpenCellKey;
+
+    if (!cellKey) {
+      return;
+    }
+
+    setActiveTooltipCellKey(cellKey);
+
+    const duration = props.cellTooltip?.autoOpenDurationMs ?? 2000;
+
+    if (duration <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setActiveTooltipCellKey((current) => current === cellKey ? undefined : current);
+    }, duration);
+
+    return () => window.clearTimeout(timeout);
+  }, [cellTooltipMode, props.cellTooltip?.autoOpenCellKey, props.cellTooltip?.autoOpenDurationMs]);
 
   useEffect(() => {
     if (!props.infiniteScroll || !props.onRowsEndReached || !infiniteScrollTrigger.shouldLoadMore) {
@@ -645,10 +675,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   editingCell,
                   editable: gridEditable,
                   disabledReason: props.disabledReason,
+                  treeData: props.treeData ?? false,
                   canEditCell: canEditGridCell,
                   getCellMeta: getGridCellMeta,
                   setRowSelected: (selected) => controller.setRowSelected(row.id, selected),
                   setFocusedCell,
+                  toggleTreeRowExpanded: controller.toggleTreeRowExpanded,
                   startFillHandle: (event) => {
                     if (!gridEditable) {
                       return;
@@ -697,6 +729,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   },
                   cancelEditing: cancelEditingCell,
                   commitEditing: commitEditingValue,
+                  cellTooltipMode,
+                  activeTooltipCellKey,
+                  openCellTooltip: setActiveTooltipCellKey,
+                  closeCellTooltip: (cellKey) => {
+                    setActiveTooltipCellKey((current) => current === cellKey ? undefined : current);
+                  },
                   onRowClick: props.onRowClick,
                   onRowDoubleClick: props.onRowDoubleClick,
                   onCellKeyDown: (event, cell) => {
@@ -1226,6 +1264,7 @@ function renderRow<TRow>(context: {
   editingCell?: EditingCell;
   editable: boolean;
   disabledReason?: ReactNode;
+  treeData: boolean;
   canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
   getCellMeta: (
     row: RowNode<TRow>,
@@ -1234,6 +1273,7 @@ function renderRow<TRow>(context: {
   ) => YoupGridCellMeta | undefined;
   setRowSelected: (selected: boolean) => void;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
+  toggleTreeRowExpanded: (rowId: GridRowId) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
   autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
@@ -1247,6 +1287,10 @@ function renderRow<TRow>(context: {
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
   ) => void;
+  cellTooltipMode: YoupGridCellTooltipMode;
+  activeTooltipCellKey?: string;
+  openCellTooltip: (cellKey: string) => void;
+  closeCellTooltip: (cellKey: string) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
 }) {
   return createElement(
@@ -1317,8 +1361,10 @@ function renderRow<TRow>(context: {
         editingCell: context.editingCell,
         editable,
         disabledReason: context.disabledReason,
+        treeData: context.treeData,
         meta,
         setFocusedCell: context.setFocusedCell,
+        toggleTreeRowExpanded: context.toggleTreeRowExpanded,
         startFillHandle: context.startFillHandle,
         autoSizeColumn: context.autoSizeColumn,
         applyCellValue: context.applyCellValue,
@@ -1327,6 +1373,10 @@ function renderRow<TRow>(context: {
         cancelEditing: context.cancelEditing,
         commitEditing: context.commitEditing,
         onKeyDown: context.onCellKeyDown,
+        cellTooltipMode: context.cellTooltipMode,
+        activeTooltipCellKey: context.activeTooltipCellKey,
+        openCellTooltip: context.openCellTooltip,
+        closeCellTooltip: context.closeCellTooltip,
         renderCell: context.renderCell,
       });
     }),
@@ -1401,8 +1451,10 @@ function renderCell<TRow>(context: {
   editingCell?: EditingCell;
   editable: boolean;
   disabledReason?: ReactNode;
+  treeData: boolean;
   meta?: YoupGridCellMeta;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
+  toggleTreeRowExpanded: (rowId: GridRowId) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
   autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
@@ -1414,13 +1466,23 @@ function renderCell<TRow>(context: {
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
   ) => void;
+  cellTooltipMode: YoupGridCellTooltipMode;
+  activeTooltipCellKey?: string;
+  openCellTooltip: (cellKey: string) => void;
+  closeCellTooltip: (cellKey: string) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
 }) {
   const column = context.layout.column;
   const value = column.accessor(context.row.original);
   const editable = context.editable;
   const cellAlign = getColumnAlign(column);
-  const cellContext = {
+  const cellKey = getCellKey(context.row.id, column.id);
+  const showTreePrefix = context.treeData && context.columnIndex === 0;
+  const hasRichTooltip = context.cellTooltipMode === "rich" && hasTooltipMessage(context.meta);
+  const tooltipId = hasRichTooltip && context.activeTooltipCellKey === cellKey
+    ? getCellTooltipId(cellKey)
+    : undefined;
+  const cellContext: YoupGridCellContext<TRow> = {
     row: context.row,
     column,
     value,
@@ -1428,6 +1490,9 @@ function renderCell<TRow>(context: {
     focused: context.focused,
     editable,
     meta: context.meta,
+    treeDepth: context.row.depth,
+    hasChildren: context.row.hasChildren,
+    expanded: context.row.expanded,
   };
   const cellState = {
     row: context.row,
@@ -1444,8 +1509,17 @@ function renderCell<TRow>(context: {
         cell: cellState,
         row: context.row.original,
         disabledReason: context.disabledReason,
+        cellTooltipMode: context.cellTooltipMode,
         applyCellValue: context.applyCellValue,
       });
+
+  const renderedContent = showTreePrefix && !context.editing
+    ? renderTreeCellContent({
+        row: context.row,
+        content: cellContent,
+        toggleExpanded: context.toggleTreeRowExpanded,
+      })
+    : cellContent;
 
   return createElement(
     "div",
@@ -1460,13 +1534,16 @@ function renderCell<TRow>(context: {
           context.fillTargeted ? "youp-grid__cell--fill-target" : "",
           context.editing ? "youp-grid__cell--editing" : "",
           !editable ? "youp-grid__cell--disabled" : "",
+          showTreePrefix ? "youp-grid__cell--tree" : "",
+          tooltipId ? "youp-grid__cell--tooltip-open" : "",
           context.meta ? `youp-grid__cell--status-${context.meta.status}` : "",
         ].filter(Boolean).join(" "),
         context.layout,
       ),
       role: "gridcell",
       tabIndex: context.focused && !context.editing ? 0 : -1,
-      title: getCellTitle(context.meta, context.disabledReason, editable),
+      title: getCellTitle(context.meta, context.disabledReason, editable, context.cellTooltipMode),
+      "aria-describedby": tooltipId,
       "aria-colindex": context.columnIndex + context.ariaColumnOffset + 1,
       "aria-readonly": !editable || undefined,
       "data-youp-row-index": context.rowIndex,
@@ -1495,6 +1572,33 @@ function renderCell<TRow>(context: {
         }
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => context.onKeyDown(event, cellState),
+      onMouseEnter: () => {
+        if (hasRichTooltip) {
+          context.openCellTooltip(cellKey);
+        }
+      },
+      onMouseLeave: () => {
+        if (hasRichTooltip) {
+          context.closeCellTooltip(cellKey);
+        }
+      },
+      onFocus: () => {
+        if (hasRichTooltip) {
+          context.openCellTooltip(cellKey);
+        }
+      },
+      onBlur: (event: ReactFocusEvent<HTMLDivElement>) => {
+        if (!hasRichTooltip) {
+          return;
+        }
+
+        const nextTarget = event.relatedTarget;
+        if (nextTarget && event.currentTarget.contains(nextTarget as Node)) {
+          return;
+        }
+
+        context.closeCellTooltip(cellKey);
+      },
     },
     context.editing
       ? renderCellEditor({
@@ -1504,8 +1608,9 @@ function renderCell<TRow>(context: {
           commitEditing: context.commitEditing,
           onKeyDown: context.onKeyDown,
         })
-      : cellContent,
-    renderCellStatus(context.meta),
+      : renderedContent,
+    renderCellStatus(context.meta, context.cellTooltipMode),
+    renderCellTooltip(context.meta, tooltipId),
     !context.editing && context.showFillHandle
       ? createElement("span", {
           className: "youp-grid__fill-handle",
@@ -1537,6 +1642,7 @@ function renderDefaultCellContent<TRow>(context: {
   cell: CellRenderState<TRow>;
   row: TRow;
   disabledReason?: ReactNode;
+  cellTooltipMode: YoupGridCellTooltipMode;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
 }) {
   if (context.cell.column.editor === "checkbox") {
@@ -1545,7 +1651,12 @@ function renderDefaultCellContent<TRow>(context: {
       type: "checkbox",
       checked: Boolean(context.cell.value),
       disabled: !context.cell.editable,
-      title: getCellTitle(context.cell.meta, context.disabledReason, context.cell.editable),
+      title: getCellTitle(
+        context.cell.meta,
+        context.disabledReason,
+        context.cell.editable,
+        context.cellTooltipMode,
+      ),
       "aria-label": context.cell.column.headerName,
       onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
         context.applyCellValue(context.cell, event.currentTarget.checked);
@@ -1565,8 +1676,57 @@ function renderDefaultCellContent<TRow>(context: {
 
   return createElement(
     "span",
-    { className: hasPlaceholder ? "youp-grid__cell-placeholder" : undefined },
+    {
+      className: [
+        "youp-grid__cell-text",
+        hasPlaceholder ? "youp-grid__cell-placeholder" : "",
+      ].filter(Boolean).join(" "),
+    },
     hasPlaceholder ? placeholder : text,
+  );
+}
+
+function renderTreeCellContent<TRow>(context: {
+  row: RowNode<TRow>;
+  content: ReactNode;
+  toggleExpanded: (rowId: GridRowId) => void;
+}) {
+  const depth = Math.max(0, context.row.depth ?? 0);
+  const toggle = context.row.hasChildren
+    ? createElement(
+        "button",
+        {
+          className: "youp-grid__tree-toggle",
+          type: "button",
+          "aria-label": context.row.expanded ? "Collapse row" : "Expand row",
+          "aria-expanded": context.row.expanded,
+          onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            context.toggleExpanded(context.row.id);
+          },
+          onDoubleClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+          },
+          onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+          },
+        },
+        createElement(
+          "span",
+          { className: "youp-grid__tree-caret", "aria-hidden": true },
+          context.row.expanded ? "v" : ">",
+        ),
+      )
+    : createElement("span", { className: "youp-grid__tree-toggle-spacer", "aria-hidden": true });
+
+  return createElement(
+    "span",
+    {
+      className: "youp-grid__cell-tree-content",
+      style: { paddingLeft: depth * 18 },
+    },
+    toggle,
+    createElement("span", { className: "youp-grid__cell-tree-value" }, context.content),
   );
 }
 
@@ -1642,16 +1802,32 @@ function renderCellEditor<TRow>(context: {
   });
 }
 
-function renderCellStatus(meta?: YoupGridCellMeta) {
+function renderCellStatus(meta: YoupGridCellMeta | undefined, tooltipMode: YoupGridCellTooltipMode) {
   if (!meta) {
     return undefined;
   }
 
   return createElement("span", {
     className: `youp-grid__cell-status youp-grid__cell-status--${meta.status}`,
-    title: typeof meta.message === "string" ? meta.message : undefined,
+    title: tooltipMode === "native" && typeof meta.message === "string" ? meta.message : undefined,
     "aria-hidden": true,
   });
+}
+
+function renderCellTooltip(meta: YoupGridCellMeta | undefined, tooltipId: string | undefined) {
+  if (!tooltipId || !meta?.message) {
+    return undefined;
+  }
+
+  return createElement(
+    "span",
+    {
+      id: tooltipId,
+      className: "youp-grid__cell-tooltip",
+      role: "tooltip",
+    },
+    meta.message,
+  );
 }
 
 function renderColumnToolbar<TRow>(context: {
@@ -3081,8 +3257,9 @@ function getCellTitle(
   meta: YoupGridCellMeta | undefined,
   disabledReason: ReactNode | undefined,
   editable: boolean,
+  tooltipMode: YoupGridCellTooltipMode,
 ): string | undefined {
-  if (typeof meta?.message === "string") {
+  if (tooltipMode === "native" && typeof meta?.message === "string") {
     return meta.message;
   }
 
@@ -3091,6 +3268,18 @@ function getCellTitle(
   }
 
   return undefined;
+}
+
+function hasTooltipMessage(meta?: YoupGridCellMeta): boolean {
+  return Boolean(meta?.message);
+}
+
+function getCellKey(rowId: GridRowId, columnId: string): string {
+  return `${String(rowId)}:${columnId}`;
+}
+
+function getCellTooltipId(cellKey: string): string {
+  return `youp-grid-cell-tooltip-${cellKey.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function isTextEditingKey(

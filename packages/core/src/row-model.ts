@@ -5,6 +5,7 @@ import { applyFilters } from "./filtering.ts";
 import { applyPagination } from "./pagination.ts";
 import { applyRowGrouping } from "./row-grouping.ts";
 import { applySorting } from "./sorting.ts";
+import { applyTreeData } from "./tree-data.ts";
 import type { BuildRowModelOptions, PaginationState, RowModel, RowNode } from "./types.ts";
 
 export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowModel<TRow> {
@@ -18,6 +19,8 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
       columns,
       visibleColumns,
       state: options.state,
+      treeData: options.treeData,
+      getParentRowId: options.getParentRowId,
       serverRowCount: options.serverRowCount,
       serverFilteredRowCount: options.serverFilteredRowCount,
     });
@@ -25,7 +28,12 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
 
   const filteredRows = applyFilters(allRows, columns, options.state?.filters);
   const sortedRows = applySorting(filteredRows, columns, options.state?.sort);
-  const paginated = applyPagination(sortedRows, options.state?.pagination);
+  const treeRows = applyTreeData(sortedRows, {
+    enabled: options.treeData,
+    state: options.state?.treeData,
+    getParentRowId: options.getParentRowId,
+  });
+  const paginated = applyPagination(treeRows, options.state?.pagination);
   const aggregation = applyAggregation(filteredRows, columns, options.state?.aggregation);
   const displayRows = applyRowGrouping(paginated.rows, columns, options.state?.rowGrouping);
 
@@ -50,11 +58,18 @@ function buildServerRowModel<TRow>(context: {
   columns: RowModel<TRow>["columns"];
   visibleColumns: RowModel<TRow>["visibleColumns"];
   state: BuildRowModelOptions<TRow>["state"];
+  treeData?: boolean;
+  getParentRowId?: BuildRowModelOptions<TRow>["getParentRowId"];
   serverRowCount?: number;
   serverFilteredRowCount?: number;
 }): RowModel<TRow> {
   const totalRowCount = context.serverRowCount ?? context.allRows.length;
   const filteredRowCount = context.serverFilteredRowCount ?? totalRowCount;
+  const visibleRows = applyTreeData(context.allRows, {
+    enabled: context.treeData,
+    state: context.state?.treeData,
+    getParentRowId: context.getParentRowId,
+  });
 
   return {
     columns: context.columns,
@@ -62,12 +77,12 @@ function buildServerRowModel<TRow>(context: {
     allRows: context.allRows,
     filteredRows: context.allRows,
     sortedRows: context.allRows,
-    visibleRows: context.allRows,
-    displayRows: applyRowGrouping(context.allRows, context.columns, context.state?.rowGrouping),
+    visibleRows,
+    displayRows: applyRowGrouping(visibleRows, context.columns, context.state?.rowGrouping),
     aggregation: applyAggregation(context.allRows, context.columns, context.state?.aggregation),
     totalRowCount,
     filteredRowCount,
-    visibleRowCount: context.allRows.length,
+    visibleRowCount: visibleRows.length,
     pageCount: getServerPageCount(filteredRowCount, context.state?.pagination),
   };
 }

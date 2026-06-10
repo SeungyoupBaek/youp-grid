@@ -22,10 +22,12 @@ import {
   setRowSelected as setCoreRowSelected,
   setSelectedRows as setCoreSelectedRows,
   setSort as setCoreSort,
+  setTreeExpandedRows as setCoreTreeExpandedRows,
   startRemoteRequest as startCoreRemoteRequest,
   toggleRowGroupExpanded as toggleCoreRowGroupExpanded,
   toggleRowSelected as toggleCoreRowSelected,
   toggleSort as toggleCoreSort,
+  toggleTreeRowExpanded as toggleCoreTreeRowExpanded,
   type GridState,
 } from "@youp-grid/core";
 import { useCallback, useMemo, useState } from "react";
@@ -45,6 +47,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
       columns: options.columns,
       state,
       getRowId: options.getRowId,
+      treeData: options.treeData,
+      getParentRowId: options.getParentRowId,
       rowModelType: options.rowModelType,
       serverRowCount: options.serverRowCount,
       serverFilteredRowCount: options.serverFilteredRowCount,
@@ -53,6 +57,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     options.rows,
     options.columns,
     options.getRowId,
+    options.treeData,
+    options.getParentRowId,
     options.rowModelType,
     options.serverRowCount,
     options.serverFilteredRowCount,
@@ -66,6 +72,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
         columns: options.columns,
         state: nextState,
         getRowId: options.getRowId,
+        treeData: options.treeData,
+        getParentRowId: options.getParentRowId,
         rowModelType: options.rowModelType,
         serverRowCount: options.serverRowCount,
         serverFilteredRowCount: options.serverFilteredRowCount,
@@ -145,5 +153,7 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     setRowSelected: (rowId, selected) => commitState(setCoreRowSelected(state, rowId, selected)),
     setSelectedRows: (rowIds) => commitState(setCoreSelectedRows(state, rowIds)),
     toggleRowSelected: (rowId) => commitState(toggleCoreRowSelected(state, rowId)),
+    setTreeExpandedRows: (rowIds) => commitState(setCoreTreeExpandedRows(state, rowIds)),
+    toggleTreeRowExpanded: (rowId) => commitState(toggleCoreTreeRowExpanded(state, rowId)),
   };
 }

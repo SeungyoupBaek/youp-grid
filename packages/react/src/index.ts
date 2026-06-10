@@ -7,6 +7,8 @@ export type {
   YoupGridCellContext,
   YoupGridCellMeta,
   YoupGridCellMetaStatus,
+  YoupGridCellTooltipMode,
+  YoupGridCellTooltipOptions,
   YoupGridCellsValueChange,
   YoupGridCellsValueChangeSource,
   YoupGridController,

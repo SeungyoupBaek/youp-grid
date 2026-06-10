@@ -2,6 +2,7 @@ import type {
   AggregationRule,
   CursorPaginationState,
   FilterRule,
+  GridRowId,
   GridState,
   PaginationState,
   RemoteCacheState,
@@ -22,6 +23,13 @@ export function createGridState(state: GridState = {}): GridState {
           columnIds: [...state.rowGrouping.columnIds],
           collapsedGroupIds: state.rowGrouping.collapsedGroupIds
             ? [...state.rowGrouping.collapsedGroupIds]
+            : undefined,
+        }
+      : undefined,
+    treeData: state.treeData
+      ? {
+          expandedRowIds: state.treeData.expandedRowIds
+            ? [...state.treeData.expandedRowIds]
             : undefined,
         }
       : undefined,
@@ -209,6 +217,30 @@ export function toggleRowGroupExpanded(state: GridState, groupId: string): GridS
   };
 }
 
+export function setTreeExpandedRows(state: GridState, rowIds: readonly GridRowId[]): GridState {
+  const expandedRowIds = [...new Set(rowIds)];
+
+  return {
+    ...state,
+    treeData: {
+      ...(state.treeData ?? {}),
+      expandedRowIds: expandedRowIds.length > 0 ? expandedRowIds : undefined,
+    },
+  };
+}
+
+export function toggleTreeRowExpanded(state: GridState, rowId: GridRowId): GridState {
+  const expandedRowIds = new Set(state.treeData?.expandedRowIds ?? []);
+
+  if (expandedRowIds.has(rowId)) {
+    expandedRowIds.delete(rowId);
+  } else {
+    expandedRowIds.add(rowId);
+  }
+
+  return setTreeExpandedRows(state, [...expandedRowIds]);
+}
+
 export function startRemoteRequest(state: GridState, requestId: string): GridState {
   return {
     ...state,
@@ -267,6 +299,7 @@ export function createRemoteCacheKey(state: GridState): string {
     filters: state.filters ?? [],
     aggregation: state.aggregation ?? [],
     rowGrouping: state.rowGrouping,
+    treeData: state.treeData,
     pagination: state.pagination,
     cursorPagination: state.cursorPagination,
   });
