@@ -443,6 +443,7 @@ Cells are keyboard-focusable and editable when both the grid and column allow it
 - `disabledReason` shows a read-only reason above the grid and is used as a cell title when it is plain text.
 - `editable: true` or `editable: false` on a column controls individual columns.
 - `editor` can be `"text"`, `"number"`, `"checkbox"`, or `"select"`.
+- `align` can be `"left"`, `"center"`, or `"right"`; by default number editors align right, checkbox editors align center, and other cells align left.
 - `options` supplies select values, and `placeholder` renders guidance for empty non-editing cells.
 - `valueParser` converts editor text into the row value type.
 - `onCellValueChange` is the only write path; consumers update their own row state.
@@ -457,7 +458,7 @@ Cells are keyboard-focusable and editable when both the grid and column allow it
 const columns: ColumnDef<SqlColumn>[] = [
   { field: "logicalName", headerName: "Logical", editor: "text" },
   { field: "physicalName", headerName: "Physical", editor: "text", placeholder: "Auto suggestion" },
-  { field: "length", headerName: "Length", editor: "number" },
+  { field: "length", headerName: "Length", editor: "number", align: "right" },
   {
     field: "dataType",
     headerName: "Type",
@@ -465,7 +466,7 @@ const columns: ColumnDef<SqlColumn>[] = [
     options: ["VARCHAR", "BIGINT", "TIMESTAMP"],
     placeholder: "Auto suggestion",
   },
-  { field: "nullable", headerName: "Nullable", editor: "checkbox" },
+  { field: "nullable", headerName: "Nullable", editor: "checkbox", align: "center" },
 ];
 
 <YoupGrid

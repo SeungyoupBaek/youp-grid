@@ -33,7 +33,7 @@ type User = {
 
 const columns: ColumnDef<User>[] = [
   { field: "name", headerName: "Name" },
-  { field: "age", headerName: "Age" },
+  { field: "age", headerName: "Age", editor: "number" },
 ];
 
 const state: GridState = {

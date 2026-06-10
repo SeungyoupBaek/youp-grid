@@ -150,6 +150,7 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showAggregationFooter?: boolean;
   showPagination?: boolean;
   showRowSelectionColumn?: boolean;
+  pinRowSelectionColumn?: boolean;
   csvFileName?: string;
   density?: YoupGridDensity;
   defaultDensity?: YoupGridDensity;

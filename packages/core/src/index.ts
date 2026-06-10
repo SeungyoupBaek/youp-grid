@@ -75,6 +75,7 @@ export type {
   AggregationResult,
   AggregationRule,
   BuildRowModelOptions,
+  ColumnAlign,
   ColumnPin,
   ColumnState,
   ColumnComparator,

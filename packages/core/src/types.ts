@@ -47,6 +47,8 @@ export type ValueParser<TValue = unknown, TRow = unknown> = (
 
 export type ColumnEditor = "text" | "number" | "checkbox" | "select";
 
+export type ColumnAlign = "left" | "center" | "right";
+
 export type ColumnEditorOptionValue = string | number | boolean;
 
 export type ColumnEditorOption =
@@ -75,6 +77,7 @@ export type ColumnDef<TRow, TValue = unknown> = {
   valueFormatter?: ValueFormatter<TValue, TRow>;
   valueParser?: ValueParser<TValue, TRow>;
   editor?: ColumnEditor;
+  align?: ColumnAlign;
   options?: readonly ColumnEditorOption[];
   placeholder?: string;
 };

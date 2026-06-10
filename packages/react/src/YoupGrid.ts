@@ -16,6 +16,7 @@ import {
   serializeGridRange,
   undoValueHistory,
   type AggregationResult,
+  type ColumnAlign,
   type ColumnEditorOption,
   type ColumnEditorOptionValue,
   type ColumnPin,
@@ -64,6 +65,10 @@ const DENSITY_ROW_HEIGHTS: Record<YoupGridDensity, number> = {
   comfortable: 46,
 };
 const SELECTION_COLUMN_WIDTH = 44;
+const AUTOSIZE_CELL_EXTRA_WIDTH = 8;
+const AUTOSIZE_CELL_BORDER_THRESHOLD = 6;
+
+let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 
 export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const controller = useYoupGrid(props);
@@ -90,6 +95,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
+  const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
   const gridEditable = (props.editable ?? true) && !props.readOnly;
   const displayRows = rowModel.displayRows;
   const virtualRange = useMemo(() => {
@@ -137,9 +143,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const someVisibleRowsSelected = selectedVisibleRowCount > 0 && !allVisibleRowsSelected;
   const columnLayouts = useMemo(() => {
     return getColumnLayouts(rowModel.visibleColumns, {
-      leftOffset: showRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0,
+      leftOffset: showRowSelectionColumn && pinRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0,
     });
-  }, [rowModel.visibleColumns, showRowSelectionColumn]);
+  }, [pinRowSelectionColumn, rowModel.visibleColumns, showRowSelectionColumn]);
   const visibleColumns = useMemo(() => columnLayouts.map((layout) => layout.column), [columnLayouts]);
   const visibleRowIndexById = useMemo(() => {
     return new Map(rowModel.visibleRows.map((row, index) => [row.id, index]));
@@ -442,6 +448,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         "youp-grid",
         `youp-grid--density-${density}`,
         !gridEditable ? "youp-grid--read-only" : "",
+        pinRowSelectionColumn ? "youp-grid--selection-column-pinned" : "",
         props.className,
       ].filter(Boolean).join(" "),
       style: gridStyle,
@@ -553,6 +560,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                 }
               },
               resizeColumn: (width) => controller.setColumnWidth(layout.column.id, width),
+              autoSizeColumn: (event) => {
+                autoSizeColumnToFit({
+                  event,
+                  column: layout.column,
+                  rows: rowModel.visibleRows,
+                  resizeColumn: (width) => controller.setColumnWidth(layout.column.id, width),
+                });
+              },
               showMenu: props.showColumnMenu ?? true,
               menuOpen: columnMenuOpenId === layout.column.id,
               toggleMenu: () => {
@@ -665,6 +680,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                         setFocusedRowIndex(nextSelectionRange.focus.rowIndex);
                         setFocusedColumnIndex(nextSelectionRange.focus.columnIndex);
                       },
+                    });
+                  },
+                  autoSizeColumn: (event, column) => {
+                    autoSizeColumnToFit({
+                      event,
+                      column,
+                      rows: rowModel.visibleRows,
+                      resizeColumn: (width) => controller.setColumnWidth(column.id, width),
                     });
                   },
                   applyCellValue,
@@ -942,6 +965,7 @@ function renderHeaderCell<TRow>(context: {
   showFilter: boolean;
   setFilter: (value: string) => void;
   resizeColumn: (width: number) => void;
+  autoSizeColumn: (event: ReactMouseEvent<HTMLElement>) => void;
   showMenu: boolean;
   menuOpen: boolean;
   toggleMenu: () => void;
@@ -960,6 +984,7 @@ function renderHeaderCell<TRow>(context: {
       role: "columnheader",
       style: getCellStyle(context.layout),
       "aria-sort": context.sorted === "desc" ? "descending" : context.sorted === "asc" ? "ascending" : "none",
+      "data-youp-column-id": context.layout.column.id,
     },
     createElement(
       "div",
@@ -1041,6 +1066,7 @@ function renderHeaderCell<TRow>(context: {
           resizeColumn: context.resizeColumn,
         });
       },
+      onDoubleClick: context.autoSizeColumn,
     }),
   );
 }
@@ -1209,6 +1235,7 @@ function renderRow<TRow>(context: {
   setRowSelected: (selected: boolean) => void;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
+  autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
   updateEditingDraft: (draftValue: string) => void;
@@ -1293,6 +1320,7 @@ function renderRow<TRow>(context: {
         meta,
         setFocusedCell: context.setFocusedCell,
         startFillHandle: context.startFillHandle,
+        autoSizeColumn: context.autoSizeColumn,
         applyCellValue: context.applyCellValue,
         startEditing: context.startEditing,
         updateEditingDraft: context.updateEditingDraft,
@@ -1376,6 +1404,7 @@ function renderCell<TRow>(context: {
   meta?: YoupGridCellMeta;
   setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
   startFillHandle: (event: ReactMouseEvent<HTMLSpanElement>) => void;
+  autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
   updateEditingDraft: (draftValue: string) => void;
@@ -1390,6 +1419,7 @@ function renderCell<TRow>(context: {
   const column = context.layout.column;
   const value = column.accessor(context.row.original);
   const editable = context.editable;
+  const cellAlign = getColumnAlign(column);
   const cellContext = {
     row: context.row,
     column,
@@ -1424,6 +1454,7 @@ function renderCell<TRow>(context: {
       className: getCellClassName(
         [
           "youp-grid__cell",
+          `youp-grid__cell--align-${cellAlign}`,
           context.focused ? "youp-grid__cell--focused" : "",
           context.selected ? "youp-grid__cell--range-selected" : "",
           context.fillTargeted ? "youp-grid__cell--fill-target" : "",
@@ -1449,7 +1480,12 @@ function renderCell<TRow>(context: {
           event.shiftKey,
         );
       },
-      onDoubleClick: () => {
+      onDoubleClick: (event: ReactMouseEvent<HTMLDivElement>) => {
+        if (isCellRightBorderDoubleClick(event)) {
+          context.autoSizeColumn(event, column);
+          return;
+        }
+
         if (editable) {
           if (column.editor === "checkbox") {
             context.applyCellValue(cellState, !Boolean(value));
@@ -1479,6 +1515,22 @@ function renderCell<TRow>(context: {
         })
       : undefined,
   );
+}
+
+function getColumnAlign<TRow>(column: ResolvedColumnDef<TRow>): ColumnAlign {
+  if (column.align) {
+    return column.align;
+  }
+
+  if (column.editor === "number") {
+    return "right";
+  }
+
+  if (column.editor === "checkbox") {
+    return "center";
+  }
+
+  return "left";
 }
 
 function renderDefaultCellContent<TRow>(context: {
@@ -2064,6 +2116,144 @@ function startColumnResize<TRow>(context: {
 
   document.addEventListener("mousemove", handleMouseMove);
   document.addEventListener("mouseup", handleMouseUp);
+}
+
+function autoSizeColumnToFit<TRow>(context: {
+  event: ReactMouseEvent<HTMLElement>;
+  column: ResolvedColumnDef<TRow>;
+  rows: readonly RowNode<TRow>[];
+  resizeColumn: (width: number) => void;
+}) {
+  context.event.preventDefault();
+  context.event.stopPropagation();
+
+  context.resizeColumn(getAutoSizeColumnWidth({
+    anchor: context.event.currentTarget,
+    column: context.column,
+    rows: context.rows,
+  }));
+}
+
+function getAutoSizeColumnWidth<TRow>(context: {
+  anchor: HTMLElement;
+  column: ResolvedColumnDef<TRow>;
+  rows: readonly RowNode<TRow>[];
+}): number {
+  const metrics = getAutoSizeMetrics(context.anchor, context.column.id);
+  const minWidth = context.column.minWidth ?? 64;
+  const maxWidth = context.column.maxWidth ?? Number.MAX_SAFE_INTEGER;
+  let width = measureAutoSizeText(context.column.headerName, metrics.headerFont) +
+    metrics.headerHorizontalPadding +
+    metrics.headerControlWidth +
+    AUTOSIZE_CELL_EXTRA_WIDTH;
+
+  for (const row of context.rows) {
+    const text = getAutoSizeCellText(context.column, row.original);
+    width = Math.max(
+      width,
+      measureAutoSizeText(text, metrics.cellFont) + metrics.cellHorizontalPadding + AUTOSIZE_CELL_EXTRA_WIDTH,
+    );
+  }
+
+  return Math.ceil(clamp(width, minWidth, maxWidth));
+}
+
+function getAutoSizeMetrics(anchor: HTMLElement, columnId: string): {
+  headerFont: string;
+  cellFont: string;
+  headerHorizontalPadding: number;
+  cellHorizontalPadding: number;
+  headerControlWidth: number;
+} {
+  const anchorCell = anchor.closest<HTMLElement>(".youp-grid__cell");
+  const root = anchor.closest<HTMLElement>(".youp-grid");
+  const headerCell = anchorCell?.getAttribute("role") === "columnheader"
+    ? anchorCell
+    : findColumnElement(root, "columnheader", columnId);
+  const bodyCell = anchorCell?.getAttribute("role") === "gridcell"
+    ? anchorCell
+    : findColumnElement(root, "gridcell", columnId);
+  const headerCellStyle = headerCell ? window.getComputedStyle(headerCell) : undefined;
+  const bodyCellStyle = bodyCell ? window.getComputedStyle(bodyCell) : headerCellStyle;
+  const headerMain = headerCell?.querySelector<HTMLElement>(".youp-grid__header-main");
+  const headerMainStyle = headerMain ? window.getComputedStyle(headerMain) : undefined;
+  const menuButton = headerCell?.querySelector<HTMLElement>(".youp-grid__column-menu-button");
+  const headerHorizontalPadding = headerCellStyle
+    ? getPixelValue(headerCellStyle.paddingLeft) + getPixelValue(headerCellStyle.paddingRight)
+    : 24;
+  const cellHorizontalPadding = bodyCellStyle
+    ? getPixelValue(bodyCellStyle.paddingLeft) + getPixelValue(bodyCellStyle.paddingRight)
+    : headerHorizontalPadding;
+  const headerControlWidth = menuButton
+    ? menuButton.offsetWidth + getPixelValue(headerMainStyle?.columnGap ?? headerMainStyle?.gap ?? "0")
+    : 0;
+
+  return {
+    headerFont: headerCellStyle ? getFontValue(headerCellStyle) : "13px sans-serif",
+    cellFont: bodyCellStyle ? getFontValue(bodyCellStyle) : "13px sans-serif",
+    headerHorizontalPadding,
+    cellHorizontalPadding,
+    headerControlWidth,
+  };
+}
+
+function findColumnElement(
+  root: HTMLElement | null,
+  role: "columnheader" | "gridcell",
+  columnId: string,
+): HTMLElement | undefined {
+  if (!root) {
+    return undefined;
+  }
+
+  return Array.from(root.querySelectorAll<HTMLElement>(`[role='${role}'][data-youp-column-id]`))
+    .find((element) => element.dataset.youpColumnId === columnId);
+}
+
+function isCellRightBorderDoubleClick(event: ReactMouseEvent<HTMLElement>): boolean {
+  const rect = event.currentTarget.getBoundingClientRect();
+
+  return Math.abs(rect.right - event.clientX) <= AUTOSIZE_CELL_BORDER_THRESHOLD;
+}
+
+function getAutoSizeCellText<TRow>(column: ResolvedColumnDef<TRow>, row: TRow): string {
+  const text = formatCellValue(column, row, column.accessor(row));
+
+  return text.length === 0 && column.placeholder ? column.placeholder : text;
+}
+
+function measureAutoSizeText(text: string, font: string): number {
+  if (typeof document === "undefined") {
+    return text.length * 8;
+  }
+
+  autosizeMeasureCanvas ??= document.createElement("canvas");
+
+  const context = autosizeMeasureCanvas.getContext("2d");
+
+  if (!context) {
+    return text.length * 8;
+  }
+
+  context.font = font;
+
+  return context.measureText(text).width;
+}
+
+function getFontValue(style: CSSStyleDeclaration): string {
+  return style.font || [
+    style.fontStyle,
+    style.fontVariant,
+    style.fontWeight,
+    `${style.fontSize}/${style.lineHeight}`,
+    style.fontFamily,
+  ].join(" ");
+}
+
+function getPixelValue(value: string): number {
+  const parsed = Number.parseFloat(value);
+
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 type FocusedCell = {

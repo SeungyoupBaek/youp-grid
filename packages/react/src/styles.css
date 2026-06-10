@@ -164,9 +164,13 @@
   --youp-grid-header-scroll-left: 0px;
 }
 
-.youp-grid__header .youp-grid__cell--header:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right):not(.youp-grid__selection-cell),
-.youp-grid__header .youp-grid__cell--header-group:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right):not(.youp-grid__selection-cell) {
+.youp-grid__header .youp-grid__cell--header:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right),
+.youp-grid__header .youp-grid__cell--header-group:not(.youp-grid__cell--pinned-left):not(.youp-grid__cell--pinned-right) {
   transform: translateX(calc(-1 * var(--youp-grid-header-scroll-left)));
+}
+
+.youp-grid--selection-column-pinned .youp-grid__header .youp-grid__selection-cell {
+  transform: none;
 }
 
 .youp-grid__row--header {
@@ -212,14 +216,17 @@
 }
 
 .youp-grid__selection-cell {
-  position: sticky;
-  left: 0;
-  z-index: 3;
   display: grid;
   place-items: center;
   min-width: 44px;
   padding: 0;
   background: #fff;
+}
+
+.youp-grid--selection-column-pinned .youp-grid__selection-cell {
+  position: sticky;
+  left: 0;
+  z-index: 3;
 }
 
 .youp-grid__cell.youp-grid__selection-cell {
@@ -284,6 +291,18 @@
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.youp-grid__cell--align-left {
+  text-align: left;
+}
+
+.youp-grid__cell--align-center {
+  text-align: center;
+}
+
+.youp-grid__cell--align-right {
+  text-align: right;
 }
 
 .youp-grid--read-only .youp-grid__cell {
@@ -406,6 +425,18 @@
   font: inherit;
   background: #fff;
   outline: none;
+}
+
+.youp-grid__cell--align-left .youp-grid__cell-editor {
+  text-align: left;
+}
+
+.youp-grid__cell--align-center .youp-grid__cell-editor {
+  text-align: center;
+}
+
+.youp-grid__cell--align-right .youp-grid__cell-editor {
+  text-align: right;
 }
 
 .youp-grid__cell-editor--select {
