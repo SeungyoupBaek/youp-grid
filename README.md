@@ -1,5 +1,8 @@
 # Youp Grid
 
+[![npm core](https://img.shields.io/npm/v/@youp-grid/core?label=@youp-grid/core)](https://www.npmjs.com/package/@youp-grid/core)
+[![npm react](https://img.shields.io/npm/v/@youp-grid/react?label=@youp-grid/react)](https://www.npmjs.com/package/@youp-grid/react)
+
 Framework-agnostic data grid core for building UI adapters such as React, Vue, Angular, Svelte, Vanilla JS, or Web Components.
 
 Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
