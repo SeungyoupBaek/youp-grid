@@ -328,3 +328,52 @@
   color: var(--youp-grid-vue-muted);
   text-align: center;
 }
+
+.youp-grid-vue__pagination {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  color: var(--youp-grid-vue-muted);
+  font-size: 13px;
+}
+
+.youp-grid-vue__pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.youp-grid-vue__pagination-size,
+.youp-grid-vue__pagination-button {
+  height: 30px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--youp-grid-vue-text);
+  font: inherit;
+}
+
+.youp-grid-vue__pagination-size {
+  min-width: 70px;
+  padding: 0 8px;
+}
+
+.youp-grid-vue__pagination-button {
+  width: 30px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.youp-grid-vue__pagination-button:disabled {
+  color: var(--youp-grid-vue-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.youp-grid-vue__pagination-page {
+  min-width: 64px;
+  text-align: center;
+}

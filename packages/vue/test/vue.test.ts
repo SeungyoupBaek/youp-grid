@@ -79,6 +79,26 @@ test("YoupGrid renders headers and rows", async () => {
   assert.match(html, /Kim/);
 });
 
+test("YoupGrid renders optional pagination footer", async () => {
+  const app = createSSRApp({
+    render: () =>
+      h(YoupGrid, {
+        rows,
+        columns,
+        getRowId: (row: User) => row.id,
+        pagination: { pageSizeOptions: [2, 3] },
+      }),
+  });
+
+  const html = await renderToString(app);
+
+  assert.match(html, /aria-label="Pagination"/);
+  assert.match(html, /1-2 \/ 3/);
+  assert.match(html, /aria-label="Next page"/);
+  assert.match(html, /Kim/);
+  assert.doesNotMatch(html, /Park/);
+});
+
 test("YoupGrid renders optional row number and selection columns", async () => {
   const app = createSSRApp({
     render: () =>

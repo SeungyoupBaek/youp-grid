@@ -36,6 +36,7 @@ export type YoupGridOptions<TRow> = {
 
 export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   emptyText?: string;
+  pagination?: boolean | YoupGridPaginationOptions;
   sortOnHeaderClick?: boolean;
   showRowNumberColumn?: boolean;
   showRowSelectionColumn?: boolean;
@@ -47,6 +48,10 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   cellMeta?: Record<string, YoupGridCellMeta | undefined>;
   getCellMeta?: (context: YoupGridCanEditCellContext<TRow>) => YoupGridCellMeta | undefined;
   cellTooltip?: YoupGridCellTooltipOptions;
+};
+
+export type YoupGridPaginationOptions = {
+  pageSizeOptions?: readonly number[];
 };
 
 export type YoupGridHeaderSlotContext<TRow> = {

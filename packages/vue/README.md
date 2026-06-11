@@ -52,6 +52,7 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
     :show-row-selection-column="true"
     :pin-row-selection-column="true"
     :show-cell-context-menu="true"
+    :pagination="{ pageSizeOptions: [10, 20, 50] }"
     @state-change="handleStateChange"
     @rows-change="handleRowsChange"
   />
@@ -75,6 +76,23 @@ Use `editable`, `readOnly`, or `canEditCell` to guard editing. `cell-edit-commit
 ## Row Number and Selection Columns
 
 Enable Excel-style row numbers and checkbox row selection with `showRowNumberColumn` and `showRowSelectionColumn`. `pinRowSelectionColumn` keeps the selection column aligned while horizontally scrolling.
+
+## Pagination Footer
+
+Enable the standard footer with `pagination`. The footer uses the core `state.pagination` model, emits page changes through `state-change`, and supports client or server row models.
+
+```vue
+<YoupGrid
+  :rows="rows"
+  :columns="columns"
+  :state="state"
+  :pagination="{ pageSizeOptions: [10, 20, 50, 100] }"
+  :row-model-type="'server'"
+  :server-row-count="totalCount"
+  :server-filtered-row-count="filteredCount"
+  @state-change="handleStateChange"
+/>
+```
 
 ## Cell Context Menu
 
@@ -141,7 +159,7 @@ grid.setSort("age", "desc");
 
 ## Boundary
 
-The Vue component currently provides row rendering, row number and selection columns, a basic cell context menu, inline editing, header sorting, placeholder display, alignment, cell metadata, native/rich cell tooltips, grouping/tree expansion controls, row click events, and header/cell slots.
+The Vue component currently provides row rendering, row number and selection columns, a basic cell context menu, inline editing, header sorting, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell slots.
 
 The headless composable provides state, row model, sorting, filtering, pagination, column state, row selection, tree expansion, grouping, aggregation, and remote-cache helpers through Vue `computed` refs.
 

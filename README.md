@@ -178,13 +178,14 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
     :show-cell-context-menu="true"
     :cell-meta="{ '1:name': { status: 'warning', message: 'Check spelling' } }"
     :cell-tooltip="{ mode: 'rich', autoOpenCellKey: '1:name' }"
+    :pagination="{ pageSizeOptions: [10, 20, 50] }"
     @state-change="handleStateChange"
     @rows-change="handleRowsChange"
   />
 </template>
 ```
 
-The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, and row selection, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, and native/rich cell tooltips. Advanced editing UX still lands first in `@youp-grid/react`.
+The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, and row selection, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Advanced editing UX still lands first in `@youp-grid/react`.
 
 ## Current Boundary
 

@@ -32,6 +32,7 @@ import type {
   YoupGridCellTooltipOptions,
   YoupGridCellValueChange,
   YoupGridHeaderSlotContext,
+  YoupGridPaginationOptions,
   YoupGridRowEvent,
   YoupGridRowsChange,
   YoupGridStateChange,
@@ -39,6 +40,8 @@ import type {
 import { useYoupGrid } from "./useYoupGrid.ts";
 
 const DEFAULT_COLUMN_WIDTH = 160;
+const DEFAULT_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const ROW_NUMBER_COLUMN_WIDTH = 44;
 const ROW_SELECTION_COLUMN_WIDTH = 44;
 
@@ -54,6 +57,21 @@ type ActiveCellContextMenu<TRow = unknown> = {
   columnIndex: number;
   clientX: number;
   clientY: number;
+};
+
+type NormalizedPaginationOptions = {
+  pageSizeOptions: readonly number[];
+};
+
+type PaginationRenderContext = {
+  pageIndex: number;
+  pageSize: number;
+  pageCount: number;
+  rowCount: number;
+  visibleRowCount: number;
+  pageSizeOptions: readonly number[];
+  onPageChange: (pageIndex: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
 };
 
 export const YoupGrid = defineComponent({
@@ -104,6 +122,10 @@ export const YoupGrid = defineComponent({
     emptyText: {
       type: String,
       default: "No rows",
+    },
+    pagination: {
+      type: [Boolean, Object] as PropType<boolean | YoupGridPaginationOptions>,
+      default: false,
     },
     sortOnHeaderClick: {
       type: Boolean,
@@ -166,8 +188,8 @@ export const YoupGrid = defineComponent({
     const grid = useYoupGrid<unknown>(() => ({
       rows: props.rows,
       columns: props.columns,
-      state: props.state,
-      defaultState: props.defaultState,
+      state: withDefaultPagination(props.state, props.pagination),
+      defaultState: withDefaultPagination(props.defaultState, props.pagination),
       getRowId: props.getRowId,
       treeData: props.treeData,
       getParentRowId: props.getParentRowId,
@@ -178,6 +200,7 @@ export const YoupGrid = defineComponent({
     }));
 
     const visibleColumns = computed(() => grid.rowModel.value.visibleColumns);
+    const paginationOptions = computed(() => normalizePaginationOptions(props.pagination));
     const leadingColumnCount = computed(
       () => Number(props.showRowNumberColumn) + Number(props.showRowSelectionColumn),
     );
@@ -505,6 +528,11 @@ export const YoupGrid = defineComponent({
       const columns = visibleColumns.value;
       const templateColumns = gridTemplateColumns.value;
       const cellContextMenu = activeCellContextMenu.value;
+      const pagination = paginationOptions.value;
+      const paginationState = grid.state.value.pagination;
+      const pageSize = paginationState?.pageSize ?? pagination?.pageSizeOptions[0] ?? DEFAULT_PAGE_SIZE;
+      const pageCount = getPageCount(rowModel.pageCount, rowModel.filteredRowCount, pageSize);
+      const pageIndex = getPageIndex(paginationState?.pageIndex, pageCount);
 
       return h(
         "div",
@@ -600,6 +628,18 @@ export const YoupGrid = defineComponent({
                   props.emptyText,
                 ),
           ]),
+          pagination
+            ? renderPaginationFooter({
+                pageIndex,
+                pageSize,
+                pageCount,
+                rowCount: rowModel.filteredRowCount,
+                visibleRowCount: rowModel.visibleRowCount,
+                pageSizeOptions: pagination.pageSizeOptions,
+                onPageChange: grid.setPage,
+                onPageSizeChange: grid.setPageSize,
+              })
+            : undefined,
           renderCellContextMenu({
             state: cellContextMenu,
             editable: cellContextMenu
@@ -618,6 +658,159 @@ export const YoupGrid = defineComponent({
     };
   },
 });
+
+function withDefaultPagination(
+  state: GridState | undefined,
+  pagination: boolean | YoupGridPaginationOptions | undefined,
+): GridState | undefined {
+  const options = normalizePaginationOptions(pagination);
+
+  if (!options || state?.pagination) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pagination: {
+      pageIndex: 0,
+      pageSize: options.pageSizeOptions[0] ?? DEFAULT_PAGE_SIZE,
+    },
+  };
+}
+
+function normalizePaginationOptions(
+  pagination: boolean | YoupGridPaginationOptions | undefined,
+): NormalizedPaginationOptions | undefined {
+  if (!pagination) {
+    return undefined;
+  }
+
+  if (pagination === true) {
+    return { pageSizeOptions: DEFAULT_PAGE_SIZE_OPTIONS };
+  }
+
+  const pageSizeOptions = normalizePageSizeOptions(pagination.pageSizeOptions);
+  return { pageSizeOptions };
+}
+
+function normalizePageSizeOptions(options?: readonly number[]): readonly number[] {
+  const source = options && options.length > 0 ? options : DEFAULT_PAGE_SIZE_OPTIONS;
+  const values = source
+    .map((value) => Math.trunc(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  return [...new Set(values)];
+}
+
+function getPageCount(pageCount: number | undefined, rowCount: number, pageSize: number): number {
+  return Math.max(1, pageCount ?? Math.ceil(Math.max(0, rowCount) / Math.max(1, pageSize)));
+}
+
+function getPageIndex(pageIndex: number | undefined, pageCount: number): number {
+  return clamp(Math.trunc(pageIndex ?? 0), 0, Math.max(0, pageCount - 1));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function renderPaginationFooter(context: PaginationRenderContext) {
+  const canMovePrevious = context.pageIndex > 0;
+  const canMoveNext = context.pageIndex < context.pageCount - 1;
+  const rowRange = getPaginationRowRange(
+    context.rowCount,
+    context.pageIndex,
+    context.pageSize,
+    context.visibleRowCount,
+  );
+  const pageSizeOptions = normalizePageSizeOptions([
+    ...context.pageSizeOptions,
+    context.pageSize,
+  ]);
+
+  return h(
+    "div",
+    {
+      class: "youp-grid-vue__pagination",
+      role: "navigation",
+      "aria-label": "Pagination",
+    },
+    [
+      h(
+        "div",
+        { class: "youp-grid-vue__pagination-status" },
+        `${rowRange.start}-${rowRange.end} / ${context.rowCount}`,
+      ),
+      h("div", { class: "youp-grid-vue__pagination-controls" }, [
+        h(
+          "select",
+          {
+            class: "youp-grid-vue__pagination-size",
+            value: context.pageSize,
+            "aria-label": "Rows per page",
+            onChange: (event: Event) => {
+              const target = event.currentTarget as HTMLSelectElement | null;
+              const pageSize = Number(target?.value);
+
+              if (Number.isFinite(pageSize) && pageSize > 0) {
+                context.onPageSizeChange(pageSize);
+              }
+            },
+          },
+          pageSizeOptions.map((pageSize) =>
+            h("option", { value: pageSize }, String(pageSize)),
+          ),
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            class: "youp-grid-vue__pagination-button",
+            disabled: !canMovePrevious,
+            "aria-label": "Previous page",
+            onClick: () => context.onPageChange(context.pageIndex - 1),
+          },
+          "<",
+        ),
+        h(
+          "span",
+          { class: "youp-grid-vue__pagination-page" },
+          `${context.pageIndex + 1} / ${context.pageCount}`,
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            class: "youp-grid-vue__pagination-button",
+            disabled: !canMoveNext,
+            "aria-label": "Next page",
+            onClick: () => context.onPageChange(context.pageIndex + 1),
+          },
+          ">",
+        ),
+      ]),
+    ],
+  );
+}
+
+function getPaginationRowRange(
+  rowCount: number,
+  pageIndex: number,
+  pageSize: number,
+  visibleRowCount: number,
+): { start: number; end: number } {
+  if (rowCount <= 0) {
+    return { start: 0, end: 0 };
+  }
+
+  const start = pageIndex * pageSize + 1;
+  const visibleCount = visibleRowCount > 0 ? visibleRowCount : pageSize;
+
+  return {
+    start,
+    end: Math.min(rowCount, start + visibleCount - 1),
+  };
+}
 
 function renderRowNumberHeaderCell() {
   return h(
