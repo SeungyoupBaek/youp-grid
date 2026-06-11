@@ -1,0 +1,50 @@
+{
+  "name": "@youp-grid/vue",
+  "version": "0.2.4",
+  "description": "Vue adapter for Youp Grid.",
+  "license": "MIT",
+  "author": "SeungyoupBaek",
+  "type": "module",
+  "keywords": [
+    "data-grid",
+    "grid",
+    "vue",
+    "typescript",
+    "table"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
+    "directory": "packages/vue"
+  },
+  "bugs": {
+    "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
+  },
+  "homepage": "https://github.com/SeungyoupBaek/youp-grid/tree/main/packages/vue#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css"
+  },
+  "dependencies": {
+    "@youp-grid/core": "0.2.4"
+  },
+  "peerDependencies": {
+    "vue": ">=3.3.0"
+  }
+}

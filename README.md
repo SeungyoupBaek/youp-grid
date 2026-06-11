@@ -2,12 +2,13 @@
 
 [![npm core](https://img.shields.io/npm/v/@youp-grid/core?label=@youp-grid/core&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/core)
 [![npm react](https://img.shields.io/npm/v/@youp-grid/react?label=@youp-grid/react&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/react)
+[![npm vue](https://img.shields.io/npm/v/@youp-grid/vue?label=@youp-grid/vue&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/vue)
 
 Framework-agnostic data grid core for building UI adapters such as React, Vue, Angular, Svelte, Vanilla JS, or Web Components.
 
 Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
 
-This repository starts with a reusable engine and a React adapter:
+This repository starts with a reusable engine, a React UI adapter, and a Vue adapter:
 
 - column normalization
 - typed row model generation
@@ -17,6 +18,7 @@ This repository starts with a reusable engine and a React adapter:
 - fixed-size virtualization range calculation
 - serializable grid state helpers
 - reusable React editing, selection, tooltip, and row operation UI
+- reusable Vue 3 component and composable for grid editing, state, and row-model integration
 
 The first goal is not to copy every AG Grid feature. The goal is to keep reusable grid behavior small and stable so application screens can adopt it incrementally.
 
@@ -26,6 +28,7 @@ The first goal is not to copy every AG Grid feature. The goal is to keep reusabl
 | --- | --- |
 | `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, tree data, and data helpers. |
 | `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, row actions, tooltips, and bundled styles. |
+| `@youp-grid/vue` | Vue 3 adapter with a basic editable grid component plus reactive state, row model, sorting, filtering, pagination, selection, grouping, and tree helpers. |
 
 ## Installation
 
@@ -36,6 +39,15 @@ npm install @youp-grid/core @youp-grid/react
 ```tsx
 import { YoupGrid } from "@youp-grid/react";
 import "@youp-grid/react/styles.css";
+```
+
+```sh
+npm install @youp-grid/core @youp-grid/vue
+```
+
+```ts
+import { YoupGrid, useYoupGrid } from "@youp-grid/vue";
+import "@youp-grid/vue/styles.css";
 ```
 
 ## Core API
@@ -122,12 +134,65 @@ const columns: ColumnDef<SqlColumn>[] = [
 />;
 ```
 
+## Vue Usage
+
+```vue
+<script setup lang="ts">
+import type { ColumnDef, GridState } from "@youp-grid/core";
+import { ref } from "vue";
+import { YoupGrid } from "@youp-grid/vue";
+import "@youp-grid/vue/styles.css";
+
+type User = {
+  id: string;
+  name: string;
+  age: number;
+};
+
+const rows = ref<User[]>([]);
+const state = ref<GridState>({});
+
+const columns: ColumnDef<User>[] = [
+  { field: "name", headerName: "Name" },
+  { field: "age", headerName: "Age", editor: "number" },
+];
+
+function handleStateChange({ state: nextState }: { state: GridState }) {
+  state.value = nextState;
+}
+
+function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
+  rows.value = nextRows;
+}
+</script>
+
+<template>
+  <YoupGrid
+    :rows="rows"
+    :columns="columns"
+    :state="state"
+    :get-row-id="(row) => row.id"
+    :show-row-number-column="true"
+    :show-row-selection-column="true"
+    :pin-row-selection-column="true"
+    :show-cell-context-menu="true"
+    :cell-meta="{ '1:name': { status: 'warning', message: 'Check spelling' } }"
+    :cell-tooltip="{ mode: 'rich', autoOpenCellKey: '1:name' }"
+    @state-change="handleStateChange"
+    @rows-change="handleRowsChange"
+  />
+</template>
+```
+
+The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, and row selection, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, and native/rich cell tooltips. Advanced editing UX still lands first in `@youp-grid/react`.
+
 ## Current Boundary
 
 Implemented now:
 
 - core package
 - React adapter package
+- Vue adapter package
 - row, column, and selection state helpers
 - fixed-height virtualized React body renderer
 - built-in header filters
@@ -164,6 +229,8 @@ Implemented now:
 - aggregation
 - row grouping
 - tree data
+- basic editable Vue grid component
+- Vue cell metadata and native/rich cell tooltips
 - Vite React demo
 - static HTML preview
 - npm package publishing setup

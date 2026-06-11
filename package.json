@@ -2,7 +2,7 @@
   "name": "youp-grid",
   "version": "0.2.4",
   "private": true,
-  "description": "Reusable TypeScript data grid core and React adapter.",
+  "description": "Reusable TypeScript data grid core and UI adapters.",
   "license": "MIT",
   "author": "SeungyoupBaek",
   "type": "module",
@@ -10,6 +10,7 @@
     "data-grid",
     "grid",
     "react",
+    "vue",
     "typescript",
     "table"
   ],
@@ -25,16 +26,18 @@
   },
   "homepage": "https://github.com/SeungyoupBaek/youp-grid#readme",
   "scripts": {
-    "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react",
-    "clean": "rm -rf packages/core/dist packages/react/dist",
+    "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react && npm run build -w @youp-grid/vue",
+    "clean": "rm -rf packages/core/dist packages/react/dist packages/vue/dist",
     "pack:dry-run": "npm pack --workspaces --dry-run",
-    "publish:dry-run": "npm publish -w @youp-grid/core --access public --dry-run && npm publish -w @youp-grid/react --access public --dry-run",
-    "test": "npm run test:core",
-    "test:core": "node --test packages/core/test/*.test.ts"
+    "publish:dry-run": "npm publish -w @youp-grid/core --access public --dry-run && npm publish -w @youp-grid/react --access public --dry-run && npm publish -w @youp-grid/vue --access public --dry-run",
+    "test": "npm run test:core && npm run test:vue",
+    "test:core": "node --test packages/core/test/*.test.ts",
+    "test:vue": "node --test packages/vue/test/*.test.ts"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
     "react": "^18.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vue": "3.5.35"
   }
 }
