@@ -837,19 +837,26 @@ export const YoupGrid = defineComponent({
       const insertedRows = rowClipboard.value.map((source, offset) => {
         const nextRowIndex = rowIndex + offset;
         const nextVisibleRowIndex = visibleRowIndex + offset;
-        const row = createRow({
-          rows: props.rows,
+        const row = createPastedRow({
+          row: createRow({
+            rows: props.rows,
+            rowIndex: nextRowIndex,
+            visibleRowIndex: nextVisibleRowIndex,
+            position: "below",
+            anchorRow: menu.rowNode.original,
+            anchorRowId: menu.rowNode.id,
+            anchorRowIndex: menu.rowNode.index,
+            reason: "paste",
+            sourceRow: source.row,
+            sourceRowId: source.rowId,
+            sourceRowIndex: source.rowIndex,
+            sourceVisibleRowIndex: source.visibleRowIndex,
+          }),
           rowIndex: nextRowIndex,
-          visibleRowIndex: nextVisibleRowIndex,
-          position: "below",
-          anchorRow: menu.rowNode.original,
-          anchorRowId: menu.rowNode.id,
-          anchorRowIndex: menu.rowNode.index,
-          reason: "paste",
           sourceRow: source.row,
           sourceRowId: source.rowId,
-          sourceRowIndex: source.rowIndex,
-          sourceVisibleRowIndex: source.visibleRowIndex,
+          columns: visibleColumns.value,
+          getRowId: props.getRowId,
         });
 
         return {
@@ -2675,6 +2682,41 @@ function updateRowsValue<TRow>(
   return nextRows;
 }
 
+function createPastedRow<TRow>(context: {
+  row: TRow;
+  rowIndex: number;
+  sourceRow: TRow;
+  sourceRowId: GridRowId;
+  columns: readonly ResolvedColumnDef<TRow>[];
+  getRowId?: (row: TRow, index: number) => GridRowId;
+}): TRow {
+  if (!isObjectRecord(context.row)) {
+    return context.row;
+  }
+
+  const rowId = context.getRowId?.(context.row, context.rowIndex);
+  let nextRow: Record<string, unknown> = context.row;
+
+  context.columns.forEach((column) => {
+    if (!column.field) {
+      return;
+    }
+
+    const sourceValue = column.accessor(context.sourceRow);
+
+    if (
+      isSameRowIdValue(sourceValue, context.sourceRowId) &&
+      isSameRowIdValue(column.accessor(context.row), rowId)
+    ) {
+      return;
+    }
+
+    nextRow = setFieldValue(nextRow, column.field, sourceValue) as Record<string, unknown>;
+  });
+
+  return nextRow as TRow;
+}
+
 function setFieldValue(row: Record<string, unknown>, field: string, value: unknown): unknown {
   if (!field.includes(".")) {
     return {
@@ -2697,6 +2739,15 @@ function setFieldValue(row: Record<string, unknown>, field: string, value: unkno
   cursor[keys[keys.length - 1]] = value;
 
   return root;
+}
+
+function isSameRowIdValue(value: unknown, rowId: GridRowId | undefined): boolean {
+  if (rowId === undefined) {
+    return false;
+  }
+
+  return value === rowId ||
+    ((typeof value === "string" || typeof value === "number") && String(value) === String(rowId));
 }
 
 function findColumnEditorOption(

@@ -96,7 +96,7 @@ Enable the standard footer with `pagination`. The footer uses the core `state.pa
 
 ## Cell Context Menu
 
-Enable `showCellContextMenu` to expose right-click actions for copy, paste, clear contents, select row, clear row selection, row copy, row paste below, row insert, and row delete. Cell paste and clear use the same edit guards as inline editing. Row insert and row paste require `createRow`; row paste passes `reason: "paste"` and `sourceRow` metadata so apps can create fresh IDs while copying values.
+Enable `showCellContextMenu` to expose right-click actions for copy, paste, clear contents, select row, clear row selection, row copy, row paste below, row insert, and row delete. Cell paste and clear use the same edit guards as inline editing. Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
 
 ## Cell Meta and Tooltips
 
