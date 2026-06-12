@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/react",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "React adapter for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
@@ -42,9 +42,10 @@
     "build": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css"
   },
   "dependencies": {
-    "@youp-grid/core": "0.2.7"
+    "@youp-grid/core": "0.2.8"
   },
   "peerDependencies": {
-    "react": ">=18.2.0"
+    "react": ">=18.2.0",
+    "react-dom": ">=18.2.0"
   }
 }

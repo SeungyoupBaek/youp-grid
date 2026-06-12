@@ -21,9 +21,12 @@ import {
   computed,
   defineComponent,
   h,
+  nextTick,
   ref,
+  Teleport,
   watch,
   type PropType,
+  type Ref,
   type Slots,
   type StyleValue,
   type VNodeChild,
@@ -59,6 +62,7 @@ const ROW_NUMBER_COLUMN_WIDTH = 44;
 const ROW_SELECTION_COLUMN_WIDTH = 44;
 const MIN_AUTOSIZE_COLUMN_WIDTH = 48;
 const MAX_AUTOSIZE_COLUMN_WIDTH = 640;
+const CONTEXT_MENU_VIEWPORT_PADDING = 8;
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 
@@ -74,6 +78,12 @@ type ActiveCellContextMenu<TRow = unknown> = {
   columnIndex: number;
   clientX: number;
   clientY: number;
+  placement?: ContextMenuPlacement;
+};
+
+type ContextMenuPlacement = {
+  x: number;
+  y: number;
 };
 
 type RowClipboardEntry<TRow = unknown> = {
@@ -311,6 +321,7 @@ export const YoupGrid = defineComponent({
   },
   setup(props, { emit, slots }) {
     const rootRef = ref<HTMLElement | null>(null);
+    const cellContextMenuRef = ref<HTMLElement | null>(null);
     const activeEdit = ref<ActiveEdit>();
     const activeTooltipCellKey = ref<string>();
     const activeCellContextMenu = ref<ActiveCellContextMenu>();
@@ -620,18 +631,70 @@ export const YoupGrid = defineComponent({
 
       event.preventDefault();
       event.stopPropagation();
-      const rootRect = rootRef.value?.getBoundingClientRect();
-      const clientX = rootRect ? event.clientX - rootRect.left : event.clientX;
-      const clientY = rootRect ? event.clientY - rootRect.top : event.clientY;
 
       activeCellContextMenu.value = {
         rowNode,
         column,
         columnIndex,
-        clientX,
-        clientY,
+        clientX: event.clientX,
+        clientY: event.clientY,
       };
     };
+    watch(activeCellContextMenu, (menu, _previous, onCleanup) => {
+      if (!menu || typeof document === "undefined") {
+        return;
+      }
+
+      const closeMenu = (event: MouseEvent) => {
+        if (event.target instanceof Node && cellContextMenuRef.value?.contains(event.target)) {
+          return;
+        }
+
+        activeCellContextMenu.value = undefined;
+      };
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          activeCellContextMenu.value = undefined;
+        }
+      };
+
+      document.addEventListener("click", closeMenu);
+      document.addEventListener("contextmenu", closeMenu);
+      document.addEventListener("keydown", handleKeyDown);
+      onCleanup(() => {
+        document.removeEventListener("click", closeMenu);
+        document.removeEventListener("contextmenu", closeMenu);
+        document.removeEventListener("keydown", handleKeyDown);
+      });
+    });
+    watch(
+      activeCellContextMenu,
+      () => {
+        void nextTick(() => {
+          const menu = activeCellContextMenu.value;
+          const menuElement = cellContextMenuRef.value;
+
+          if (!menu || !menuElement) {
+            return;
+          }
+
+          const menuRect = menuElement.getBoundingClientRect();
+          const placement = getClampedContextMenuPlacement({
+            anchorX: menu.clientX,
+            anchorY: menu.clientY,
+            menuWidth: menuRect.width,
+            menuHeight: menuRect.height,
+          });
+
+          if (menu.placement?.x === placement.x && menu.placement.y === placement.y) {
+            return;
+          }
+
+          activeCellContextMenu.value = { ...menu, placement };
+        });
+      },
+      { flush: "post" },
+    );
     const copyCellContextMenuCell = () => {
       const menu = activeCellContextMenu.value;
 
@@ -884,6 +947,37 @@ export const YoupGrid = defineComponent({
       const pageSize = paginationState?.pageSize ?? pagination?.pageSizeOptions[0] ?? DEFAULT_PAGE_SIZE;
       const pageCount = getPageCount(rowModel.pageCount, rowModel.filteredRowCount, pageSize);
       const pageIndex = getPageIndex(paginationState?.pageIndex, pageCount);
+      const cellContextMenuNode = renderCellContextMenu({
+        state: cellContextMenu,
+        menuRef: cellContextMenuRef,
+        editable: cellContextMenu
+          ? canEditCell(cellContextMenu.rowNode, cellContextMenu.column)
+          : false,
+        hasSelectedRows: selectedRowIds.value.size > 0,
+        copy: copyCellContextMenuCell,
+        paste: pasteCellContextMenuCell,
+        clearContents: clearCellContextMenuCell,
+        selectRow: selectCellContextMenuRow,
+        clearRowSelection: clearCellContextMenuRowSelection,
+        copyRows: copyCellContextMenuRows,
+        pasteRows: pasteCellContextMenuRows,
+        insertRowAbove: () => insertCellContextMenuRow("above"),
+        insertRowBelow: () => insertCellContextMenuRow("below"),
+        deleteRows: deleteCellContextMenuRows,
+        autoSizeColumn: autoSizeCellContextMenuColumn,
+        canInsertRows: Boolean(props.createRow && gridEditable.value),
+        canPasteRows: Boolean(props.createRow && gridEditable.value && rowClipboard.value.length > 0),
+        canDeleteRows: gridEditable.value && getCellContextMenuTargetRows().length > 0,
+        copyRowsLabel: getCellContextMenuTargetRows().length > 1 ? "Copy selected rows" : "Copy row",
+        pasteRowsLabel: rowClipboard.value.length > 1
+          ? `Paste ${rowClipboard.value.length} rows below`
+          : "Paste row below",
+        deleteRowCount: getCellContextMenuTargetRows().length,
+        closeMenu: closeCellContextMenu,
+      });
+      const cellContextMenuPortal = cellContextMenuNode
+        ? h(Teleport, { to: "body" }, [cellContextMenuNode])
+        : undefined;
 
       return h(
         "div",
@@ -1029,33 +1123,7 @@ export const YoupGrid = defineComponent({
                 onPageSizeChange: grid.setPageSize,
               })
             : undefined,
-          renderCellContextMenu({
-            state: cellContextMenu,
-            editable: cellContextMenu
-              ? canEditCell(cellContextMenu.rowNode, cellContextMenu.column)
-              : false,
-            hasSelectedRows: selectedRowIds.value.size > 0,
-            copy: copyCellContextMenuCell,
-            paste: pasteCellContextMenuCell,
-            clearContents: clearCellContextMenuCell,
-            selectRow: selectCellContextMenuRow,
-            clearRowSelection: clearCellContextMenuRowSelection,
-            copyRows: copyCellContextMenuRows,
-            pasteRows: pasteCellContextMenuRows,
-            insertRowAbove: () => insertCellContextMenuRow("above"),
-            insertRowBelow: () => insertCellContextMenuRow("below"),
-            deleteRows: deleteCellContextMenuRows,
-            autoSizeColumn: autoSizeCellContextMenuColumn,
-            canInsertRows: Boolean(props.createRow && gridEditable.value),
-            canPasteRows: Boolean(props.createRow && gridEditable.value && rowClipboard.value.length > 0),
-            canDeleteRows: gridEditable.value && getCellContextMenuTargetRows().length > 0,
-            copyRowsLabel: getCellContextMenuTargetRows().length > 1 ? "Copy selected rows" : "Copy row",
-            pasteRowsLabel: rowClipboard.value.length > 1
-              ? `Paste ${rowClipboard.value.length} rows below`
-              : "Paste row below",
-            deleteRowCount: getCellContextMenuTargetRows().length,
-            closeMenu: closeCellContextMenu,
-          }),
+          cellContextMenuPortal,
         ],
       );
     };
@@ -2014,6 +2082,7 @@ function getCellTitle(
 
 function renderCellContextMenu(context: {
   state?: ActiveCellContextMenu;
+  menuRef: Ref<HTMLElement | null>;
   editable: boolean;
   hasSelectedRows: boolean;
   canInsertRows: boolean;
@@ -2043,15 +2112,18 @@ function renderCellContextMenu(context: {
     action();
     context.closeMenu();
   };
+  const placement = context.state.placement;
 
   return h(
     "div",
     {
+      ref: context.menuRef,
       class: "youp-grid-vue__cell-context-menu",
       role: "menu",
       style: {
-        left: `${context.state.clientX}px`,
-        top: `${context.state.clientY}px`,
+        left: `${placement?.x ?? context.state.clientX}px`,
+        top: `${placement?.y ?? context.state.clientY}px`,
+        visibility: placement ? "visible" : "hidden",
       },
       onClick: (event: MouseEvent) => event.stopPropagation(),
       onContextmenu: (event: MouseEvent) => {
@@ -2424,6 +2496,32 @@ function getFilterValue(
   const value = state.filters?.find((filter) => filter.columnId === columnId)?.value;
 
   return value == null ? "" : String(value);
+}
+
+function getClampedContextMenuPlacement(context: {
+  anchorX: number;
+  anchorY: number;
+  menuWidth: number;
+  menuHeight: number;
+}): ContextMenuPlacement {
+  const viewportWidth = typeof window === "undefined" ? context.anchorX + context.menuWidth : window.innerWidth;
+  const viewportHeight = typeof window === "undefined" ? context.anchorY + context.menuHeight : window.innerHeight;
+  const padding = CONTEXT_MENU_VIEWPORT_PADDING;
+  const menuWidth = Math.max(1, context.menuWidth);
+  const menuHeight = Math.max(1, context.menuHeight);
+  const maxX = Math.max(padding, viewportWidth - menuWidth - padding);
+  const maxY = Math.max(padding, viewportHeight - menuHeight - padding);
+  const preferredX = context.anchorX + menuWidth + padding > viewportWidth
+    ? context.anchorX - menuWidth
+    : context.anchorX;
+  const preferredY = context.anchorY + menuHeight + padding > viewportHeight
+    ? context.anchorY - menuHeight
+    : context.anchorY;
+
+  return {
+    x: Math.round(Math.min(Math.max(preferredX, padding), maxX)),
+    y: Math.round(Math.min(Math.max(preferredY, padding), maxY)),
+  };
 }
 
 function getAutoSizeColumnWidth<TRow>(context: {

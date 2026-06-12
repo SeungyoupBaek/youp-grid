@@ -830,8 +830,8 @@
 }
 
 .youp-grid__cell-context-menu {
-  position: absolute;
-  z-index: 40;
+  position: fixed;
+  z-index: 1000;
   display: grid;
   min-width: 180px;
   padding: 6px;

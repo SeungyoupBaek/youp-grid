@@ -32,6 +32,7 @@ import {
   type RowModel,
   type RowNode,
 } from "@youp-grid/core";
+import { createPortal } from "react-dom";
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ChangeEvent as ReactChangeEvent,
@@ -41,6 +42,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
+  RefObject,
   UIEvent as ReactUIEvent,
 } from "react";
 
@@ -70,6 +72,7 @@ const ROW_NUMBER_COLUMN_WIDTH = 44;
 const SELECTION_COLUMN_WIDTH = 44;
 const AUTOSIZE_CELL_EXTRA_WIDTH = 8;
 const AUTOSIZE_CELL_BORDER_THRESHOLD = 6;
+const CONTEXT_MENU_VIEWPORT_PADDING = 8;
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 
@@ -87,6 +90,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const cellContextMenuRef = useRef<HTMLDivElement | null>(null);
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
   const skipNextBlurCommitRef = useRef(false);
   const valueHistoryRef = useRef<GridValueHistoryState>(createValueHistoryState());
@@ -276,7 +280,13 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return;
     }
 
-    const closeMenu = () => setCellContextMenu(undefined);
+    const closeMenu = (event?: MouseEvent) => {
+      if (event?.target instanceof Node && cellContextMenuRef.current?.contains(event.target)) {
+        return;
+      }
+
+      setCellContextMenu(undefined);
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         closeMenu();
@@ -293,6 +303,46 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [cellContextMenu]);
+
+  useLayoutEffect(() => {
+    if (!cellContextMenu || !cellContextMenuRef.current) {
+      return;
+    }
+
+    const menuRect = cellContextMenuRef.current.getBoundingClientRect();
+    const placement = getClampedContextMenuPlacement({
+      anchorX: cellContextMenu.clientX,
+      anchorY: cellContextMenu.clientY,
+      menuWidth: menuRect.width,
+      menuHeight: menuRect.height,
+    });
+
+    if (
+      cellContextMenu.placement?.x === placement.x &&
+      cellContextMenu.placement.y === placement.y
+    ) {
+      return;
+    }
+
+    setCellContextMenu((current) => {
+      if (
+        !current ||
+        current.clientX !== cellContextMenu.clientX ||
+        current.clientY !== cellContextMenu.clientY
+      ) {
+        return current;
+      }
+
+      if (
+        current.placement?.x === placement.x &&
+        current.placement.y === placement.y
+      ) {
+        return current;
+      }
+
+      return { ...current, placement };
+    });
+  });
 
   useEffect(() => {
     if (cellTooltipMode !== "rich") {
@@ -525,15 +575,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     setFocusedRowIndex(cell.rowIndex);
     setFocusedColumnIndex(cell.columnIndex);
-    const rootRect = rootRef.current?.getBoundingClientRect();
-    const clientX = rootRect ? event.clientX - rootRect.left : event.clientX;
-    const clientY = rootRect ? event.clientY - rootRect.top : event.clientY;
-
     setCellContextMenu({
       rowIndex: cell.rowIndex,
       columnIndex: cell.columnIndex,
-      clientX,
-      clientY,
+      clientX: event.clientX,
+      clientY: event.clientY,
       anchor: event.currentTarget,
     });
   };
@@ -827,6 +873,34 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       );
     }
   };
+
+  const cellContextMenuElement = renderCellContextMenu({
+    state: cellContextMenu,
+    menuRef: cellContextMenuRef,
+    editable: gridEditable,
+    hasSelectedRows: selectedRowIds.size > 0,
+    canInsertRows: gridEditable && Boolean(props.createRow && props.onRowsChange),
+    canPasteRows: gridEditable && Boolean(props.createRow && props.onRowsChange && rowClipboard.length > 0),
+    canDeleteRows: gridEditable && Boolean(props.onRowsChange && getCellContextMenuDeleteRowCount() > 0),
+    copyRowsLabel: getCellContextMenuCopyRowCount() > 1 ? "Copy selected rows" : "Copy row",
+    pasteRowsLabel: rowClipboard.length > 1 ? `Paste ${rowClipboard.length} rows below` : "Paste row below",
+    deleteRowLabel: getCellContextMenuDeleteRowCount() > 1 ? "Delete selected rows" : "Delete row",
+    copy: copyCellContextMenuSelection,
+    paste: pasteCellContextMenuSelection,
+    clearContents: clearCellContextMenuSelection,
+    selectRow: selectCellContextMenuRow,
+    clearRowSelection: () => controller.setSelectedRows([]),
+    copyRows: copyCellContextMenuRows,
+    pasteRows: pasteCellContextMenuRows,
+    insertRowAbove: () => insertCellContextMenuRow("above"),
+    insertRowBelow: () => insertCellContextMenuRow("below"),
+    deleteRows: deleteCellContextMenuRows,
+    autoSizeColumn: autoSizeCellContextMenuColumn,
+    closeMenu: () => setCellContextMenu(undefined),
+  });
+  const cellContextMenuPortal = cellContextMenuElement && typeof document !== "undefined"
+    ? createPortal(cellContextMenuElement, document.body)
+    : cellContextMenuElement;
 
   return createElement(
     "div",
@@ -1159,29 +1233,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         selectionColumnOffset,
       }),
     ),
-    renderCellContextMenu({
-      state: cellContextMenu,
-      editable: gridEditable,
-      hasSelectedRows: selectedRowIds.size > 0,
-      canInsertRows: gridEditable && Boolean(props.createRow && props.onRowsChange),
-      canPasteRows: gridEditable && Boolean(props.createRow && props.onRowsChange && rowClipboard.length > 0),
-      canDeleteRows: gridEditable && Boolean(props.onRowsChange && getCellContextMenuDeleteRowCount() > 0),
-      copyRowsLabel: getCellContextMenuCopyRowCount() > 1 ? "Copy selected rows" : "Copy row",
-      pasteRowsLabel: rowClipboard.length > 1 ? `Paste ${rowClipboard.length} rows below` : "Paste row below",
-      deleteRowLabel: getCellContextMenuDeleteRowCount() > 1 ? "Delete selected rows" : "Delete row",
-      copy: copyCellContextMenuSelection,
-      paste: pasteCellContextMenuSelection,
-      clearContents: clearCellContextMenuSelection,
-      selectRow: selectCellContextMenuRow,
-      clearRowSelection: () => controller.setSelectedRows([]),
-      copyRows: copyCellContextMenuRows,
-      pasteRows: pasteCellContextMenuRows,
-      insertRowAbove: () => insertCellContextMenuRow("above"),
-      insertRowBelow: () => insertCellContextMenuRow("below"),
-      deleteRows: deleteCellContextMenuRows,
-      autoSizeColumn: autoSizeCellContextMenuColumn,
-      closeMenu: () => setCellContextMenu(undefined),
-    }),
+    cellContextMenuPortal,
     renderPagination({
       enabled: props.showPagination ?? true,
       cursorPagination: controller.state.cursorPagination,
@@ -1629,6 +1681,7 @@ function renderColumnMenuButton(context: {
 
 function renderCellContextMenu(context: {
   state?: CellContextMenuState;
+  menuRef: RefObject<HTMLDivElement>;
   editable: boolean;
   hasSelectedRows: boolean;
   canInsertRows: boolean;
@@ -1658,15 +1711,18 @@ function renderCellContextMenu(context: {
     action();
     context.closeMenu();
   };
+  const placement = context.state.placement;
 
   return createElement(
     "div",
     {
+      ref: context.menuRef,
       className: "youp-grid__cell-context-menu",
       role: "menu",
       style: {
-        left: context.state.clientX,
-        top: context.state.clientY,
+        left: placement?.x ?? context.state.clientX,
+        top: placement?.y ?? context.state.clientY,
+        visibility: placement ? "visible" : "hidden",
       },
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
         event.stopPropagation();
@@ -3032,6 +3088,37 @@ function getPixelValue(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getClampedContextMenuPlacement(context: {
+  anchorX: number;
+  anchorY: number;
+  menuWidth: number;
+  menuHeight: number;
+}): ContextMenuPlacement {
+  const viewportWidth = typeof window === "undefined" ? context.anchorX + context.menuWidth : window.innerWidth;
+  const viewportHeight = typeof window === "undefined" ? context.anchorY + context.menuHeight : window.innerHeight;
+  const padding = CONTEXT_MENU_VIEWPORT_PADDING;
+  const menuWidth = Math.max(1, context.menuWidth);
+  const menuHeight = Math.max(1, context.menuHeight);
+  const maxX = Math.max(padding, viewportWidth - menuWidth - padding);
+  const maxY = Math.max(padding, viewportHeight - menuHeight - padding);
+  const preferredX = context.anchorX + menuWidth + padding > viewportWidth
+    ? context.anchorX - menuWidth
+    : context.anchorX;
+  const preferredY = context.anchorY + menuHeight + padding > viewportHeight
+    ? context.anchorY - menuHeight
+    : context.anchorY;
+
+  return {
+    x: Math.round(Math.min(Math.max(preferredX, padding), maxX)),
+    y: Math.round(Math.min(Math.max(preferredY, padding), maxY)),
+  };
+}
+
+type ContextMenuPlacement = {
+  x: number;
+  y: number;
+};
+
 type FocusedCell = {
   rowIndex: number;
   columnIndex: number;
@@ -3041,6 +3128,7 @@ type CellContextMenuState = FocusedCell & {
   clientX: number;
   clientY: number;
   anchor: HTMLElement;
+  placement?: ContextMenuPlacement;
 };
 
 type RowClipboardEntry<TRow> = {
