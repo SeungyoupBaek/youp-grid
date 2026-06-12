@@ -13,6 +13,117 @@
   line-height: 1.4;
 }
 
+.youp-grid-vue,
+.youp-grid-vue *,
+.youp-grid-vue *::before,
+.youp-grid-vue *::after {
+  box-sizing: border-box;
+}
+
+.youp-grid-vue__toolbar {
+  position: relative;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  background: #fff;
+}
+
+.youp-grid-vue__toolbar-button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--youp-grid-vue-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.youp-grid-vue__toolbar-button:hover,
+.youp-grid-vue__toolbar-button:focus-visible {
+  background: #eef3fb;
+  outline: none;
+}
+
+.youp-grid-vue__density-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--youp-grid-vue-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.youp-grid-vue__density-control select {
+  height: 28px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--youp-grid-vue-text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.youp-grid-vue__column-panel {
+  position: absolute;
+  top: calc(100% - 3px);
+  left: 0;
+  z-index: 5;
+  display: grid;
+  width: min(520px, calc(100vw - 48px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(23 32 51 / 16%);
+}
+
+.youp-grid-vue__column-panel-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.youp-grid-vue__column-toggle {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.youp-grid-vue__column-toggle input {
+  margin: 0;
+  accent-color: var(--youp-grid-vue-accent);
+}
+
+.youp-grid-vue__pin-controls {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.youp-grid-vue__pin-button {
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--youp-grid-vue-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.youp-grid-vue__pin-button--active {
+  border-color: var(--youp-grid-vue-accent);
+  background: #edf4ff;
+  color: var(--youp-grid-vue-accent);
+}
+
 .youp-grid-vue__viewport {
   border: 1px solid var(--youp-grid-vue-border);
   border-radius: 6px;
@@ -137,6 +248,44 @@
 
 .youp-grid-vue__cell--editable {
   cursor: cell;
+}
+
+.youp-grid-vue--read-only .youp-grid-vue__cell--editable {
+  cursor: default;
+}
+
+.youp-grid-vue--density-compact {
+  font-size: 12px;
+}
+
+.youp-grid-vue--density-comfortable {
+  font-size: 14px;
+}
+
+.youp-grid-vue--density-compact .youp-grid-vue__cell:not(.youp-grid-vue__cell--header),
+.youp-grid-vue--density-compact .youp-grid-vue__group-cell {
+  min-height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.youp-grid-vue--density-comfortable .youp-grid-vue__cell:not(.youp-grid-vue__cell--header),
+.youp-grid-vue--density-comfortable .youp-grid-vue__group-cell {
+  min-height: 44px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.youp-grid-vue--density-compact .youp-grid-vue__editor {
+  min-height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.youp-grid-vue--density-comfortable .youp-grid-vue__editor {
+  min-height: 44px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .youp-grid-vue__cell-context-menu {
@@ -275,6 +424,41 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.youp-grid-vue__header-label--static {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.youp-grid-vue__filter-input {
+  display: block;
+  width: calc(100% - 16px);
+  height: 26px;
+  margin: 0 8px 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.youp-grid-vue__column-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 2;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.youp-grid-vue__column-resizer:hover {
+  background: rgb(31 111 235 / 18%);
 }
 
 .youp-grid-vue__sort-indicator {
