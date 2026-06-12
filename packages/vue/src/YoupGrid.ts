@@ -76,6 +76,13 @@ type ActiveCellContextMenu<TRow = unknown> = {
   clientY: number;
 };
 
+type RowClipboardEntry<TRow = unknown> = {
+  row: TRow;
+  rowId: GridRowId;
+  rowIndex: number;
+  visibleRowIndex: number;
+};
+
 type NormalizedPaginationOptions = {
   pageSizeOptions: readonly number[];
 };
@@ -303,9 +310,11 @@ export const YoupGrid = defineComponent({
     densityChange: (_density: YoupGridDensity) => true,
   },
   setup(props, { emit, slots }) {
+    const rootRef = ref<HTMLElement | null>(null);
     const activeEdit = ref<ActiveEdit>();
     const activeTooltipCellKey = ref<string>();
     const activeCellContextMenu = ref<ActiveCellContextMenu>();
+    const rowClipboard = ref<RowClipboardEntry[]>([]);
     const columnChooserOpen = ref(false);
     const internalDensity = ref<YoupGridDensity>(props.defaultDensity);
     const lastRowsEndReachedKey = ref<string>();
@@ -611,12 +620,16 @@ export const YoupGrid = defineComponent({
 
       event.preventDefault();
       event.stopPropagation();
+      const rootRect = rootRef.value?.getBoundingClientRect();
+      const clientX = rootRect ? event.clientX - rootRect.left : event.clientX;
+      const clientY = rootRect ? event.clientY - rootRect.top : event.clientY;
+
       activeCellContextMenu.value = {
         rowNode,
         column,
         columnIndex,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX,
+        clientY,
       };
     };
     const copyCellContextMenuCell = () => {
@@ -687,6 +700,28 @@ export const YoupGrid = defineComponent({
 
       return [menu.rowNode];
     };
+    const copyCellContextMenuRows = () => {
+      const targetRows = getCellContextMenuTargetRows();
+
+      if (targetRows.length === 0) {
+        return;
+      }
+
+      const visibleRowIndexByRowId = new Map<GridRowId, number>();
+
+      grid.rowModel.value.visibleRows.forEach((row, index) => {
+        if (!isGroupNode(row)) {
+          visibleRowIndexByRowId.set(row.id, index);
+        }
+      });
+
+      rowClipboard.value = targetRows.map((row) => ({
+        row: row.original,
+        rowId: row.id,
+        rowIndex: row.index,
+        visibleRowIndex: visibleRowIndexByRowId.get(row.id) ?? row.index,
+      }));
+    };
     const insertCellContextMenuRow = (position: YoupGridRowInsertPosition) => {
       const menu = activeCellContextMenu.value;
 
@@ -723,6 +758,66 @@ export const YoupGrid = defineComponent({
           anchorRowId: menu.rowNode.id,
           anchorRowIndex: menu.rowNode.index,
         }],
+        source: "context-menu",
+      });
+    };
+    const pasteCellContextMenuRows = () => {
+      const menu = activeCellContextMenu.value;
+
+      if (!menu || !gridEditable.value || !props.createRow || rowClipboard.value.length === 0) {
+        return;
+      }
+
+      const createRow = props.createRow;
+      const rowIndex = menu.rowNode.index + 1;
+      const visibleRowIndex = getVisibleRowIndex(grid.rowModel.value.visibleRows, menu.rowNode.id) + 1;
+      const insertedRows = rowClipboard.value.map((source, offset) => {
+        const nextRowIndex = rowIndex + offset;
+        const nextVisibleRowIndex = visibleRowIndex + offset;
+        const row = createRow({
+          rows: props.rows,
+          rowIndex: nextRowIndex,
+          visibleRowIndex: nextVisibleRowIndex,
+          position: "below",
+          anchorRow: menu.rowNode.original,
+          anchorRowId: menu.rowNode.id,
+          anchorRowIndex: menu.rowNode.index,
+          reason: "paste",
+          sourceRow: source.row,
+          sourceRowId: source.rowId,
+          sourceRowIndex: source.rowIndex,
+          sourceVisibleRowIndex: source.visibleRowIndex,
+        });
+
+        return {
+          row,
+          rowIndex: nextRowIndex,
+          visibleRowIndex: nextVisibleRowIndex,
+          source,
+        };
+      });
+
+      emit("rowsChange", {
+        rows: [
+          ...props.rows.slice(0, rowIndex),
+          ...insertedRows.map(({ row }) => row),
+          ...props.rows.slice(rowIndex),
+        ],
+        changes: insertedRows.map(({ row, rowIndex, visibleRowIndex, source }) => ({
+          type: "insert",
+          row,
+          rowIndex,
+          visibleRowIndex,
+          position: "below",
+          anchorRow: menu.rowNode.original,
+          anchorRowId: menu.rowNode.id,
+          anchorRowIndex: menu.rowNode.index,
+          reason: "paste",
+          sourceRow: source.row,
+          sourceRowId: source.rowId,
+          sourceRowIndex: source.rowIndex,
+          sourceVisibleRowIndex: source.visibleRowIndex,
+        })),
         source: "context-menu",
       });
     };
@@ -793,6 +888,7 @@ export const YoupGrid = defineComponent({
       return h(
         "div",
         {
+          ref: rootRef,
           class: [
             "youp-grid-vue",
             `youp-grid-vue--density-${density.value}`,
@@ -944,12 +1040,19 @@ export const YoupGrid = defineComponent({
             clearContents: clearCellContextMenuCell,
             selectRow: selectCellContextMenuRow,
             clearRowSelection: clearCellContextMenuRowSelection,
+            copyRows: copyCellContextMenuRows,
+            pasteRows: pasteCellContextMenuRows,
             insertRowAbove: () => insertCellContextMenuRow("above"),
             insertRowBelow: () => insertCellContextMenuRow("below"),
             deleteRows: deleteCellContextMenuRows,
             autoSizeColumn: autoSizeCellContextMenuColumn,
             canInsertRows: Boolean(props.createRow && gridEditable.value),
+            canPasteRows: Boolean(props.createRow && gridEditable.value && rowClipboard.value.length > 0),
             canDeleteRows: gridEditable.value && getCellContextMenuTargetRows().length > 0,
+            copyRowsLabel: getCellContextMenuTargetRows().length > 1 ? "Copy selected rows" : "Copy row",
+            pasteRowsLabel: rowClipboard.value.length > 1
+              ? `Paste ${rowClipboard.value.length} rows below`
+              : "Paste row below",
             deleteRowCount: getCellContextMenuTargetRows().length,
             closeMenu: closeCellContextMenu,
           }),
@@ -1914,13 +2017,18 @@ function renderCellContextMenu(context: {
   editable: boolean;
   hasSelectedRows: boolean;
   canInsertRows: boolean;
+  canPasteRows: boolean;
   canDeleteRows: boolean;
+  copyRowsLabel: string;
+  pasteRowsLabel: string;
   deleteRowCount: number;
   copy: () => void;
   paste: () => void;
   clearContents: () => void;
   selectRow: () => void;
   clearRowSelection: () => void;
+  copyRows: () => void;
+  pasteRows: () => void;
   insertRowAbove: () => void;
   insertRowBelow: () => void;
   deleteRows: () => void;
@@ -1978,6 +2086,15 @@ function renderCellContextMenu(context: {
         label: "Clear row selection",
         disabled: !context.hasSelectedRows,
         onClick: () => runAction(context.clearRowSelection),
+      }),
+      renderCellContextMenuButton({
+        label: context.copyRowsLabel,
+        onClick: () => runAction(context.copyRows),
+      }),
+      renderCellContextMenuButton({
+        label: context.pasteRowsLabel,
+        disabled: !context.canPasteRows,
+        onClick: () => runAction(context.pasteRows),
       }),
       h("div", {
         class: "youp-grid-vue__context-menu-separator",

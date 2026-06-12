@@ -84,6 +84,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const viewportHeight = normalizeHeight(props.height) ?? 420;
   const loading = props.loading ?? controller.state.remoteRequest?.status === "loading";
   const infiniteScrollLoading = props.infiniteScrollLoading ?? loading;
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
@@ -98,6 +99,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
   const [cellContextMenu, setCellContextMenu] = useState<CellContextMenuState | undefined>();
+  const [rowClipboard, setRowClipboard] = useState<RowClipboardEntry<TRow>[]>([]);
   const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
   const showRowNumberColumn = props.showRowNumberColumn ?? false;
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
@@ -523,11 +525,15 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     setFocusedRowIndex(cell.rowIndex);
     setFocusedColumnIndex(cell.columnIndex);
+    const rootRect = rootRef.current?.getBoundingClientRect();
+    const clientX = rootRect ? event.clientX - rootRect.left : event.clientX;
+    const clientY = rootRect ? event.clientY - rootRect.top : event.clientY;
+
     setCellContextMenu({
       rowIndex: cell.rowIndex,
       columnIndex: cell.columnIndex,
-      clientX: event.clientX,
-      clientY: event.clientY,
+      clientX,
+      clientY,
       anchor: event.currentTarget,
     });
   };
@@ -625,6 +631,29 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     return [row];
   };
   const getCellContextMenuDeleteRowCount = () => getCellContextMenuTargetRows().length;
+  const getCellContextMenuCopyRowCount = () => getCellContextMenuTargetRows().length;
+  const copyCellContextMenuRows = () => {
+    const targetRows = getCellContextMenuTargetRows();
+
+    if (targetRows.length === 0) {
+      return;
+    }
+
+    const visibleRowIndexByRowId = new Map<GridRowId, number>();
+
+    rowModel.visibleRows.forEach((row, index) => {
+      if (!isRowGroupNode(row)) {
+        visibleRowIndexByRowId.set(row.id, index);
+      }
+    });
+
+    setRowClipboard(targetRows.map((row) => ({
+      row: row.original,
+      rowId: row.id,
+      rowIndex: row.index,
+      visibleRowIndex: visibleRowIndexByRowId.get(row.id) ?? row.index,
+    })));
+  };
   const insertCellContextMenuRow = (position: YoupGridRowInsertPosition) => {
     if (!cellContextMenu || !gridEditable || !props.createRow || !props.onRowsChange) {
       return;
@@ -665,6 +694,72 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         anchorRowId: anchorRow.id,
         anchorRowIndex: anchorRow.index,
       }],
+      source: "context-menu",
+    });
+    setSelectionRange(undefined);
+    setFocusedRowIndex(visibleRowIndex);
+  };
+  const pasteCellContextMenuRows = () => {
+    if (!cellContextMenu || !gridEditable || !props.createRow || !props.onRowsChange || rowClipboard.length === 0) {
+      return;
+    }
+
+    const anchorRow = rowModel.visibleRows[cellContextMenu.rowIndex];
+
+    if (!anchorRow || isRowGroupNode(anchorRow)) {
+      return;
+    }
+
+    const createRow = props.createRow;
+    const rowIndex = anchorRow.index + 1;
+    const visibleRowIndex = cellContextMenu.rowIndex + 1;
+    const insertedRows = rowClipboard.map((source, offset) => {
+      const nextRowIndex = rowIndex + offset;
+      const nextVisibleRowIndex = visibleRowIndex + offset;
+      const row = createRow({
+        rows: props.rows,
+        rowIndex: nextRowIndex,
+        visibleRowIndex: nextVisibleRowIndex,
+        position: "below",
+        anchorRow: anchorRow.original,
+        anchorRowId: anchorRow.id,
+        anchorRowIndex: anchorRow.index,
+        reason: "paste",
+        sourceRow: source.row,
+        sourceRowId: source.rowId,
+        sourceRowIndex: source.rowIndex,
+        sourceVisibleRowIndex: source.visibleRowIndex,
+      });
+
+      return {
+        row,
+        rowIndex: nextRowIndex,
+        visibleRowIndex: nextVisibleRowIndex,
+        source,
+      };
+    });
+
+    props.onRowsChange({
+      rows: [
+        ...props.rows.slice(0, rowIndex),
+        ...insertedRows.map(({ row }) => row),
+        ...props.rows.slice(rowIndex),
+      ],
+      changes: insertedRows.map(({ row, rowIndex, visibleRowIndex, source }) => ({
+        type: "insert",
+        row,
+        rowIndex,
+        visibleRowIndex,
+        position: "below",
+        anchorRow: anchorRow.original,
+        anchorRowId: anchorRow.id,
+        anchorRowIndex: anchorRow.index,
+        reason: "paste",
+        sourceRow: source.row,
+        sourceRowId: source.rowId,
+        sourceRowIndex: source.rowIndex,
+        sourceVisibleRowIndex: source.visibleRowIndex,
+      })),
       source: "context-menu",
     });
     setSelectionRange(undefined);
@@ -736,6 +831,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   return createElement(
     "div",
     {
+      ref: rootRef,
       className: [
         "youp-grid",
         `youp-grid--density-${density}`,
@@ -1068,13 +1164,18 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       editable: gridEditable,
       hasSelectedRows: selectedRowIds.size > 0,
       canInsertRows: gridEditable && Boolean(props.createRow && props.onRowsChange),
+      canPasteRows: gridEditable && Boolean(props.createRow && props.onRowsChange && rowClipboard.length > 0),
       canDeleteRows: gridEditable && Boolean(props.onRowsChange && getCellContextMenuDeleteRowCount() > 0),
+      copyRowsLabel: getCellContextMenuCopyRowCount() > 1 ? "Copy selected rows" : "Copy row",
+      pasteRowsLabel: rowClipboard.length > 1 ? `Paste ${rowClipboard.length} rows below` : "Paste row below",
       deleteRowLabel: getCellContextMenuDeleteRowCount() > 1 ? "Delete selected rows" : "Delete row",
       copy: copyCellContextMenuSelection,
       paste: pasteCellContextMenuSelection,
       clearContents: clearCellContextMenuSelection,
       selectRow: selectCellContextMenuRow,
       clearRowSelection: () => controller.setSelectedRows([]),
+      copyRows: copyCellContextMenuRows,
+      pasteRows: pasteCellContextMenuRows,
       insertRowAbove: () => insertCellContextMenuRow("above"),
       insertRowBelow: () => insertCellContextMenuRow("below"),
       deleteRows: deleteCellContextMenuRows,
@@ -1531,13 +1632,18 @@ function renderCellContextMenu(context: {
   editable: boolean;
   hasSelectedRows: boolean;
   canInsertRows: boolean;
+  canPasteRows: boolean;
   canDeleteRows: boolean;
+  copyRowsLabel: string;
+  pasteRowsLabel: string;
   deleteRowLabel: string;
   copy: () => void;
   paste: () => void;
   clearContents: () => void;
   selectRow: () => void;
   clearRowSelection: () => void;
+  copyRows: () => void;
+  pasteRows: () => void;
   insertRowAbove: () => void;
   insertRowBelow: () => void;
   deleteRows: () => void;
@@ -1593,6 +1699,15 @@ function renderCellContextMenu(context: {
       label: "Clear row selection",
       disabled: !context.hasSelectedRows,
       onClick: () => runAction(context.clearRowSelection),
+    }),
+    renderColumnMenuButton({
+      label: context.copyRowsLabel,
+      onClick: () => runAction(context.copyRows),
+    }),
+    renderColumnMenuButton({
+      label: context.pasteRowsLabel,
+      disabled: !context.canPasteRows,
+      onClick: () => runAction(context.pasteRows),
     }),
     createElement("div", { className: "youp-grid__column-menu-separator", role: "separator" }),
     renderColumnMenuButton({
@@ -2926,6 +3041,13 @@ type CellContextMenuState = FocusedCell & {
   clientX: number;
   clientY: number;
   anchor: HTMLElement;
+};
+
+type RowClipboardEntry<TRow> = {
+  row: TRow;
+  rowId: GridRowId;
+  rowIndex: number;
+  visibleRowIndex: number;
 };
 
 type EditingCell = FocusedCell & {

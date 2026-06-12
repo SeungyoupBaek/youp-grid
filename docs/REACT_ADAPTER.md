@@ -207,9 +207,10 @@ The React adapter can render a pinned checkbox column for row selection.
 
 - `showRowNumberColumn` renders a read-only row number column on the far left.
 - `showCellContextMenu` enables the cell right-click menu.
-- The menu supports copy, paste, clear contents, select row, clear row selection, row insert, row delete, and auto-size column.
-- Row insert requires `createRow` so each app can define its own empty row shape.
-- Row insert and delete emit `onRowsChange` with the next controlled `rows` array and a `changes` list.
+- The menu supports copy, paste, clear contents, select row, clear row selection, row copy, row paste below, row insert, row delete, and auto-size column.
+- Row insert and row paste require `createRow` so each app can define its own row shape and fresh row IDs.
+- Row paste calls `createRow` with `reason: "paste"` and `sourceRow` metadata so apps can copy values without duplicating IDs.
+- Row insert, row paste, and row delete emit `onRowsChange` with the next controlled `rows` array and a `changes` list.
 - `rowIndex` is the source `rows` index, and `visibleRowIndex` is the current visible grid index.
 - Row hiding is intentionally not included.
 

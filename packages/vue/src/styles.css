@@ -289,7 +289,7 @@
 }
 
 .youp-grid-vue__cell-context-menu {
-  position: fixed;
+  position: absolute;
   z-index: 1000;
   min-width: 180px;
   padding: 4px;

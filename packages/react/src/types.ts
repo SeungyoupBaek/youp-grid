@@ -52,6 +52,8 @@ export type YoupGridRowsChangeSource = "context-menu";
 
 export type YoupGridRowInsertPosition = "above" | "below";
 
+export type YoupGridRowCreateReason = "insert" | "paste";
+
 export type YoupGridCreateRowContext<TRow> = {
   rows: readonly TRow[];
   rowIndex: number;
@@ -60,6 +62,11 @@ export type YoupGridCreateRowContext<TRow> = {
   anchorRow: TRow;
   anchorRowId: GridRowId;
   anchorRowIndex: number;
+  reason?: YoupGridRowCreateReason;
+  sourceRow?: TRow;
+  sourceRowId?: GridRowId;
+  sourceRowIndex?: number;
+  sourceVisibleRowIndex?: number;
 };
 
 export type YoupGridRowInsertChange<TRow> = {
@@ -71,6 +78,11 @@ export type YoupGridRowInsertChange<TRow> = {
   anchorRow: TRow;
   anchorRowId: GridRowId;
   anchorRowIndex: number;
+  reason?: YoupGridRowCreateReason;
+  sourceRow?: TRow;
+  sourceRowId?: GridRowId;
+  sourceRowIndex?: number;
+  sourceVisibleRowIndex?: number;
 };
 
 export type YoupGridRowDeleteChange<TRow> = {
