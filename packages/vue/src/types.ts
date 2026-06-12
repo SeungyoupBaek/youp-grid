@@ -10,10 +10,11 @@ import type {
   RemoteCacheState,
   ResolvedColumnDef,
   RowGroupingState,
+  RowNode,
   RowModel,
   SortDirection,
 } from "@youp-grid/core";
-import type { ComputedRef, VNodeChild } from "vue";
+import type { ComputedRef, StyleValue, VNodeChild } from "vue";
 
 export type YoupGridStateChange<TRow> = {
   state: GridState;
@@ -32,12 +33,37 @@ export type YoupGridOptions<TRow> = {
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;
+  rowHeight?: number;
+  overscan?: number;
+  infiniteScroll?: boolean;
+  infiniteScrollThreshold?: number;
+  infiniteScrollLoading?: boolean;
+  hasMoreRows?: boolean;
 };
 
+export type YoupGridDensity = "compact" | "standard" | "comfortable";
+
 export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
+  className?: string;
+  style?: StyleValue;
+  height?: number | string;
   emptyText?: string;
+  emptyContent?: VNodeChild;
+  loading?: boolean;
+  loadingContent?: VNodeChild;
+  error?: VNodeChild;
+  errorContent?: VNodeChild;
   pagination?: boolean | YoupGridPaginationOptions;
+  showPagination?: boolean;
   sortOnHeaderClick?: boolean;
+  showColumnChooser?: boolean;
+  showCsvExport?: boolean;
+  showDensityControl?: boolean;
+  showFilters?: boolean;
+  csvFileName?: string;
+  density?: YoupGridDensity;
+  defaultDensity?: YoupGridDensity;
+  onDensityChange?: (density: YoupGridDensity) => void;
   showRowNumberColumn?: boolean;
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
@@ -45,6 +71,8 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   editable?: boolean;
   readOnly?: boolean;
   canEditCell?: (context: YoupGridCanEditCellContext<TRow>) => boolean;
+  disabledReason?: VNodeChild;
+  createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
   cellMeta?: Record<string, YoupGridCellMeta | undefined>;
   getCellMeta?: (context: YoupGridCanEditCellContext<TRow>) => YoupGridCellMeta | undefined;
   cellTooltip?: YoupGridCellTooltipOptions;
@@ -60,6 +88,8 @@ export type YoupGridHeaderSlotContext<TRow> = {
   columnIndex: number;
   align: ColumnAlign;
   sortDirection?: SortDirection;
+  resizeColumn: (width: number) => void;
+  autoSizeColumn: () => void;
 };
 
 export type YoupGridCellSlotContext<TRow> = {
@@ -95,16 +125,21 @@ export type YoupGridRowEvent<TRow> = {
   row: TRow;
   rowId: GridRowId;
   rowIndex: number;
+  rowNode: RowNode<TRow>;
+  event: MouseEvent;
 };
 
 export type YoupGridCanEditCellContext<TRow> = {
   row: TRow;
   rowId: GridRowId;
   rowIndex: number;
+  rowNode: RowNode<TRow>;
   column: ResolvedColumnDef<TRow>;
   columnId: string;
   value: unknown;
 };
+
+export type YoupGridCellValueChangeSource = "edit" | "delete" | "paste" | "fill" | "undo" | "redo";
 
 export type YoupGridCellValueChange<TRow> = {
   row: TRow;
@@ -114,7 +149,14 @@ export type YoupGridCellValueChange<TRow> = {
   columnId: string;
   value: unknown;
   previousValue: unknown;
-  source: "edit" | "delete" | "paste";
+  source: YoupGridCellValueChangeSource;
+};
+
+export type YoupGridCellsValueChangeSource = "paste" | "fill";
+
+export type YoupGridCellsValueChange<TRow> = {
+  changes: YoupGridCellValueChange<TRow>[];
+  source: YoupGridCellsValueChangeSource;
 };
 
 export type YoupGridCellEditCommitReason = "enter" | "tab" | "blur";
@@ -126,10 +168,53 @@ export type YoupGridCellEditCommit<TRow> = Omit<
   reason: YoupGridCellEditCommitReason;
 };
 
+export type YoupGridRowInsertPosition = "above" | "below";
+
+export type YoupGridCreateRowContext<TRow> = {
+  rows: readonly TRow[];
+  rowIndex: number;
+  visibleRowIndex: number;
+  position: YoupGridRowInsertPosition;
+  anchorRow: TRow;
+  anchorRowId: GridRowId;
+  anchorRowIndex: number;
+};
+
+export type YoupGridRowInsertChange<TRow> = {
+  type: "insert";
+  row: TRow;
+  rowId?: GridRowId;
+  rowIndex: number;
+  visibleRowIndex: number;
+  position: YoupGridRowInsertPosition;
+  anchorRow: TRow;
+  anchorRowId: GridRowId;
+  anchorRowIndex: number;
+};
+
+export type YoupGridRowDeleteChange<TRow> = {
+  type: "delete";
+  row: TRow;
+  rowId: GridRowId;
+  rowIndex: number;
+  visibleRowIndex: number;
+};
+
+export type YoupGridRowChange<TRow> = YoupGridRowInsertChange<TRow> | YoupGridRowDeleteChange<TRow>;
+
 export type YoupGridRowsChange<TRow> = {
   rows: TRow[];
-  changes: YoupGridCellValueChange<TRow>[];
-  source: "edit" | "delete" | "paste";
+  changes: YoupGridRowChange<TRow>[];
+  source: "context-menu";
+};
+
+export type YoupGridRowsEndReachedEvent<TRow> = {
+  state: GridState;
+  rowModel: RowModel<TRow>;
+  rowCount: number;
+  lastVisibleRowIndex: number;
+  threshold: number;
+  remainingRows: number;
 };
 
 export type YoupGridController<TRow> = {

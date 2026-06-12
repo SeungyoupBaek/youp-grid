@@ -11,6 +11,7 @@ import type {
   RowNode,
   SortDirection,
 } from "@youp-grid/core";
+import { exportGridCsv } from "@youp-grid/core";
 import {
   computed,
   defineComponent,
@@ -19,10 +20,12 @@ import {
   watch,
   type PropType,
   type Slots,
+  type StyleValue,
   type VNodeChild,
 } from "vue";
 
 import type {
+  YoupGridCellsValueChange,
   YoupGridCanEditCellContext,
   YoupGridCellEditCommit,
   YoupGridCellEditCommitReason,
@@ -31,10 +34,14 @@ import type {
   YoupGridCellTooltipMode,
   YoupGridCellTooltipOptions,
   YoupGridCellValueChange,
+  YoupGridCreateRowContext,
+  YoupGridDensity,
   YoupGridHeaderSlotContext,
   YoupGridPaginationOptions,
   YoupGridRowEvent,
+  YoupGridRowInsertPosition,
   YoupGridRowsChange,
+  YoupGridRowsEndReachedEvent,
   YoupGridStateChange,
 } from "./types.ts";
 import { useYoupGrid } from "./useYoupGrid.ts";
@@ -42,8 +49,16 @@ import { useYoupGrid } from "./useYoupGrid.ts";
 const DEFAULT_COLUMN_WIDTH = 160;
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const DEFAULT_INFINITE_SCROLL_THRESHOLD = 5;
 const ROW_NUMBER_COLUMN_WIDTH = 44;
 const ROW_SELECTION_COLUMN_WIDTH = 44;
+const DENSITY_ROW_HEIGHTS: Record<YoupGridDensity, number> = {
+  compact: 32,
+  standard: 36,
+  comfortable: 44,
+};
+const MIN_AUTOSIZE_COLUMN_WIDTH = 48;
+const MAX_AUTOSIZE_COLUMN_WIDTH = 640;
 
 type ActiveEdit = {
   rowId: GridRowId;
@@ -93,6 +108,42 @@ export const YoupGrid = defineComponent({
       type: Object as PropType<GridState>,
       default: undefined,
     },
+    className: {
+      type: String,
+      default: undefined,
+    },
+    style: {
+      type: [String, Object, Array] as PropType<StyleValue>,
+      default: undefined,
+    },
+    height: {
+      type: [Number, String],
+      default: undefined,
+    },
+    rowHeight: {
+      type: Number,
+      default: undefined,
+    },
+    overscan: {
+      type: Number,
+      default: undefined,
+    },
+    infiniteScroll: {
+      type: Boolean,
+      default: false,
+    },
+    infiniteScrollThreshold: {
+      type: Number,
+      default: undefined,
+    },
+    infiniteScrollLoading: {
+      type: Boolean,
+      default: false,
+    },
+    hasMoreRows: {
+      type: Boolean,
+      default: undefined,
+    },
     getRowId: {
       type: Function as PropType<(row: unknown, index: number) => GridRowId>,
       default: undefined,
@@ -123,9 +174,65 @@ export const YoupGrid = defineComponent({
       type: String,
       default: "No rows",
     },
+    emptyContent: {
+      type: null as unknown as PropType<VNodeChild>,
+      default: undefined,
+    },
+    loading: {
+      type: Boolean,
+      default: false,
+    },
+    loadingContent: {
+      type: null as unknown as PropType<VNodeChild>,
+      default: undefined,
+    },
+    error: {
+      type: [String, Object, Boolean] as PropType<string | Error | boolean | null | undefined>,
+      default: undefined,
+    },
+    errorContent: {
+      type: null as unknown as PropType<VNodeChild>,
+      default: undefined,
+    },
     pagination: {
       type: [Boolean, Object] as PropType<boolean | YoupGridPaginationOptions>,
       default: false,
+    },
+    showPagination: {
+      type: Boolean,
+      default: undefined,
+    },
+    showColumnChooser: {
+      type: Boolean,
+      default: false,
+    },
+    showCsvExport: {
+      type: Boolean,
+      default: false,
+    },
+    showDensityControl: {
+      type: Boolean,
+      default: false,
+    },
+    showFilters: {
+      type: Boolean,
+      default: false,
+    },
+    csvFileName: {
+      type: String,
+      default: undefined,
+    },
+    density: {
+      type: String as PropType<YoupGridDensity>,
+      default: undefined,
+    },
+    defaultDensity: {
+      type: String as PropType<YoupGridDensity>,
+      default: "standard",
+    },
+    onDensityChange: {
+      type: Function as PropType<(density: YoupGridDensity) => void>,
+      default: undefined,
     },
     sortOnHeaderClick: {
       type: Boolean,
@@ -157,6 +264,14 @@ export const YoupGrid = defineComponent({
     },
     canEditCell: {
       type: Function as PropType<(context: YoupGridCanEditCellContext<unknown>) => boolean>,
+      default: undefined,
+    },
+    disabledReason: {
+      type: null as unknown as PropType<VNodeChild>,
+      default: undefined,
+    },
+    createRow: {
+      type: Function as PropType<(context: YoupGridCreateRowContext<unknown>) => unknown>,
       default: undefined,
     },
     cellMeta: {
@@ -357,20 +472,6 @@ export const YoupGrid = defineComponent({
 
       if (!Object.is(value, previousValue)) {
         emit("cellValueChange", change);
-        const nextRows = updateRowsValue(props.rows, rowNode.index, column, value);
-
-        if (nextRows) {
-          emit("rowsChange", {
-            rows: nextRows,
-            changes: [
-              {
-                ...change,
-                row: nextRows[rowNode.index],
-              },
-            ],
-            source: "edit",
-          });
-        }
       }
 
       cancelCellEdit();
@@ -397,20 +498,6 @@ export const YoupGrid = defineComponent({
       }
 
       emit("cellValueChange", change);
-      const nextRows = updateRowsValue(props.rows, rowNode.index, column, checked);
-
-      if (nextRows) {
-        emit("rowsChange", {
-          rows: nextRows,
-          changes: [
-            {
-              ...change,
-              row: nextRows[rowNode.index],
-            },
-          ],
-          source: "edit",
-        });
-      }
     };
     const applyCellValueChange = (
       rowNode: RowNode<unknown>,
@@ -431,20 +518,6 @@ export const YoupGrid = defineComponent({
       const change = createCellValueChange(rowNode, column, value, previousValue, source);
 
       emit("cellValueChange", change);
-      const nextRows = updateRowsValue(props.rows, rowNode.index, column, value);
-
-      if (nextRows) {
-        emit("rowsChange", {
-          rows: nextRows,
-          changes: [
-            {
-              ...change,
-              row: nextRows[rowNode.index],
-            },
-          ],
-          source,
-        });
-      }
     };
     const closeCellContextMenu = () => {
       activeCellContextMenu.value = undefined;
@@ -883,6 +956,8 @@ function renderHeaderCell<TRow>(context: {
     columnIndex: context.columnIndex,
     align,
     sortDirection: context.sortDirection,
+    resizeColumn: () => undefined,
+    autoSizeColumn: () => undefined,
   };
   const content = renderHeaderSlot(context.slots, slotContext, context.column.headerName);
   const sortable = context.sortOnHeaderClick && context.column.sortable !== false;
@@ -1108,11 +1183,13 @@ function renderDataRow<TRow>(context: {
       role: "row",
       "aria-rowindex": context.displayIndex + 2,
       style: { gridTemplateColumns: context.templateColumns },
-      onClick: () =>
+      onClick: (event: MouseEvent) =>
         context.onRowClick({
           row: context.rowNode.original,
           rowId: context.rowNode.id,
           rowIndex: context.rowNode.index,
+          rowNode: context.rowNode,
+          event,
         }),
     },
     [
@@ -1691,6 +1768,7 @@ function getCellEditContext<TRow>(
     row: rowNode.original,
     rowId: rowNode.id,
     rowIndex: rowNode.index,
+    rowNode,
     column,
     columnId: column.id,
     value: column.accessor(rowNode.original),
