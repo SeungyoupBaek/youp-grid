@@ -21,10 +21,11 @@ import "@youp-grid/react/styles.css";
 - cell placeholders, column alignment, validation metadata, and rich tooltips
 - column menus, resizing, auto-sizing, pinning, visibility, density, and row selection UI
 - optional row number column and cell context menu
-- controlled row insert/delete callbacks through `createRow` and `onRowsChange`
+- controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
 - loading, empty, error, validation, pending, warning, and read-only states
 
 The adapter emits changes through callbacks. Applications keep ownership of row data.
+Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
 
 ## Example
 

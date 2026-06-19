@@ -185,7 +185,7 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
 </template>
 ```
 
-The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, and row selection, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Advanced editing UX still lands first in `@youp-grid/react`.
+The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, row selection, row copy/paste, row insert/delete, and auto-size, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
 
 ## Current Boundary
 
@@ -205,7 +205,7 @@ Implemented now:
 - density control
 - checkbox selection column
 - row number column
-- cell context menu for copy, paste, clear, row selection, row insert/delete, and auto-size
+- cell context menu for copy, paste, clear, row selection, row copy/paste, row insert/delete, and auto-size
 - row click and double-click events
 - custom cell and header renderers
 - pinned left/right columns
@@ -243,6 +243,7 @@ npm install
 npm test
 npm run build
 npm run pack:dry-run
+npm run release:check
 ```
 
 ## Project Maintenance

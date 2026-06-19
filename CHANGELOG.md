@@ -8,6 +8,13 @@ The project follows semantic versioning while the public API stabilizes.
 
 - Add public contribution, security, and GitHub maintenance templates.
 - Improve npm package metadata for open-source discovery.
+- Add release metadata checks for workspace version, package-lock, and adapter core dependency alignment.
+- Document the full core, React, and Vue publish/release flow.
+
+## [0.2.9] - 2026-06-12
+
+- Fix row paste below so copied row values are applied to inserted rows while preserving newly created row IDs.
+- Keep `@youp-grid/core`, `@youp-grid/react`, and `@youp-grid/vue` package versions aligned.
 
 ## [0.2.2] - 2026-06-10
 

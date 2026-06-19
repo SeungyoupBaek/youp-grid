@@ -28,8 +28,9 @@
   "scripts": {
     "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react && npm run build -w @youp-grid/vue",
     "clean": "rm -rf packages/core/dist packages/react/dist packages/vue/dist",
-    "pack:dry-run": "npm pack --workspaces --dry-run",
-    "publish:dry-run": "npm publish -w @youp-grid/core --access public --dry-run && npm publish -w @youp-grid/react --access public --dry-run && npm publish -w @youp-grid/vue --access public --dry-run",
+    "pack:dry-run": "npm pack --workspaces --dry-run --cache /private/tmp/youp-grid-npm-cache",
+    "publish:dry-run": "npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run",
+    "release:check": "npm test && npm run build && npm run pack:dry-run && node scripts/check-release.mjs",
     "test": "npm run test:core && npm run test:vue",
     "test:core": "node --test packages/core/test/*.test.ts",
     "test:vue": "node --test packages/vue/test/*.test.ts"
