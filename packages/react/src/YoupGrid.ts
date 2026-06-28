@@ -2,11 +2,13 @@ import {
   createRemoteCacheKey,
   createValueHistoryState,
   exportGridCsv,
+  exportGridExcel,
   getFillHandleCells,
   getFillHandleTargetRange,
   getInfiniteScrollTrigger,
   getVirtualRange,
   getClipboardPasteCells,
+  getClipboardPasteRowCount,
   isCellInRange,
   isRowGroupNode,
   normalizeCellRange,
@@ -53,6 +55,7 @@ import type {
   YoupGridCellTooltipMode,
   YoupGridCellValueChangeSource,
   YoupGridCellsValueChangeSource,
+  YoupGridCreateRowContext,
   YoupGridDensity,
   YoupGridHeaderContext,
   YoupGridProps,
@@ -623,6 +626,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           selectionRange: getCellContextMenuRange(),
           rows: rowModel.visibleRows,
           columns: visibleColumns,
+          sourceRows: props.rows,
+          createRow: props.createRow,
+          getRowId: props.getRowId,
+          onRowsChange: props.onRowsChange,
           canEditCell: canEditGridCell,
           applyCellValueChanges,
         });
@@ -930,6 +937,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       density,
       open: columnChooserOpen,
       columns: rowModel.columns,
+      showExcelExport: props.showExcelExport ?? true,
       toggleOpen: () => setColumnChooserOpen((current) => !current),
       setDensity,
       setColumnHidden: controller.setColumnHidden,
@@ -939,6 +947,16 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           fileName: props.csvFileName ?? "youp-grid.csv",
           mimeType: "text/csv;charset=utf-8",
           text: exportGridCsv({
+            rows: rowModel.visibleRows,
+            columns: visibleColumns,
+          }),
+        });
+      },
+      exportExcel: () => {
+        downloadTextFile({
+          fileName: props.excelFileName ?? "youp-grid.xls",
+          mimeType: "application/vnd.ms-excel;charset=utf-8",
+          text: exportGridExcel({
             rows: rowModel.visibleRows,
             columns: visibleColumns,
           }),
@@ -982,6 +1000,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             selectionRange,
             rows: rowModel.visibleRows,
             columns: visibleColumns,
+            sourceRows: props.rows,
+            createRow: props.createRow,
+            getRowId: props.getRowId,
+            onRowsChange: props.onRowsChange,
             canEditCell: canEditGridCell,
             applyCellValueChanges,
           });
@@ -2488,6 +2510,7 @@ function renderCellTooltip(meta: YoupGridCellMeta | undefined, tooltipId: string
 function renderColumnToolbar<TRow>(context: {
   showColumnChooser: boolean;
   showCsvExport: boolean;
+  showExcelExport: boolean;
   showDensityControl: boolean;
   density: YoupGridDensity;
   open: boolean;
@@ -2497,8 +2520,14 @@ function renderColumnToolbar<TRow>(context: {
   setColumnHidden: (columnId: string, hidden: boolean) => void;
   setColumnPinned: (columnId: string, pinned: ColumnPin | undefined) => void;
   exportCsv: () => void;
+  exportExcel: () => void;
 }) {
-  if (!context.showColumnChooser && !context.showCsvExport && !context.showDensityControl) {
+  if (
+    !context.showColumnChooser &&
+    !context.showCsvExport &&
+    !context.showExcelExport &&
+    !context.showDensityControl
+  ) {
     return undefined;
   }
 
@@ -2526,6 +2555,17 @@ function renderColumnToolbar<TRow>(context: {
             onClick: context.exportCsv,
           },
           "Export CSV",
+        )
+      : undefined,
+    context.showExcelExport
+      ? createElement(
+          "button",
+          {
+            className: "youp-grid__toolbar-button",
+            type: "button",
+            onClick: context.exportExcel,
+          },
+          "Export Excel",
         )
       : undefined,
     context.showDensityControl
@@ -3171,6 +3211,16 @@ type PendingCellValueChange<TRow> = {
   previousValue: unknown;
 };
 
+type PendingClipboardRowInsert<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowIndex: number;
+  visibleRowIndex: number;
+  anchorRow: TRow;
+  anchorRowId: GridRowId;
+  anchorRowIndex: number;
+};
+
 function handleCellKeyDown<TRow>(context: {
   event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>;
   cell: CellRenderState<TRow>;
@@ -3640,6 +3690,10 @@ function handleGridPaste<TRow>(context: {
   selectionRange?: GridCellRange;
   rows: readonly RowNode<TRow>[];
   columns: readonly ResolvedColumnDef<TRow>[];
+  sourceRows?: readonly TRow[];
+  createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
+  getRowId?: (row: TRow, index: number) => GridRowId;
+  onRowsChange?: YoupGridProps<TRow>["onRowsChange"];
   applyCellValueChanges: (
     changes: PendingCellValueChange<TRow>[],
     source: YoupGridCellValueChangeSource,
@@ -3652,6 +3706,10 @@ function handleGridPaste<TRow>(context: {
     selectionRange: context.selectionRange,
     rows: context.rows,
     columns: context.columns,
+    sourceRows: context.sourceRows,
+    createRow: context.createRow,
+    getRowId: context.getRowId,
+    onRowsChange: context.onRowsChange,
     applyCellValueChanges: context.applyCellValueChanges,
     canEditCell: context.canEditCell,
   });
@@ -3667,6 +3725,10 @@ function applyGridClipboardText<TRow>(context: {
   selectionRange?: GridCellRange;
   rows: readonly RowNode<TRow>[];
   columns: readonly ResolvedColumnDef<TRow>[];
+  sourceRows?: readonly TRow[];
+  createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
+  getRowId?: (row: TRow, index: number) => GridRowId;
+  onRowsChange?: YoupGridProps<TRow>["onRowsChange"];
   applyCellValueChanges: (
     changes: PendingCellValueChange<TRow>[],
     source: YoupGridCellValueChangeSource,
@@ -3689,17 +3751,51 @@ function applyGridClipboardText<TRow>(context: {
   const fillRange = normalizedRange && values.length === 1 && values[0]?.length === 1
     ? normalizedRange
     : undefined;
+  let pasteRows = context.rows;
+  let insertedRows: PendingClipboardRowInsert<TRow>[] = [];
+  let rowsAfterInsert: TRow[] | undefined;
+  const missingRowCount = getClipboardPasteMissingRowCount({
+    rows: context.rows,
+    values,
+    startCell,
+    fillRange,
+  });
+
+  if (
+    missingRowCount > 0 &&
+    context.sourceRows &&
+    context.createRow &&
+    context.onRowsChange
+  ) {
+    const inserted = createClipboardPasteRows({
+      sourceRows: context.sourceRows,
+      visibleRows: context.rows,
+      missingRowCount,
+      createRow: context.createRow,
+      getRowId: context.getRowId,
+    });
+
+    if (inserted) {
+      insertedRows = inserted.insertedRows;
+      rowsAfterInsert = inserted.rows;
+      pasteRows = [
+        ...context.rows,
+        ...insertedRows.map((insertedRow) => insertedRow.rowNode),
+      ];
+    }
+  }
 
   const changes: PendingCellValueChange<TRow>[] = [];
+  const insertedRowIds = new Set(insertedRows.map((insertedRow) => insertedRow.rowNode.id));
 
   for (const cell of getClipboardPasteCells({
     values,
     startCell,
-    rowCount: context.rows.length,
+    rowCount: pasteRows.length,
     columnCount: context.columns.length,
     fillRange,
   })) {
-    const row = context.rows[cell.rowIndex];
+    const row = pasteRows[cell.rowIndex];
     const column = context.columns[cell.columnIndex];
 
     if (!row || !column || !context.canEditCell(row, cell.rowIndex, column)) {
@@ -3708,6 +3804,10 @@ function applyGridClipboardText<TRow>(context: {
 
     const previousValue = column.accessor(row.original);
     const value = parseDraftValue(column, row.original, cell.value);
+
+    if (insertedRowIds.has(row.id) && isSameRowIdValue(previousValue, row.id)) {
+      continue;
+    }
 
     if (Object.is(value, previousValue)) {
       continue;
@@ -3724,8 +3824,151 @@ function applyGridClipboardText<TRow>(context: {
     });
   }
 
+  if (insertedRows.length > 0 && rowsAfterInsert && context.onRowsChange) {
+    const rowsChange = applyClipboardInsertedRowValues({
+      rows: rowsAfterInsert,
+      insertedRows,
+      changes,
+    });
+
+    context.onRowsChange({
+      rows: rowsChange.rows,
+      changes: rowsChange.insertedRows.map((insertedRow) => ({
+        type: "insert",
+        row: insertedRow.row,
+        rowIndex: insertedRow.rowIndex,
+        visibleRowIndex: insertedRow.visibleRowIndex,
+        position: "below",
+        anchorRow: insertedRow.anchorRow,
+        anchorRowId: insertedRow.anchorRowId,
+        anchorRowIndex: insertedRow.anchorRowIndex,
+        reason: "paste",
+      })),
+      source: "clipboard",
+    });
+  }
+
   context.applyCellValueChanges(changes, "paste");
   return true;
+}
+
+function getClipboardPasteMissingRowCount<TRow>(context: {
+  rows: readonly RowNode<TRow>[];
+  values: readonly (readonly string[])[];
+  startCell: FocusedCell;
+  fillRange?: NormalizedGridCellRange;
+}): number {
+  if (context.fillRange || context.rows.length === 0) {
+    return 0;
+  }
+
+  const pasteRowCount = getClipboardPasteRowCount({
+    values: context.values,
+    fillRange: context.fillRange,
+  });
+
+  return Math.max(0, context.startCell.rowIndex + pasteRowCount - context.rows.length);
+}
+
+function createClipboardPasteRows<TRow>(context: {
+  sourceRows: readonly TRow[];
+  visibleRows: readonly RowNode<TRow>[];
+  missingRowCount: number;
+  createRow: (createContext: YoupGridCreateRowContext<TRow>) => TRow;
+  getRowId?: (row: TRow, index: number) => GridRowId;
+}): { rows: TRow[]; insertedRows: PendingClipboardRowInsert<TRow>[] } | undefined {
+  const firstAnchor = context.visibleRows[context.visibleRows.length - 1];
+
+  if (!firstAnchor) {
+    return undefined;
+  }
+
+  let rows = [...context.sourceRows];
+  let anchorRow = firstAnchor.original;
+  let anchorRowId = firstAnchor.id;
+  let anchorRowIndex = firstAnchor.index;
+  const insertStartRowIndex = firstAnchor.index + 1;
+  const insertedRows: PendingClipboardRowInsert<TRow>[] = [];
+
+  for (let offset = 0; offset < context.missingRowCount; offset += 1) {
+    const rowIndex = insertStartRowIndex + offset;
+    const visibleRowIndex = context.visibleRows.length + offset;
+    const row = context.createRow({
+      rows,
+      rowIndex,
+      visibleRowIndex,
+      position: "below",
+      anchorRow,
+      anchorRowId,
+      anchorRowIndex,
+      reason: "paste",
+    });
+    const rowId = context.getRowId?.(row, rowIndex) ?? rowIndex;
+    const rowNode = {
+      id: rowId,
+      index: rowIndex,
+      original: row,
+    };
+
+    rows = [
+      ...rows.slice(0, rowIndex),
+      row,
+      ...rows.slice(rowIndex),
+    ];
+    insertedRows.push({
+      row,
+      rowNode,
+      rowIndex,
+      visibleRowIndex,
+      anchorRow,
+      anchorRowId,
+      anchorRowIndex,
+    });
+    anchorRow = row;
+    anchorRowId = rowId;
+    anchorRowIndex = rowIndex;
+  }
+
+  return { rows, insertedRows };
+}
+
+function applyClipboardInsertedRowValues<TRow>(context: {
+  rows: TRow[];
+  insertedRows: readonly PendingClipboardRowInsert<TRow>[];
+  changes: readonly PendingCellValueChange<TRow>[];
+}): { rows: TRow[]; insertedRows: PendingClipboardRowInsert<TRow>[] } {
+  let rows = context.rows;
+  const insertedRows = context.insertedRows.map((insertedRow) => ({ ...insertedRow }));
+  const insertedRowById = new Map(
+    insertedRows.map((insertedRow) => [insertedRow.rowNode.id, insertedRow]),
+  );
+
+  for (const change of context.changes) {
+    const insertedRow = insertedRowById.get(change.rowId);
+
+    if (!insertedRow || !change.column.field || !isObjectRecord(rows[insertedRow.rowIndex])) {
+      continue;
+    }
+
+    const row = setFieldValue(
+      rows[insertedRow.rowIndex] as Record<string, unknown>,
+      change.column.field,
+      change.value,
+    ) as TRow;
+
+    rows = [
+      ...rows.slice(0, insertedRow.rowIndex),
+      row,
+      ...rows.slice(insertedRow.rowIndex + 1),
+    ];
+    insertedRow.row = row;
+    insertedRow.rowNode = {
+      ...insertedRow.rowNode,
+      original: row,
+    };
+  }
+
+  return { rows, insertedRows };
 }
 
 function writeClipboardText(text: string): Promise<void> {

@@ -96,7 +96,11 @@ Enable the standard footer with `pagination`. The footer uses the core `state.pa
 
 ## Cell Context Menu
 
-Enable `showCellContextMenu` to expose right-click actions for copy, paste, clear contents, select row, clear row selection, row copy, row paste below, row insert, and row delete. Cell paste and clear use the same edit guards as inline editing. Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
+Enable `showCellContextMenu` to expose right-click actions for copy, paste, clear contents, select row, clear row selection, row copy, row paste below, row insert, and row delete. Cell paste and clear use the same edit guards as inline editing. Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row. TSV paste also uses `createRow` and `rows-change` to append missing rows when pasted data runs past the last visible row.
+
+## CSV and Excel Export
+
+The toolbar can export currently visible rows and visible columns as CSV or Excel-compatible `.xls`. Use `showCsvExport`, `showExcelExport`, `csvFileName`, and `excelFileName` to control the export buttons and file names.
 
 ## Cell Meta and Tooltips
 

@@ -58,9 +58,11 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   sortOnHeaderClick?: boolean;
   showColumnChooser?: boolean;
   showCsvExport?: boolean;
+  showExcelExport?: boolean;
   showDensityControl?: boolean;
   showFilters?: boolean;
   csvFileName?: string;
+  excelFileName?: string;
   density?: YoupGridDensity;
   defaultDensity?: YoupGridDensity;
   onDensityChange?: (density: YoupGridDensity) => void;
@@ -217,7 +219,7 @@ export type YoupGridRowChange<TRow> = YoupGridRowInsertChange<TRow> | YoupGridRo
 export type YoupGridRowsChange<TRow> = {
   rows: TRow[];
   changes: YoupGridRowChange<TRow>[];
-  source: "context-menu";
+  source: "context-menu" | "clipboard";
 };
 
 export type YoupGridRowsEndReachedEvent<TRow> = {

@@ -20,12 +20,13 @@ import "@youp-grid/react/styles.css";
 - cell edit commit callbacks with enter, tab, and blur reasons
 - cell placeholders, column alignment, validation metadata, and rich tooltips
 - column menus, resizing, auto-sizing, pinning, visibility, density, and row selection UI
+- toolbar CSV and Excel export
 - optional row number column and cell context menu
 - controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
 - loading, empty, error, validation, pending, warning, and read-only states
 
 The adapter emits changes through callbacks. Applications keep ownership of row data.
-Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
+Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row. TSV paste also uses `createRow` and `onRowsChange` to append missing rows when pasted data runs past the last visible row.
 
 ## Example
 

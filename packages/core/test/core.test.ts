@@ -13,11 +13,13 @@ import {
   createRemoteCacheKey,
   createValueHistoryState,
   exportGridCsv,
+  exportGridExcel,
   failRemoteRequest,
   finishRemoteRequest,
   getFillHandleCells,
   getFillHandleTargetRange,
   getClipboardPasteCells,
+  getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
   getVirtualRange,
   invertValueHistoryEntry,
@@ -732,6 +734,17 @@ test("clipboard utilities serialize and parse TSV ranges", () => {
       { rowIndex: 2, columnIndex: 2, value: "X" },
     ],
   );
+  assert.equal(getClipboardPasteRowCount({ values: [["A"], ["B"], ["C"]] }), 3);
+  assert.equal(
+    getClipboardPasteRowCount({
+      values: [["X"]],
+      fillRange: normalizeCellRange({
+        anchor: { rowIndex: 1, columnIndex: 1 },
+        focus: { rowIndex: 3, columnIndex: 1 },
+      }),
+    }),
+    3,
+  );
 });
 
 test("value history tracks undo and redo entries", () => {
@@ -861,7 +874,7 @@ test("fill handle utilities calculate target ranges and repeated cells", () => {
   );
 });
 
-test("CSV export serializes visible rows and columns", () => {
+test("CSV and Excel export serialize visible rows and columns", () => {
   const model = buildRowModel({
     rows: [
       { id: "e", name: "Kim, \"A\"", age: 41, city: "Seoul\nGangnam", profile: { tier: "gold" } },
@@ -891,6 +904,30 @@ test("CSV export serializes visible rows and columns", () => {
       formatCell: ({ value }) => value,
     }),
     '"Kim, ""A""";41;"Seoul\nGangnam"\nHan;31;Incheon',
+  );
+  assert.equal(
+    exportGridExcel({
+      rows: model.visibleRows,
+      columns: model.visibleColumns,
+      sheetName: "Export",
+    }),
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<?mso-application progid="Excel.Sheet"?>',
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
+      ' xmlns:o="urn:schemas-microsoft-com:office:office"',
+      ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+      ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+      '  <Worksheet ss:Name="Export">',
+      "    <Table>",
+      '      <Row><Cell><Data ss:Type="String">name</Data></Cell><Cell><Data ss:Type="String">age</Data></Cell><Cell><Data ss:Type="String">city</Data></Cell></Row>',
+      '      <Row><Cell><Data ss:Type="String">Kim, "A"</Data></Cell><Cell><Data ss:Type="String">41 years</Data></Cell><Cell><Data ss:Type="String">Seoul\nGangnam</Data></Cell></Row>',
+      '      <Row><Cell><Data ss:Type="String">Han</Data></Cell><Cell><Data ss:Type="String">31 years</Data></Cell><Cell><Data ss:Type="String">Incheon</Data></Cell></Row>',
+      "    </Table>",
+      "  </Worksheet>",
+      "</Workbook>",
+      "",
+    ].join("\n"),
   );
 });
 

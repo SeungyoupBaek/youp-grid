@@ -10,6 +10,7 @@ export { applyAggregation } from "./aggregation.ts";
 export {
   isCellInRange,
   getClipboardPasteCells,
+  getClipboardPasteRowCount,
   normalizeCellRange,
   parseClipboardText,
   serializeGridRange,
@@ -25,6 +26,8 @@ export { getFillHandleCells, getFillHandleTargetRange } from "./fill-handle.ts";
 export type { GridFillHandleCell } from "./fill-handle.ts";
 export { exportGridCsv } from "./csv.ts";
 export type { CsvCellFormatter, ExportGridCsvOptions } from "./csv.ts";
+export { exportGridExcel } from "./excel.ts";
+export type { ExcelCellFormatter, ExportGridExcelOptions } from "./excel.ts";
 export { applyFilters, defaultFilterPredicate } from "./filtering.ts";
 export { getInfiniteScrollTrigger } from "./infinite-scroll.ts";
 export { applyPagination } from "./pagination.ts";

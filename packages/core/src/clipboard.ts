@@ -133,6 +133,19 @@ export function getClipboardPasteCells(options: {
   return cells;
 }
 
+export function getClipboardPasteRowCount(options: {
+  values: readonly (readonly string[])[];
+  fillRange?: NormalizedGridCellRange;
+}): number {
+  if (options.values.length === 0) {
+    return 0;
+  }
+
+  return options.fillRange
+    ? options.fillRange.endRowIndex - options.fillRange.startRowIndex + 1
+    : options.values.length;
+}
+
 function formatClipboardValue(value: unknown): string {
   return value == null ? "" : String(value);
 }

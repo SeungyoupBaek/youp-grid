@@ -24,7 +24,7 @@ The adapter should not own data semantics. Sorting, filtering, pagination, row s
 - TSV clipboard copy/paste
 - fill handle
 - undo/redo for cell value changes
-- CSV export
+- CSV and Excel export
 - loading and error overlays
 - column width and visibility state helpers
 - column resize handles
@@ -571,6 +571,7 @@ The adapter copies and pastes tab-separated values:
 - Copy uses the current range selection, or the focused cell when no range is active.
 - Paste starts at the current range's top-left cell, or the focused cell when no range is active.
 - Pasting one value into a selected range fills the whole range.
+- When TSV paste runs past the last visible row, `createRow` and `onRowsChange` append the missing rows with `source: "clipboard"`.
 - Paste writes through `onCellValueChange`; row objects are never mutated by the grid.
 - A paste operation is stored as one undoable history entry.
 
@@ -583,12 +584,14 @@ The focused cell or active range shows a small fill handle in the bottom-right c
 - Fill writes through `onCellValueChange` with `source: "fill"`.
 - A fill operation is stored as one undoable history entry.
 
-## CSV Export
+## CSV And Excel Export
 
-The built-in toolbar can export the currently visible rows and visible columns as CSV.
+The built-in toolbar can export the currently visible rows and visible columns as CSV or Excel-compatible `.xls`.
 
 - `showCsvExport` controls whether the toolbar button is shown.
 - `csvFileName` controls the downloaded file name.
+- `showExcelExport` controls whether the Excel toolbar button is shown.
+- `excelFileName` controls the downloaded Excel file name.
 - Values use `valueFormatter` when a column provides one.
 - Hidden columns are excluded because export uses the visible column model.
 

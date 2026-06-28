@@ -185,7 +185,7 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
 </template>
 ```
 
-The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, row selection, row copy/paste, row insert/delete, and auto-size, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row.
+The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, row selection, row copy/paste, row insert/delete, and auto-size, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Row insert, row paste, and TSV paste auto-append require `createRow`; pasted rows keep newly created row IDs while copying field-backed column values.
 
 ## Current Boundary
 
@@ -218,9 +218,10 @@ Implemented now:
 - read-only and per-cell edit guards
 - range selection
 - TSV clipboard copy/paste
+- TSV paste auto-appends missing rows with `createRow`
 - fill handle for repeated cell values
 - undo/redo for cell value changes
-- CSV export
+- CSV and Excel export
 - loading and error overlays
 - server-side row model contract
 - cursor pagination adapter

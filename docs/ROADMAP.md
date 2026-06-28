@@ -61,7 +61,7 @@ Status: in progress
 
 - undo/redo
 - fill handle
-- CSV export
+- CSV and Excel export
 - loading, empty, and error overlays
 - column menu
 - grouped headers
