@@ -10,6 +10,7 @@ import {
   invalidateRemoteCache as invalidateCoreRemoteCache,
   setAggregation as setCoreAggregation,
   setColumnHidden as setCoreColumnHidden,
+  setColumnOrder as setCoreColumnOrder,
   setColumnPinned as setCoreColumnPinned,
   setColumnWidth as setCoreColumnWidth,
   setCursorPage as setCoreCursorPage,
@@ -114,6 +115,9 @@ export function useYoupGrid<TRow>(
     },
     setColumnPinned: (columnId, pinned) => {
       commitState(setCoreColumnPinned(state.value, columnId, pinned));
+    },
+    setColumnOrder: (columnIds) => {
+      commitState(setCoreColumnOrder(state.value, columnIds));
     },
     setColumnWidth: (columnId, width) => {
       commitState(setCoreColumnWidth(state.value, columnId, width));

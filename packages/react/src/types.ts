@@ -138,6 +138,15 @@ export type YoupGridRowEvent<TRow> = {
   event: ReactMouseEvent<HTMLDivElement>;
 };
 
+export type YoupGridRowDetailContext<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowId: GridRowId;
+  rowIndex: number;
+  expanded: boolean;
+  toggleExpanded: () => void;
+};
+
 export type YoupGridRowsEndReachedEvent<TRow> = {
   state: GridState;
   rowModel: RowModel<TRow>;
@@ -193,6 +202,7 @@ export type YoupGridController<TRow> = {
   acknowledgeRemoteCache: (key?: string) => void;
   setColumnHidden: (columnId: string, hidden: boolean) => void;
   setColumnPinned: (columnId: string, pinned: ColumnPin | undefined) => void;
+  setColumnOrder: (columnIds: readonly string[]) => void;
   setColumnWidth: (columnId: string, width: number) => void;
   setRowSelected: (rowId: GridRowId, selected: boolean) => void;
   setSelectedRows: (rowIds: readonly GridRowId[]) => void;
@@ -221,6 +231,9 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
   showCellContextMenu?: boolean;
+  detailRowHeight?: number;
+  expandedDetailRowIds?: readonly GridRowId[];
+  defaultExpandedDetailRowIds?: readonly GridRowId[];
   csvFileName?: string;
   excelFileName?: string;
   density?: YoupGridDensity;
@@ -235,6 +248,8 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   cellTooltip?: YoupGridCellTooltipOptions;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
+  renderRowDetail?: (context: YoupGridRowDetailContext<TRow>) => ReactNode;
+  isRowDetailAvailable?: (context: YoupGridRowDetailContext<TRow>) => boolean;
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
   onCellEditCommit?: (commit: YoupGridCellEditCommit<TRow>) => void;
   onCellsValueChange?: (change: YoupGridCellsValueChange<TRow>) => void;
@@ -242,6 +257,7 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   onRowsChange?: (change: YoupGridRowsChange<TRow>) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
+  onDetailExpandedRowsChange?: (rowIds: readonly GridRowId[]) => void;
   onRowsEndReached?: (event: YoupGridRowsEndReachedEvent<TRow>) => void;
   emptyContent?: ReactNode;
 };

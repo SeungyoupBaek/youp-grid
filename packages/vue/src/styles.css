@@ -84,9 +84,22 @@
 
 .youp-grid-vue__column-panel-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
   align-items: center;
   gap: 12px;
+}
+
+.youp-grid-vue__column-panel-button {
+  justify-self: start;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--youp-grid-vue-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
 }
 
 .youp-grid-vue__column-toggle {
@@ -106,6 +119,11 @@
   gap: 4px;
 }
 
+.youp-grid-vue__order-controls {
+  display: inline-flex;
+  gap: 4px;
+}
+
 .youp-grid-vue__pin-button {
   min-height: 26px;
   padding: 3px 7px;
@@ -118,10 +136,26 @@
   font-size: 12px;
 }
 
+.youp-grid-vue__column-panel-button:disabled,
+.youp-grid-vue__pin-button:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .youp-grid-vue__pin-button--active {
   border-color: var(--youp-grid-vue-accent);
   background: #edf4ff;
   color: var(--youp-grid-vue-accent);
+}
+
+.youp-grid-vue__detail-cell {
+  min-width: 0;
+  padding: 12px;
+  border-right: 0;
+  color: var(--youp-grid-vue-text);
+  line-height: 1.5;
+  white-space: normal;
 }
 
 .youp-grid-vue__viewport {
@@ -160,6 +194,10 @@
   background: #fbfcfe;
 }
 
+.youp-grid-vue__row--detail {
+  background: #fbfcfe;
+}
+
 .youp-grid-vue__cell,
 .youp-grid-vue__group-cell {
   position: relative;
@@ -180,6 +218,35 @@
 .youp-grid-vue__cell--header {
   min-height: 38px;
   padding: 0;
+}
+
+.youp-grid-vue__cell--header[draggable="true"] {
+  cursor: grab;
+}
+
+.youp-grid-vue__cell--column-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.youp-grid-vue__cell--column-drag-over-before::after,
+.youp-grid-vue__cell--column-drag-over-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 3px;
+  background: #2563eb;
+  pointer-events: none;
+}
+
+.youp-grid-vue__cell--column-drag-over-before::after {
+  left: 0;
+}
+
+.youp-grid-vue__cell--column-drag-over-after::after {
+  right: 0;
 }
 
 .youp-grid-vue__row-number-cell,
@@ -469,7 +536,8 @@
 }
 
 .youp-grid-vue__group-button,
-.youp-grid-vue__tree-button {
+.youp-grid-vue__tree-button,
+.youp-grid-vue__detail-button {
   border: 0;
   background: transparent;
   color: inherit;
@@ -485,7 +553,8 @@
   font-weight: 600;
 }
 
-.youp-grid-vue__tree-button {
+.youp-grid-vue__tree-button,
+.youp-grid-vue__detail-button {
   width: 18px;
   margin-right: 4px;
   color: var(--youp-grid-vue-accent);

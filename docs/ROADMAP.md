@@ -40,6 +40,8 @@ Status: implemented
 - filter inputs
 - pagination controls
 - column resize handle
+- column drag reorder
+- column order menu and reset controls
 - column chooser
 - pinned columns
 - keyboard cell navigation

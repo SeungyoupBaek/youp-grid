@@ -70,6 +70,10 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
   showCellContextMenu?: boolean;
+  detailRowHeight?: number;
+  expandedDetailRowIds?: readonly GridRowId[];
+  defaultExpandedDetailRowIds?: readonly GridRowId[];
+  isRowDetailAvailable?: (context: YoupGridRowDetailSlotContext<TRow>) => boolean;
   editable?: boolean;
   readOnly?: boolean;
   canEditCell?: (context: YoupGridCanEditCellContext<TRow>) => boolean;
@@ -106,6 +110,15 @@ export type YoupGridCellSlotContext<TRow> = {
   align: ColumnAlign;
   editable: boolean;
   meta?: YoupGridCellMeta;
+};
+
+export type YoupGridRowDetailSlotContext<TRow> = {
+  row: TRow;
+  rowId: GridRowId;
+  rowIndex: number;
+  rowNode: RowNode<TRow>;
+  expanded: boolean;
+  toggleExpanded: () => void;
 };
 
 export type YoupGridCellMetaStatus = "loading" | "error" | "warning" | "success";
@@ -257,6 +270,7 @@ export type YoupGridController<TRow> = {
   acknowledgeRemoteCache: (key?: string) => void;
   setColumnHidden: (columnId: string, hidden: boolean) => void;
   setColumnPinned: (columnId: string, pinned: ColumnPin | undefined) => void;
+  setColumnOrder: (columnIds: readonly string[]) => void;
   setColumnWidth: (columnId: string, width: number) => void;
   setRowSelected: (rowId: GridRowId, selected: boolean) => void;
   setSelectedRows: (rowIds: readonly GridRowId[]) => void;

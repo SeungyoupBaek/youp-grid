@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/vue",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Vue adapter for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
@@ -42,7 +42,7 @@
     "build": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css"
   },
   "dependencies": {
-    "@youp-grid/core": "0.2.10"
+    "@youp-grid/core": "0.2.11"
   },
   "peerDependencies": {
     "vue": ">=3.3.0"

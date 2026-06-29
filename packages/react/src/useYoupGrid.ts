@@ -9,6 +9,7 @@ import {
   finishRemoteRequest as finishCoreRemoteRequest,
   invalidateRemoteCache as invalidateCoreRemoteCache,
   setColumnHidden as setCoreColumnHidden,
+  setColumnOrder as setCoreColumnOrder,
   setColumnPinned as setCoreColumnPinned,
   setColumnWidth as setCoreColumnWidth,
   setCursorPage as setCoreCursorPage,
@@ -146,6 +147,9 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     },
     setColumnPinned: (columnId, pinned) => {
       commitState(setCoreColumnPinned(state, columnId, pinned));
+    },
+    setColumnOrder: (columnIds) => {
+      commitState(setCoreColumnOrder(state, columnIds));
     },
     setColumnWidth: (columnId, width) => {
       commitState(setCoreColumnWidth(state, columnId, width));

@@ -28,6 +28,8 @@ The adapter should not own data semantics. Sorting, filtering, pagination, row s
 - loading and error overlays
 - column width and visibility state helpers
 - column resize handles
+- column drag reorder within the same pin group
+- column order menu and reset controls
 - column menu
 - grouped headers
 - density control
@@ -154,7 +156,13 @@ Each header can show a column menu for common column actions.
 
 - `showColumnMenu` controls whether header menu buttons are shown.
 - The menu can sort ascending, sort descending, or clear the active sort.
-- The menu can pin left, pin right, unpin, hide the column, or clear that column's filter.
+- The menu can pin left, pin right, unpin, move the column, reset column order, hide the column, or clear that column's filter.
+
+## Master Detail Rows
+
+`renderRowDetail` renders an expandable detail row below each data row. Use `defaultExpandedDetailRowIds` for uncontrolled initial state, or `expandedDetailRowIds` with `onDetailExpandedRowsChange` for controlled expansion.
+
+When row detail rendering is enabled, the React adapter renders the current display rows in normal flow so detail row height stays correct.
 
 ## Grouped Headers
 

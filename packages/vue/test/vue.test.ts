@@ -41,6 +41,21 @@ test("useYoupGrid manages uncontrolled grid state", () => {
   );
 });
 
+test("useYoupGrid sets column order", () => {
+  const controller = useYoupGrid({
+    rows,
+    columns,
+    getRowId: (row) => row.id,
+  });
+
+  controller.setColumnOrder(["age", "name"]);
+
+  assert.deepEqual(
+    controller.rowModel.value.visibleColumns.map((column) => column.id),
+    ["age", "name"],
+  );
+});
+
 test("useYoupGrid supports controlled state", () => {
   const state = ref<GridState>({});
   const controller = useYoupGrid(() => ({
@@ -124,6 +139,31 @@ test("YoupGrid renders optional row number and selection columns", async () => {
   assert.match(html, /aria-label="Row 1"/);
   assert.match(html, /aria-label="Select row 2"/);
   assert.match(html, /youp-grid-vue__row--selected/);
+});
+
+test("YoupGrid renders expanded row detail slot", async () => {
+  const app = createSSRApp({
+    render: () =>
+      h(
+        YoupGrid,
+        {
+          rows,
+          columns,
+          getRowId: (row: User) => row.id,
+          defaultExpandedDetailRowIds: ["2"],
+        },
+        {
+          "row-detail": ({ row }: { row: User }) => h("div", `Detail ${row.name}`),
+        },
+      ),
+  });
+
+  const html = await renderToString(app);
+
+  assert.match(html, /aria-label="Expand detail row"/);
+  assert.match(html, /aria-label="Collapse detail row"/);
+  assert.match(html, /Detail Lee/);
+  assert.doesNotMatch(html, /Detail Kim/);
 });
 
 test("YoupGrid renders native cell meta titles", async () => {

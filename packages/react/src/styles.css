@@ -110,9 +110,21 @@
 
 .youp-grid__column-panel-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
   align-items: center;
   gap: 12px;
+}
+
+.youp-grid__column-panel-button {
+  justify-self: start;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--youp-grid-border);
+  border-radius: 4px;
+  color: var(--youp-grid-text);
+  font: inherit;
+  cursor: pointer;
+  background: #fff;
 }
 
 .youp-grid__column-toggle {
@@ -129,6 +141,12 @@
   gap: 4px;
 }
 
+.youp-grid__order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .youp-grid__pin-button {
   min-height: 26px;
   padding: 3px 7px;
@@ -138,6 +156,13 @@
   font: inherit;
   cursor: pointer;
   background: #fff;
+}
+
+.youp-grid__column-panel-button:disabled,
+.youp-grid__pin-button:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  background: #f8fafc;
 }
 
 .youp-grid__pin-button--active {
@@ -190,6 +215,10 @@
 
 .youp-grid__row--group {
   background: #f8fafc;
+}
+
+.youp-grid__row--detail {
+  background: #fbfcfe;
 }
 
 .youp-grid__row--header:hover,
@@ -425,6 +454,11 @@
   align-items: center;
 }
 
+.youp-grid__cell--detail-toggle-cell {
+  display: flex;
+  align-items: center;
+}
+
 .youp-grid__cell-tree-content {
   display: inline-flex;
   min-width: 0;
@@ -462,6 +496,48 @@
 .youp-grid__tree-toggle:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
+}
+
+.youp-grid__cell-detail-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.youp-grid__cell-detail-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youp-grid__detail-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  color: var(--youp-grid-muted);
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+}
+
+.youp-grid__detail-toggle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.youp-grid__detail-caret {
+  width: 12px;
+  line-height: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .youp-grid__tree-caret {
@@ -695,6 +771,35 @@
   background: var(--youp-grid-header);
 }
 
+.youp-grid__cell--header[draggable="true"] {
+  cursor: grab;
+}
+
+.youp-grid__cell--column-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.youp-grid__cell--column-drag-over-before::after,
+.youp-grid__cell--column-drag-over-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 3px;
+  background: #2563eb;
+  pointer-events: none;
+}
+
+.youp-grid__cell--column-drag-over-before::after {
+  left: 0;
+}
+
+.youp-grid__cell--column-drag-over-after::after {
+  right: 0;
+}
+
 .youp-grid__cell--header-group {
   display: block;
   padding: var(--youp-grid-header-group-block-padding) var(--youp-grid-cell-inline-padding);
@@ -704,6 +809,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   background: var(--youp-grid-header);
+}
+
+.youp-grid__cell--detail {
+  padding: 12px;
+  color: var(--youp-grid-text);
+  line-height: 1.5;
+  white-space: normal;
+  background: #fbfcfe;
 }
 
 .youp-grid__cell--aggregation {

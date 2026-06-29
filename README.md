@@ -199,8 +199,9 @@ Implemented now:
 - built-in header filters
 - pagination controls
 - column resize handles and double-click auto-size
+- column drag reorder within the same pin group
 - column chooser with visibility controls
-- column menu for sort, pin, hide, and filter actions
+- column menu for sort, pin, order, reset order, hide, and filter actions
 - grouped headers
 - density control
 - checkbox selection column
@@ -231,6 +232,7 @@ Implemented now:
 - aggregation
 - row grouping
 - tree data
+- expandable master-detail rows
 - basic editable Vue grid component
 - Vue cell metadata and native/rich cell tooltips
 - Vite React demo

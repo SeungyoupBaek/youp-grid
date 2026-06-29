@@ -50,6 +50,7 @@ import type {
   YoupGridDensity,
   YoupGridHeaderSlotContext,
   YoupGridPaginationOptions,
+  YoupGridRowDetailSlotContext,
   YoupGridRowEvent,
   YoupGridRowInsertPosition,
   YoupGridRowsChange,
@@ -62,6 +63,7 @@ const DEFAULT_COLUMN_WIDTH = 160;
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_INFINITE_SCROLL_THRESHOLD = 5;
+const DEFAULT_DETAIL_ROW_HEIGHT = 96;
 const ROW_NUMBER_COLUMN_WIDTH = 44;
 const ROW_SELECTION_COLUMN_WIDTH = 44;
 const MIN_AUTOSIZE_COLUMN_WIDTH = 48;
@@ -106,6 +108,10 @@ type PendingClipboardRowInsert<TRow = unknown> = {
   anchorRowId: GridRowId;
   anchorRowIndex: number;
 };
+
+type ColumnDropPosition = "before" | "after";
+
+type ColumnMoveDirection = "left" | "right" | "start" | "end";
 
 type NormalizedPaginationOptions = {
   pageSizeOptions: readonly number[];
@@ -295,6 +301,22 @@ export const YoupGrid = defineComponent({
       type: Boolean,
       default: false,
     },
+    detailRowHeight: {
+      type: Number,
+      default: DEFAULT_DETAIL_ROW_HEIGHT,
+    },
+    expandedDetailRowIds: {
+      type: Array as PropType<readonly GridRowId[]>,
+      default: undefined,
+    },
+    defaultExpandedDetailRowIds: {
+      type: Array as PropType<readonly GridRowId[]>,
+      default: undefined,
+    },
+    isRowDetailAvailable: {
+      type: Function as PropType<(context: YoupGridRowDetailSlotContext<unknown>) => boolean>,
+      default: undefined,
+    },
     editable: {
       type: Boolean,
       default: true,
@@ -339,6 +361,7 @@ export const YoupGrid = defineComponent({
     cellEditCommit: (_commit: YoupGridCellEditCommit<unknown>) => true,
     rowsChange: (_change: YoupGridRowsChange<unknown>) => true,
     rowsEndReached: (_event: YoupGridRowsEndReachedEvent<unknown>) => true,
+    detailExpandedRowsChange: (_rowIds: readonly GridRowId[]) => true,
     densityChange: (_density: YoupGridDensity) => true,
   },
   setup(props, { emit, slots }) {
@@ -349,6 +372,12 @@ export const YoupGrid = defineComponent({
     const activeCellContextMenu = ref<ActiveCellContextMenu>();
     const rowClipboard = ref<RowClipboardEntry[]>([]);
     const columnChooserOpen = ref(false);
+    const internalExpandedDetailRowIds = ref<GridRowId[]>([
+      ...(props.defaultExpandedDetailRowIds ?? []),
+    ]);
+    const draggedColumnId = ref<string>();
+    const dragOverColumnId = ref<string>();
+    const dragOverColumnPosition = ref<ColumnDropPosition>();
     const internalDensity = ref<YoupGridDensity>(props.defaultDensity);
     const lastRowsEndReachedKey = ref<string>();
     const grid = useYoupGrid<unknown>(() => ({
@@ -366,6 +395,7 @@ export const YoupGrid = defineComponent({
     }));
 
     const visibleColumns = computed(() => grid.rowModel.value.visibleColumns);
+    const originalColumnIds = computed(() => getColumnDefIds(props.columns));
     const density = computed(() => props.density ?? internalDensity.value);
     const gridEditable = computed(() => props.editable && !props.readOnly);
     const infiniteScrollLoading = computed(
@@ -401,6 +431,12 @@ export const YoupGrid = defineComponent({
     const selectedRowIds = computed(
       () => new Set<GridRowId>(grid.state.value.selectedRowIds ?? []),
     );
+    const expandedDetailRowIds = computed(
+      () => props.expandedDetailRowIds ?? internalExpandedDetailRowIds.value,
+    );
+    const expandedDetailRowIdSet = computed(
+      () => new Set<GridRowId>(expandedDetailRowIds.value),
+    );
     const visibleRowIds = computed(() =>
       grid.rowModel.value.visibleRows.map((rowNode) => rowNode.id),
     );
@@ -423,6 +459,83 @@ export const YoupGrid = defineComponent({
     const cellTooltipMode = computed<YoupGridCellTooltipMode>(
       () => props.cellTooltip?.mode ?? "native",
     );
+    const resetColumnDrag = () => {
+      draggedColumnId.value = undefined;
+      dragOverColumnId.value = undefined;
+      dragOverColumnPosition.value = undefined;
+    };
+    const reorderColumn = (
+      sourceColumnId: string | undefined,
+      targetColumnId: string,
+      position: ColumnDropPosition,
+    ) => {
+      if (!sourceColumnId) {
+        return;
+      }
+
+      const columnIds = getReorderedColumnIds({
+        columns: grid.rowModel.value.columns,
+        sourceColumnId,
+        targetColumnId,
+        position,
+      });
+
+      if (columnIds) {
+        grid.setColumnOrder(columnIds);
+      }
+    };
+    const moveColumn = (columnId: string, direction: ColumnMoveDirection) => {
+      const target = getColumnMoveTarget(grid.rowModel.value.columns, columnId, direction);
+
+      if (!target) {
+        return;
+      }
+
+      reorderColumn(columnId, target.columnId, target.position);
+    };
+    const canMoveColumn = (columnId: string, direction: ColumnMoveDirection) => {
+      return Boolean(getColumnMoveTarget(grid.rowModel.value.columns, columnId, direction));
+    };
+    const canResetColumnOrder = () => {
+      return !areColumnIdsEqual(
+        grid.rowModel.value.columns.map((column) => column.id),
+        originalColumnIds.value,
+      );
+    };
+    const resetColumnOrder = () => {
+      grid.setColumnOrder(originalColumnIds.value);
+    };
+    const setExpandedDetailRowIds = (rowIds: GridRowId[]) => {
+      if (props.expandedDetailRowIds === undefined) {
+        internalExpandedDetailRowIds.value = rowIds;
+      }
+
+      emit("detailExpandedRowsChange", rowIds);
+    };
+    const toggleDetailRowExpanded = (rowId: GridRowId) => {
+      const nextRowIds = expandedDetailRowIdSet.value.has(rowId)
+        ? expandedDetailRowIds.value.filter((currentRowId) => currentRowId !== rowId)
+        : [...expandedDetailRowIds.value, rowId];
+
+      setExpandedDetailRowIds(nextRowIds);
+    };
+    const getRowDetailContext = (
+      rowNode: RowNode<unknown>,
+    ): YoupGridRowDetailSlotContext<unknown> => ({
+      row: rowNode.original,
+      rowId: rowNode.id,
+      rowIndex: rowNode.index,
+      rowNode,
+      expanded: expandedDetailRowIdSet.value.has(rowNode.id),
+      toggleExpanded: () => toggleDetailRowExpanded(rowNode.id),
+    });
+    const isRowDetailAvailable = (rowNode: RowNode<unknown>) => {
+      if (!slots["row-detail"]) {
+        return false;
+      }
+
+      return props.isRowDetailAvailable?.(getRowDetailContext(rowNode)) ?? true;
+    };
     watch(
       () => [
         props.infiniteScroll,
@@ -1167,6 +1280,10 @@ export const YoupGrid = defineComponent({
             setDensity,
             setColumnHidden: grid.setColumnHidden,
             setColumnPinned: grid.setColumnPinned,
+            canMoveColumn,
+            moveColumn,
+            canResetColumnOrder,
+            resetColumnOrder,
             exportCsv,
             exportExcel,
           }),
@@ -1209,6 +1326,44 @@ export const YoupGrid = defineComponent({
                       }
                     },
                     resizeColumn: (width) => grid.setColumnWidth(column.id, width),
+                    dragged: draggedColumnId.value === column.id,
+                    dragOver: dragOverColumnId.value === column.id && draggedColumnId.value !== column.id,
+                    dragOverPosition: dragOverColumnPosition.value,
+                    startColumnDrag: (event) => {
+                      if (event.dataTransfer) {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", column.id);
+                      }
+
+                      draggedColumnId.value = column.id;
+                      dragOverColumnId.value = undefined;
+                      dragOverColumnPosition.value = undefined;
+                    },
+                    dragOverColumn: (event) => {
+                      if (!canReorderColumn(grid.rowModel.value.columns, draggedColumnId.value, column.id)) {
+                        return;
+                      }
+
+                      event.preventDefault();
+
+                      if (event.dataTransfer) {
+                        event.dataTransfer.dropEffect = "move";
+                      }
+
+                      dragOverColumnId.value = column.id;
+                      dragOverColumnPosition.value = getColumnDropPosition(event);
+                    },
+                    dropColumn: (event) => {
+                      if (!canReorderColumn(grid.rowModel.value.columns, draggedColumnId.value, column.id)) {
+                        resetColumnDrag();
+                        return;
+                      }
+
+                      event.preventDefault();
+                      reorderColumn(draggedColumnId.value, column.id, getColumnDropPosition(event));
+                      resetColumnDrag();
+                    },
+                    endColumnDrag: resetColumnDrag,
                     autoSizeColumn: () =>
                       grid.setColumnWidth(
                         column.id,
@@ -1232,10 +1387,13 @@ export const YoupGrid = defineComponent({
                     showRowNumberColumn: props.showRowNumberColumn,
                     showRowSelectionColumn: props.showRowSelectionColumn,
                     selectionColumnOffset: selectionColumnOffset.value,
+                    detailRowHeight: props.detailRowHeight,
                     selectedRowIds: selectedRowIds.value,
+                    expandedDetailRowIds: expandedDetailRowIdSet.value,
                     slots,
                     onToggleGroup: (groupId) => grid.toggleRowGroupExpanded(groupId),
                     onToggleTreeRow: (rowId) => grid.toggleTreeRowExpanded(rowId),
+                    onToggleDetailRow: toggleDetailRowExpanded,
                     onSetRowSelected: (rowId, selected) => grid.setRowSelected(rowId, selected),
                     onRowClick: (event) => emit("rowClick", event),
                     onRowDoubleClick: (event) => emit("rowDoubleClick", event),
@@ -1252,6 +1410,8 @@ export const YoupGrid = defineComponent({
                     commitCellEdit,
                     commitCheckboxEdit,
                     openCellContextMenu,
+                    getRowDetailContext,
+                    isRowDetailAvailable,
                   }),
                 )
               : h(
@@ -1447,6 +1607,10 @@ function renderColumnToolbar<TRow>(context: {
   setDensity: (density: YoupGridDensity) => void;
   setColumnHidden: (columnId: string, hidden: boolean) => void;
   setColumnPinned: (columnId: string, pinned: ColumnPin | undefined) => void;
+  canMoveColumn: (columnId: string, direction: ColumnMoveDirection) => boolean;
+  moveColumn: (columnId: string, direction: ColumnMoveDirection) => void;
+  canResetColumnOrder: () => boolean;
+  resetColumnOrder: () => void;
   exportCsv: () => void;
   exportExcel: () => void;
 }) {
@@ -1525,42 +1689,68 @@ function renderColumnToolbar<TRow>(context: {
         ? h(
             "div",
             { class: "youp-grid-vue__column-panel" },
-            context.columns.map((column) =>
+            [
               h(
-                "div",
-                { key: column.id, class: "youp-grid-vue__column-panel-row" },
-                [
-                  h(
-                    "label",
-                    { class: "youp-grid-vue__column-toggle" },
-                    [
-                      h("input", {
-                        type: "checkbox",
-                        checked: !column.hidden,
-                        onChange: (event: Event) => {
-                          const target = event.currentTarget as HTMLInputElement | null;
-                          context.setColumnHidden(column.id, !Boolean(target?.checked));
-                        },
-                      }),
-                      column.headerName,
-                    ],
-                  ),
-                  h(
-                    "div",
-                    {
-                      class: "youp-grid-vue__pin-controls",
-                      role: "group",
-                      "aria-label": `Pin ${column.headerName}`,
-                    },
-                    [
-                      renderPinButton(column, undefined, "None", context.setColumnPinned),
-                      renderPinButton(column, "left", "Left", context.setColumnPinned),
-                      renderPinButton(column, "right", "Right", context.setColumnPinned),
-                    ],
-                  ),
-                ],
+                "button",
+                {
+                  type: "button",
+                  class: "youp-grid-vue__column-panel-button",
+                  disabled: !context.canResetColumnOrder(),
+                  onClick: context.resetColumnOrder,
+                },
+                "Reset order",
               ),
-            ),
+              ...context.columns.map((column) =>
+                h(
+                  "div",
+                  { key: column.id, class: "youp-grid-vue__column-panel-row" },
+                  [
+                    h(
+                      "label",
+                      { class: "youp-grid-vue__column-toggle" },
+                      [
+                        h("input", {
+                          type: "checkbox",
+                          checked: !column.hidden,
+                          onChange: (event: Event) => {
+                            const target = event.currentTarget as HTMLInputElement | null;
+                            context.setColumnHidden(column.id, !Boolean(target?.checked));
+                          },
+                        }),
+                        column.headerName,
+                      ],
+                    ),
+                    h(
+                      "div",
+                      {
+                        class: "youp-grid-vue__pin-controls",
+                        role: "group",
+                        "aria-label": `Pin ${column.headerName}`,
+                      },
+                      [
+                        renderPinButton(column, undefined, "None", context.setColumnPinned),
+                        renderPinButton(column, "left", "Left", context.setColumnPinned),
+                        renderPinButton(column, "right", "Right", context.setColumnPinned),
+                      ],
+                    ),
+                    h(
+                      "div",
+                      {
+                        class: "youp-grid-vue__order-controls",
+                        role: "group",
+                        "aria-label": `Order ${column.headerName}`,
+                      },
+                      [
+                        renderOrderButton(column, "start", "Start", context.canMoveColumn, context.moveColumn),
+                        renderOrderButton(column, "left", "Left", context.canMoveColumn, context.moveColumn),
+                        renderOrderButton(column, "right", "Right", context.canMoveColumn, context.moveColumn),
+                        renderOrderButton(column, "end", "End", context.canMoveColumn, context.moveColumn),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           )
         : undefined,
     ],
@@ -1569,6 +1759,25 @@ function renderColumnToolbar<TRow>(context: {
 
 function renderDensityOption(value: YoupGridDensity, label: string) {
   return h("option", { value }, label);
+}
+
+function renderOrderButton<TRow>(
+  column: ResolvedColumnDef<TRow>,
+  direction: ColumnMoveDirection,
+  label: string,
+  canMoveColumn: (columnId: string, direction: ColumnMoveDirection) => boolean,
+  moveColumn: (columnId: string, direction: ColumnMoveDirection) => void,
+) {
+  return h(
+    "button",
+    {
+      type: "button",
+      class: "youp-grid-vue__pin-button",
+      disabled: !canMoveColumn(column.id, direction),
+      onClick: () => moveColumn(column.id, direction),
+    },
+    label,
+  );
 }
 
 function renderPinButton<TRow>(
@@ -1661,6 +1870,13 @@ function renderHeaderCell<TRow>(context: {
   showFilter: boolean;
   setFilter: (value: string) => void;
   resizeColumn: (width: number) => void;
+  dragged: boolean;
+  dragOver: boolean;
+  dragOverPosition: ColumnDropPosition | undefined;
+  startColumnDrag: (event: DragEvent) => void;
+  dragOverColumn: (event: DragEvent) => void;
+  dropColumn: (event: DragEvent) => void;
+  endColumnDrag: () => void;
   autoSizeColumn: () => void;
 }) {
   const align = getColumnAlign(context.column);
@@ -1708,10 +1924,19 @@ function renderHeaderCell<TRow>(context: {
         "youp-grid-vue__cell",
         "youp-grid-vue__cell--header",
         `youp-grid-vue__cell--align-${align}`,
+        context.dragged ? "youp-grid-vue__cell--column-dragging" : undefined,
+        context.dragOver
+          ? `youp-grid-vue__cell--column-drag-over-${context.dragOverPosition ?? "before"}`
+          : undefined,
       ],
       role: "columnheader",
       "aria-colindex": context.ariaColumnOffset + context.columnIndex + 1,
       "aria-sort": getAriaSort(context.sortDirection),
+      draggable: true,
+      onDragstart: context.startColumnDrag,
+      onDragover: context.dragOverColumn,
+      onDrop: context.dropColumn,
+      onDragend: context.endColumnDrag,
     },
     [
       headerControl,
@@ -1757,10 +1982,13 @@ function renderDisplayRow<TRow>(context: {
   showRowNumberColumn: boolean;
   showRowSelectionColumn: boolean;
   selectionColumnOffset: number;
+  detailRowHeight: number;
   selectedRowIds: ReadonlySet<GridRowId>;
+  expandedDetailRowIds: ReadonlySet<GridRowId>;
   slots: Slots;
   onToggleGroup: (groupId: string) => void;
   onToggleTreeRow: (rowId: GridRowId) => void;
+  onToggleDetailRow: (rowId: GridRowId) => void;
   onSetRowSelected: (rowId: GridRowId, selected: boolean) => void;
   onRowClick: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick: (event: YoupGridRowEvent<TRow>) => void;
@@ -1798,6 +2026,8 @@ function renderDisplayRow<TRow>(context: {
     column: ResolvedColumnDef<TRow>,
     columnIndex: number,
   ) => void;
+  getRowDetailContext: (rowNode: RowNode<TRow>) => YoupGridRowDetailSlotContext<TRow>;
+  isRowDetailAvailable: (rowNode: RowNode<TRow>) => boolean;
 }) {
   if (isGroupNode(context.displayNode)) {
     return renderGroupRow({
@@ -1810,7 +2040,10 @@ function renderDisplayRow<TRow>(context: {
     });
   }
 
-  return renderDataRow({
+  const detailAvailable = context.isRowDetailAvailable(context.displayNode);
+  const detailExpanded = detailAvailable && context.expandedDetailRowIds.has(context.displayNode.id);
+  const detailContext = context.getRowDetailContext(context.displayNode);
+  const row = renderDataRow({
     rowNode: context.displayNode,
     displayIndex: context.displayIndex,
     columns: context.columns,
@@ -1822,6 +2055,7 @@ function renderDisplayRow<TRow>(context: {
     selected: context.selectedRowIds.has(context.displayNode.id),
     slots: context.slots,
     onToggleTreeRow: context.onToggleTreeRow,
+    onToggleDetailRow: context.onToggleDetailRow,
     onSetRowSelected: context.onSetRowSelected,
     onRowClick: context.onRowClick,
     onRowDoubleClick: context.onRowDoubleClick,
@@ -1838,7 +2072,89 @@ function renderDisplayRow<TRow>(context: {
     commitCellEdit: context.commitCellEdit,
     commitCheckboxEdit: context.commitCheckboxEdit,
     openCellContextMenu: context.openCellContextMenu,
+    detailAvailable,
+    detailExpanded,
   });
+  const detailRow = detailExpanded
+    ? renderDetailRow({
+        rowNode: context.displayNode,
+        displayIndex: context.displayIndex,
+        detailRowHeight: context.detailRowHeight,
+        columns: context.columns,
+        leadingColumnCount: context.leadingColumnCount,
+        templateColumns: context.templateColumns,
+        slots: context.slots,
+        detailContext,
+      })
+    : undefined;
+
+  return detailRow ? [row, detailRow] : row;
+}
+
+function renderDetailRow<TRow>(context: {
+  rowNode: RowNode<TRow>;
+  displayIndex: number;
+  detailRowHeight: number;
+  columns: readonly ResolvedColumnDef<TRow>[];
+  leadingColumnCount: number;
+  templateColumns: string;
+  slots: Slots;
+  detailContext: YoupGridRowDetailSlotContext<TRow>;
+}) {
+  const content = context.slots["row-detail"]?.(context.detailContext);
+
+  if (!content || content.length === 0) {
+    return undefined;
+  }
+
+  return h(
+    "div",
+    {
+      class: ["youp-grid-vue__row", "youp-grid-vue__row--detail"],
+      role: "row",
+      "aria-rowindex": context.displayIndex + 3,
+      style: {
+        gridTemplateColumns: context.templateColumns,
+        minHeight: `${context.detailRowHeight}px`,
+      },
+    },
+    h(
+      "div",
+      {
+        class: "youp-grid-vue__detail-cell",
+        role: "gridcell",
+        style: {
+          gridColumn: `1 / span ${Math.max(
+            context.columns.length + context.leadingColumnCount,
+            1,
+          )}`,
+          minHeight: `${context.detailRowHeight}px`,
+        },
+      },
+      content,
+    ),
+  );
+}
+
+function renderDetailToggle(context: {
+  expanded: boolean;
+  rowId: GridRowId;
+  onToggleDetailRow: (rowId: GridRowId) => void;
+}) {
+  return h(
+    "button",
+    {
+      type: "button",
+      class: "youp-grid-vue__detail-button",
+      "aria-label": context.expanded ? "Collapse detail row" : "Expand detail row",
+      "aria-expanded": context.expanded,
+      onClick: (event: MouseEvent) => {
+        event.stopPropagation();
+        context.onToggleDetailRow(context.rowId);
+      },
+    },
+    context.expanded ? "-" : "+",
+  );
 }
 
 function renderGroupRow<TRow>(context: {
@@ -1900,6 +2216,7 @@ function renderDataRow<TRow>(context: {
   selected: boolean;
   slots: Slots;
   onToggleTreeRow: (rowId: GridRowId) => void;
+  onToggleDetailRow: (rowId: GridRowId) => void;
   onSetRowSelected: (rowId: GridRowId, selected: boolean) => void;
   onRowClick: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick: (event: YoupGridRowEvent<TRow>) => void;
@@ -1937,6 +2254,8 @@ function renderDataRow<TRow>(context: {
     column: ResolvedColumnDef<TRow>,
     columnIndex: number,
   ) => void;
+  detailAvailable: boolean;
+  detailExpanded: boolean;
 }) {
   return h(
     "div",
@@ -1989,6 +2308,9 @@ function renderDataRow<TRow>(context: {
           ariaColumnOffset: context.leadingColumnCount,
           slots: context.slots,
           onToggleTreeRow: context.onToggleTreeRow,
+          onToggleDetailRow: context.onToggleDetailRow,
+          detailAvailable: context.detailAvailable && columnIndex === 0,
+          detailExpanded: context.detailExpanded,
           activeEdit: context.activeEdit,
           activeTooltipCellKey: context.activeTooltipCellKey,
           cellTooltipMode: context.cellTooltipMode,
@@ -2073,6 +2395,9 @@ function renderDataCell<TRow>(context: {
   ariaColumnOffset: number;
   slots: Slots;
   onToggleTreeRow: (rowId: GridRowId) => void;
+  onToggleDetailRow: (rowId: GridRowId) => void;
+  detailAvailable: boolean;
+  detailExpanded: boolean;
   activeEdit?: ActiveEdit;
   activeTooltipCellKey?: string;
   cellTooltipMode: YoupGridCellTooltipMode;
@@ -2154,6 +2479,15 @@ function renderDataCell<TRow>(context: {
           context.commitCheckboxEdit(context.rowNode, context.column, checked),
       });
   const children = normalizeCellChildren(content);
+  if (!editing && context.detailAvailable) {
+    children.unshift(
+      renderDetailToggle({
+        expanded: context.detailExpanded,
+        rowId: context.rowNode.id,
+        onToggleDetailRow: context.onToggleDetailRow,
+      }),
+    );
+  }
   const status = renderCellStatus(context.meta, context.cellTooltipMode);
   const tooltip = renderCellTooltip(context.meta, tooltipId);
 
@@ -2812,6 +3146,137 @@ function getFilterValue(
   const value = state.filters?.find((filter) => filter.columnId === columnId)?.value;
 
   return value == null ? "" : String(value);
+}
+
+function canReorderColumn<TRow>(
+  columns: readonly ResolvedColumnDef<TRow>[],
+  sourceColumnId: string | undefined,
+  targetColumnId: string,
+): sourceColumnId is string {
+  if (!sourceColumnId || sourceColumnId === targetColumnId) {
+    return false;
+  }
+
+  const sourceColumn = columns.find((column) => column.id === sourceColumnId);
+  const targetColumn = columns.find((column) => column.id === targetColumnId);
+
+  return Boolean(sourceColumn && targetColumn && sourceColumn.pinned === targetColumn.pinned);
+}
+
+function getReorderedColumnIds<TRow>(context: {
+  columns: readonly ResolvedColumnDef<TRow>[];
+  sourceColumnId: string;
+  targetColumnId: string;
+  position: ColumnDropPosition;
+}): string[] | undefined {
+  if (!canReorderColumn(context.columns, context.sourceColumnId, context.targetColumnId)) {
+    return undefined;
+  }
+
+  const columnIds = context.columns.map((column) => column.id);
+  const sourceIndex = columnIds.indexOf(context.sourceColumnId);
+  const targetIndex = columnIds.indexOf(context.targetColumnId);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return undefined;
+  }
+
+  const nextColumnIds = moveItem(columnIds, sourceIndex, targetIndex, context.position);
+
+  return nextColumnIds.every((columnId, index) => columnId === columnIds[index]) ? undefined : nextColumnIds;
+}
+
+function getColumnMoveTarget<TRow>(
+  columns: readonly ResolvedColumnDef<TRow>[],
+  columnId: string,
+  direction: ColumnMoveDirection,
+): { columnId: string; position: ColumnDropPosition } | undefined {
+  const sourceColumn = columns.find((column) => column.id === columnId);
+
+  if (!sourceColumn) {
+    return undefined;
+  }
+
+  const groupColumns = columns.filter((column) => column.pinned === sourceColumn.pinned);
+  const groupIndex = groupColumns.findIndex((column) => column.id === columnId);
+
+  if (groupIndex < 0) {
+    return undefined;
+  }
+
+  if ((direction === "left" || direction === "start") && groupIndex === 0) {
+    return undefined;
+  }
+
+  if ((direction === "right" || direction === "end") && groupIndex === groupColumns.length - 1) {
+    return undefined;
+  }
+
+  if (direction === "left") {
+    return { columnId: groupColumns[groupIndex - 1].id, position: "before" };
+  }
+
+  if (direction === "right") {
+    return { columnId: groupColumns[groupIndex + 1].id, position: "after" };
+  }
+
+  if (direction === "start") {
+    return { columnId: groupColumns[0].id, position: "before" };
+  }
+
+  return { columnId: groupColumns[groupColumns.length - 1].id, position: "after" };
+}
+
+function getColumnDefIds<TRow>(columns: readonly ColumnDef<TRow>[]): string[] {
+  return columns.map((column) => {
+    if (column.id) {
+      return column.id;
+    }
+
+    if (column.field) {
+      return String(column.field);
+    }
+
+    throw new Error("Column requires either `id` or `field`.");
+  });
+}
+
+function areColumnIdsEqual(
+  leftColumnIds: readonly string[],
+  rightColumnIds: readonly string[],
+): boolean {
+  return (
+    leftColumnIds.length === rightColumnIds.length &&
+    leftColumnIds.every((columnId, index) => columnId === rightColumnIds[index])
+  );
+}
+
+function moveItem<TItem>(
+  items: readonly TItem[],
+  sourceIndex: number,
+  targetIndex: number,
+  position: ColumnDropPosition,
+): TItem[] {
+  const nextItems = [...items];
+  const [item] = nextItems.splice(sourceIndex, 1);
+  const insertIndex = position === "before"
+    ? sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+    : sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+
+  nextItems.splice(insertIndex, 0, item);
+
+  return nextItems;
+}
+
+function getColumnDropPosition(event: DragEvent): ColumnDropPosition {
+  const element = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
+  const rect = element?.getBoundingClientRect();
+
+  if (!rect) {
+    return "before";
+  }
+
+  return event.clientX > rect.left + rect.width / 2 ? "after" : "before";
 }
 
 function getClampedContextMenuPlacement(context: {

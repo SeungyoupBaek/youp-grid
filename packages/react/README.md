@@ -19,7 +19,8 @@ import "@youp-grid/react/styles.css";
 - clipboard paste, fill handle, delete, undo, and redo write paths
 - cell edit commit callbacks with enter, tab, and blur reasons
 - cell placeholders, column alignment, validation metadata, and rich tooltips
-- column menus, resizing, auto-sizing, pinning, visibility, density, and row selection UI
+- column menus, resizing, auto-sizing, drag reorder, order reset, pinning, visibility, density, and row selection UI
+- expandable master-detail rows through `renderRowDetail`
 - toolbar CSV and Excel export
 - optional row number column and cell context menu
 - controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
