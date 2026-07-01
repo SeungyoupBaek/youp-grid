@@ -50,11 +50,11 @@ export function App() {
   });
   const columns = useMemo<ColumnDef<Trade>[]>(
     () => [
-      { field: "desk", headerGroup: "Trade", width: 140, editable: true },
-      { field: "symbol", headerGroup: "Trade", width: 120, editable: true },
+      { field: "desk", headerName: "Desk", width: 140, editable: true },
+      { field: "symbol", headerName: "Symbol", width: 120, editable: true },
       {
         field: "quantity",
-        headerGroup: "Position",
+        headerName: "Quantity",
         width: 140,
         minWidth: 110,
         editable: true,
@@ -62,14 +62,14 @@ export function App() {
       },
       {
         field: "price",
-        headerGroup: "Position",
+        headerName: "Price",
         width: 120,
         minWidth: 100,
         editable: true,
         valueFormatter: (value) => `$${Number(value).toFixed(2)}`,
         valueParser: (value) => Number(value),
       },
-      { field: "status", headerGroup: "Workflow", width: 140, editable: true },
+      { field: "status", headerName: "Status", width: 140, editable: true },
     ],
     [],
   );
