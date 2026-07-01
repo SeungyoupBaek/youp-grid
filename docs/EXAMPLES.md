@@ -16,6 +16,18 @@ npm install
 npm run dev --prefix examples/react-basic
 ```
 
+## GitHub Pages
+
+The public demo is served from [seungyoupbaek.github.io/youp-grid](https://seungyoupbaek.github.io/youp-grid/).
+
+The `Deploy GitHub Pages` workflow builds the same React demo with `/youp-grid/` as the Vite base path and deploys `examples/react-basic/dist` through GitHub Pages. In the repository settings, set Pages source to GitHub Actions.
+
+Build the Pages artifact locally:
+
+```sh
+npm run build:pages
+```
+
 ## Interaction Smoke Test
 
 The Playwright smoke test starts the React demo and checks a small set of production-critical interactions:

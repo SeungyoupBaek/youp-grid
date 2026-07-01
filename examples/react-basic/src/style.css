@@ -1,23 +1,130 @@
+body {
+  margin: 0;
+  background: #eef2f7;
+}
+
+.demo-page {
+  min-height: 100vh;
+  color: #172033;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.site-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 28px;
+  align-items: end;
+  padding: 28px clamp(16px, 4vw, 42px) 20px;
+  border-bottom: 1px solid #d8dee8;
+  background: #fff;
+}
+
+.site-header__brand {
+  min-width: 0;
+}
+
+.site-header__eyebrow {
+  margin: 0 0 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: clamp(32px, 6vw, 56px);
+  letter-spacing: 0;
+  line-height: 0.95;
+}
+
+.site-header__copy {
+  max-width: 620px;
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.site-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.site-header__button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.site-header__button--primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.install-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.install-strip span {
+  flex: 0 0 auto;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.install-strip code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .demo-shell {
-  margin: 0 auto;
-  max-width: 1040px;
-  padding: 32px;
+  padding: 18px clamp(16px, 4vw, 42px) 32px;
 }
 
 .demo-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin: 0 auto 12px;
+  max-width: 1180px;
 }
 
-.demo-toolbar h1 {
+.demo-toolbar h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 18px;
+  letter-spacing: 0;
 }
 
 .demo-row-event {
+  display: block;
   min-width: 120px;
+  margin-top: 3px;
   color: #64748b;
   font-size: 13px;
   font-weight: 700;
@@ -25,6 +132,8 @@
 
 .demo-actions {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   margin-left: auto;
 }
@@ -47,6 +156,12 @@
   background: #eff6ff;
 }
 
+.demo-shell > .youp-grid {
+  max-width: 1180px;
+  margin: 0 auto;
+  background: #fff;
+}
+
 .trade-detail {
   display: flex;
   min-height: 100%;
@@ -59,4 +174,25 @@
 .trade-detail strong {
   color: #0f172a;
   font-size: 15px;
+}
+
+@media (max-width: 780px) {
+  .site-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .site-header__actions {
+    justify-content: flex-start;
+  }
+
+  .demo-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .demo-actions {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
 }

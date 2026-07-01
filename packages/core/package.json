@@ -33,7 +33,7 @@
   "bugs": {
     "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
   },
-  "homepage": "https://github.com/SeungyoupBaek/youp-grid/tree/main/packages/core#readme",
+  "homepage": "https://seungyoupbaek.github.io/youp-grid/",
   "publishConfig": {
     "access": "public"
   },

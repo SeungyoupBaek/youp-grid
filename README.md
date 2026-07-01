@@ -8,6 +8,8 @@ Framework-agnostic data grid core for building UI adapters such as React, Vue, A
 
 Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
 
+Try the live demo at [seungyoupbaek.github.io/youp-grid](https://seungyoupbaek.github.io/youp-grid/).
+
 This repository starts with a reusable engine, a React UI adapter, and a Vue adapter:
 
 - column normalization
@@ -236,6 +238,7 @@ Implemented now:
 - basic editable Vue grid component
 - Vue cell metadata and native/rich cell tooltips
 - Vite React demo
+- GitHub Pages live demo
 - Playwright interaction smoke test
 - static HTML preview
 - npm package publishing setup

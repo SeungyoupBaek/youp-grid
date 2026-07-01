@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { ColumnDef, GridState } from "@youp-grid/core";
 import { YoupGrid } from "@youp-grid/react";
 import "@youp-grid/react/styles.css";
+import rootPackage from "../../../package.json";
 import "./style.css";
 
 type Trade = {
@@ -21,6 +22,8 @@ const initialRows: Trade[] = Array.from({ length: 10000 }, (_, index) => ({
   price: Number((92 + (index % 37) * 1.73).toFixed(2)),
   status: index % 9 === 0 ? "Rejected" : index % 3 === 0 ? "Filled" : "Open",
 }));
+
+const packageVersion = rootPackage.version;
 
 export function App() {
   const [rows, setRows] = useState(initialRows);
@@ -113,126 +116,165 @@ export function App() {
   const hasMoreInfiniteRows = infiniteMode && infiniteRowLimit < rows.length;
 
   return (
-    <main className="demo-shell">
-      <section className="demo-toolbar">
-        <h1>Youp Grid</h1>
-        <span className="demo-row-event" aria-live="polite">
-          {rowEvent}
-        </span>
-        <div className="demo-actions">
-          <button
-            type="button"
-            aria-pressed={loading}
-            onClick={() => setLoading((current) => !current)}
-          >
-            Loading
-          </button>
-          <button
-            type="button"
-            aria-pressed={error}
-            onClick={() => setError((current) => !current)}
-          >
-            Error
-          </button>
-          <button
-            type="button"
-            aria-pressed={serverMode}
-            onClick={() => {
-              setCursorMode(false);
-              setInfiniteMode(false);
-              setServerMode((current) => !current);
-            }}
-          >
-            Server rows
-          </button>
-          <button
-            type="button"
-            aria-pressed={cursorMode}
-            onClick={() => {
-              setServerMode(false);
-              setInfiniteMode(false);
-              setCursorMode((current) => !current);
-            }}
-          >
-            Cursor rows
-          </button>
-          <button
-            type="button"
-            aria-pressed={infiniteMode}
-            onClick={() => {
-              setServerMode(false);
-              setCursorMode(false);
-              setInfiniteRowLimit(300);
-              setInfiniteMode((current) => !current);
-            }}
-          >
-            Infinite rows
-          </button>
+    <main className="demo-page">
+      <header className="site-header">
+        <div className="site-header__brand">
+          <p className="site-header__eyebrow">Open-source TypeScript data grid</p>
+          <h1>Youp Grid</h1>
+          <p className="site-header__copy">
+            Try the React adapter below, then install the public packages from npm.
+          </p>
         </div>
-      </section>
-      <YoupGrid
-        rows={gridRows}
-        columns={columns}
-        state={gridState}
-        getRowId={(row) => row.id}
-        rowModelType={serverMode || cursorMode || infiniteMode ? "server" : "client"}
-        serverRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
-        serverFilteredRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
-        onStateChange={({ state: nextState }) => setState(nextState)}
-        onCellValueChange={({ rowId, column, value }) => {
-          if (!column.field) {
-            return;
-          }
+        <div className="site-header__actions" aria-label="Package links">
+          <a className="site-header__button site-header__button--primary" href="#demo">
+            Try demo
+          </a>
+          <a
+            className="site-header__button"
+            href="https://www.npmjs.com/package/@youp-grid/react"
+            rel="noreferrer"
+            target="_blank"
+          >
+            npm React
+          </a>
+          <a
+            className="site-header__button"
+            href="https://github.com/SeungyoupBaek/youp-grid/releases"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Releases
+          </a>
+        </div>
+        <div className="install-strip" aria-label="Install command">
+          <span>v{packageVersion}</span>
+          <code>npm install @youp-grid/core @youp-grid/react</code>
+        </div>
+      </header>
 
-          setRows((currentRows) => {
-            return currentRows.map((row) => {
-              if (row.id !== rowId) {
-                return row;
-              }
-
-              return {
-                ...row,
-                [column.field as keyof Trade]: value,
-              };
-            });
-          });
-        }}
-        onRowClick={({ rowId }) => {
-          setRowEvent(`Click ${rowId}`);
-        }}
-        onRowDoubleClick={({ rowId }) => {
-          setRowEvent(`Double ${rowId}`);
-        }}
-        infiniteScroll={infiniteMode}
-        infiniteScrollThreshold={30}
-        hasMoreRows={hasMoreInfiniteRows}
-        onRowsEndReached={({ rowCount }) => {
-          setInfiniteRowLimit((current) => {
-            return Math.min(rows.length, Math.max(current, rowCount) + 300);
-          });
-          setRowEvent(`Load more after ${rowCount} rows`);
-        }}
-        editable
-        loading={loading}
-        loadingContent="Loading trades"
-        error={error}
-        errorContent="Unable to load trades"
-        showColumnChooser
-        showCellContextMenu
-        showFilters
-        showPagination={!infiniteMode}
-        showRowSelectionColumn
-        detailRowHeight={88}
-        renderRowDetail={({ row }) => (
-          <div className="trade-detail">
-            <strong>{row.symbol}</strong>
-            <span>Desk {row.desk}</span>
-            <span>{row.quantity.toLocaleString()} shares</span>
-            <span>{row.status}</span>
+      <section className="demo-shell" id="demo">
+        <div className="demo-toolbar">
+          <div>
+            <h2>Live trading grid</h2>
+            <span className="demo-row-event" aria-live="polite">
+              {rowEvent}
+            </span>
           </div>
-        )}
-        height={520}
-      />
+          <div className="demo-actions">
+            <button
+              type="button"
+              aria-pressed={loading}
+              onClick={() => setLoading((current) => !current)}
+            >
+              Loading
+            </button>
+            <button
+              type="button"
+              aria-pressed={error}
+              onClick={() => setError((current) => !current)}
+            >
+              Error
+            </button>
+            <button
+              type="button"
+              aria-pressed={serverMode}
+              onClick={() => {
+                setCursorMode(false);
+                setInfiniteMode(false);
+                setServerMode((current) => !current);
+              }}
+            >
+              Server rows
+            </button>
+            <button
+              type="button"
+              aria-pressed={cursorMode}
+              onClick={() => {
+                setServerMode(false);
+                setInfiniteMode(false);
+                setCursorMode((current) => !current);
+              }}
+            >
+              Cursor rows
+            </button>
+            <button
+              type="button"
+              aria-pressed={infiniteMode}
+              onClick={() => {
+                setServerMode(false);
+                setCursorMode(false);
+                setInfiniteRowLimit(300);
+                setInfiniteMode((current) => !current);
+              }}
+            >
+              Infinite rows
+            </button>
+          </div>
+        </div>
+        <YoupGrid
+          rows={gridRows}
+          columns={columns}
+          state={gridState}
+          getRowId={(row) => row.id}
+          rowModelType={serverMode || cursorMode || infiniteMode ? "server" : "client"}
+          serverRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
+          serverFilteredRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
+          onStateChange={({ state: nextState }) => setState(nextState)}
+          onCellValueChange={({ rowId, column, value }) => {
+            if (!column.field) {
+              return;
+            }
+
+            setRows((currentRows) => {
+              return currentRows.map((row) => {
+                if (row.id !== rowId) {
+                  return row;
+                }
+
+                return {
+                  ...row,
+                  [column.field as keyof Trade]: value,
+                };
+              });
+            });
+          }}
+          onRowClick={({ rowId }) => {
+            setRowEvent(`Click ${rowId}`);
+          }}
+          onRowDoubleClick={({ rowId }) => {
+            setRowEvent(`Double ${rowId}`);
+          }}
+          infiniteScroll={infiniteMode}
+          infiniteScrollThreshold={30}
+          hasMoreRows={hasMoreInfiniteRows}
+          onRowsEndReached={({ rowCount }) => {
+            setInfiniteRowLimit((current) => {
+              return Math.min(rows.length, Math.max(current, rowCount) + 300);
+            });
+            setRowEvent(`Load more after ${rowCount} rows`);
+          }}
+          editable
+          loading={loading}
+          loadingContent="Loading trades"
+          error={error}
+          errorContent="Unable to load trades"
+          showColumnChooser
+          showCellContextMenu
+          showFilters
+          showPagination={!infiniteMode}
+          showRowSelectionColumn
+          detailRowHeight={88}
+          renderRowDetail={({ row }) => (
+            <div className="trade-detail">
+              <strong>{row.symbol}</strong>
+              <span>Desk {row.desk}</span>
+              <span>{row.quantity.toLocaleString()} shares</span>
+              <span>{row.status}</span>
+            </div>
+          )}
+          height={520}
+        />
+      </section>
     </main>
   );
 }
