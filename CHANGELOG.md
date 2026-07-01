@@ -11,6 +11,13 @@ The project follows semantic versioning while the public API stabilizes.
 - Add release metadata checks for workspace version, package-lock, and adapter core dependency alignment.
 - Document the full core, React, and Vue publish/release flow.
 
+## [0.2.12] - 2026-07-01
+
+- Add Playwright smoke coverage for the React basic demo.
+- Keep React master-detail rows virtualized with detail row height accounting.
+- Add Vue keyboard cell focus, range selection, and public event/slot type exports.
+- Add example documentation for the runtime demo and smoke test.
+
 ## [0.2.9] - 2026-06-12
 
 - Fix row paste below so copied row values are applied to inserted rows while preserving newly created row IDs.
