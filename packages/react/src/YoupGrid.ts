@@ -2408,7 +2408,13 @@ function renderGroupRow<TRow>(context: {
           "aria-expanded": context.row.expanded,
           onClick: () => context.toggleExpanded(context.row.groupId),
         },
-        createElement("span", { className: "youp-grid__group-caret", "aria-hidden": true }, context.row.expanded ? "v" : ">"),
+        createElement("span", {
+          className: [
+            "youp-grid__group-caret youp-grid__caret",
+            context.row.expanded ? "youp-grid__caret--expanded" : "",
+          ].filter(Boolean).join(" "),
+          "aria-hidden": true,
+        }),
         createElement("span", { className: "youp-grid__group-label" }, context.row.label),
         createElement("span", { className: "youp-grid__group-count" }, `${context.row.rowCount} rows`),
       ),
@@ -3295,8 +3301,13 @@ function renderTreeCellContent<TRow>(context: {
         },
         createElement(
           "span",
-          { className: "youp-grid__tree-caret", "aria-hidden": true },
-          context.row.expanded ? "v" : ">",
+          {
+            className: [
+              "youp-grid__tree-caret youp-grid__caret",
+              context.row.expanded ? "youp-grid__caret--expanded" : "",
+            ].filter(Boolean).join(" "),
+            "aria-hidden": true,
+          },
         ),
       )
     : createElement("span", { className: "youp-grid__tree-toggle-spacer", "aria-hidden": true });
@@ -3340,8 +3351,13 @@ function renderDetailCellContent(context: {
       },
       createElement(
         "span",
-        { className: "youp-grid__detail-caret", "aria-hidden": true },
-        context.expanded ? "v" : ">",
+        {
+          className: [
+            "youp-grid__detail-caret youp-grid__caret",
+            context.expanded ? "youp-grid__caret--expanded" : "",
+          ].filter(Boolean).join(" "),
+          "aria-hidden": true,
+        },
       ),
     ),
     createElement("span", { className: "youp-grid__cell-detail-value" }, context.content),

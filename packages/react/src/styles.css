@@ -10,6 +10,7 @@
   --youp-grid-editor-block-padding: 8px;
   --youp-grid-header-group-block-padding: 7px;
   border: 1px solid var(--youp-grid-border);
+  border-radius: 8px;
   position: relative;
   color: var(--youp-grid-text);
   font-family:
@@ -17,6 +18,7 @@
   font-size: 13px;
   line-height: 1.35;
   overflow: hidden;
+  background: #fff;
 }
 
 .youp-grid--density-compact {
@@ -57,12 +59,17 @@
   min-height: 28px;
   padding: 4px 9px;
   border: 1px solid var(--youp-grid-border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--youp-grid-text);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
   background: #fff;
+}
+
+.youp-grid__toolbar-button:hover {
+  border-color: #b8c4d4;
+  background: #f8fafc;
 }
 
 .youp-grid__disabled-reason {
@@ -87,7 +94,7 @@
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--youp-grid-border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--youp-grid-text);
   font: inherit;
   background: #fff;
@@ -120,7 +127,7 @@
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--youp-grid-border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--youp-grid-text);
   font: inherit;
   cursor: pointer;
@@ -486,17 +493,23 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 
 .youp-grid__tree-toggle {
   padding: 0;
   border: 0;
+  border-radius: 999px;
   color: var(--youp-grid-muted);
   font: inherit;
   cursor: pointer;
   background: transparent;
+}
+
+.youp-grid__tree-toggle:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .youp-grid__tree-toggle:focus-visible {
@@ -518,19 +531,50 @@
   text-overflow: ellipsis;
 }
 
-.youp-grid__detail-toggle {
+.youp-grid__caret {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
+  border-radius: 999px;
+  color: currentColor;
+}
+
+.youp-grid__caret::before {
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.youp-grid__caret--expanded::before {
+  transform: rotate(45deg);
+}
+
+.youp-grid__detail-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
+  border-radius: 999px;
   color: var(--youp-grid-muted);
   font: inherit;
   cursor: pointer;
   background: transparent;
+}
+
+.youp-grid__detail-toggle:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .youp-grid__detail-toggle:focus-visible {
@@ -538,18 +582,9 @@
   outline-offset: 1px;
 }
 
+.youp-grid__tree-caret,
 .youp-grid__detail-caret {
-  width: 12px;
-  line-height: 1;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.youp-grid__tree-caret {
-  width: 12px;
-  line-height: 1;
-  text-align: center;
+  width: 18px;
 }
 
 .youp-grid__cell--tooltip-open {
@@ -844,7 +879,7 @@
   align-items: center;
   color: var(--youp-grid-text);
   font-weight: 800;
-  background: #f8fafc;
+  background: #f9fbfe;
 }
 
 .youp-grid__row-number-cell--group,
@@ -855,7 +890,7 @@
 .youp-grid__group-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -872,9 +907,12 @@
 }
 
 .youp-grid__group-caret {
-  width: 14px;
-  color: var(--youp-grid-muted);
-  text-align: center;
+  width: 18px;
+}
+
+.youp-grid__group-toggle:hover .youp-grid__caret {
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .youp-grid__group-label {
@@ -883,7 +921,15 @@
 }
 
 .youp-grid__group-count {
-  color: var(--youp-grid-muted);
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  color: #52637a;
+  background: #fff;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1104,10 +1150,15 @@
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--youp-grid-border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--youp-grid-text);
   font: inherit;
   background: #fff;
+}
+
+.youp-grid__pagination button:hover:not(:disabled) {
+  border-color: #b8c4d4;
+  background: #f8fafc;
 }
 
 .youp-grid__pagination button:disabled {

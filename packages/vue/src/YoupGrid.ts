@@ -2311,7 +2311,13 @@ function renderDetailToggle(context: {
         context.onToggleDetailRow(context.rowId);
       },
     },
-    context.expanded ? "-" : "+",
+    h("span", {
+      class: [
+        "youp-grid-vue__expander",
+        context.expanded ? "youp-grid-vue__expander--expanded" : undefined,
+      ],
+      "aria-hidden": "true",
+    }),
   );
 }
 
@@ -2353,7 +2359,13 @@ function renderGroupRow<TRow>(context: {
           onClick: () => context.onToggleGroup(context.displayNode.groupId),
         },
         [
-          h("span", { class: "youp-grid-vue__expander" }, context.displayNode.expanded ? "-" : "+"),
+          h("span", {
+            class: [
+              "youp-grid-vue__expander",
+              context.displayNode.expanded ? "youp-grid-vue__expander--expanded" : undefined,
+            ],
+            "aria-hidden": "true",
+          }),
           h("span", context.displayNode.label),
           h("span", { class: "youp-grid-vue__group-count" }, String(context.displayNode.rowCount)),
         ],
@@ -3007,13 +3019,20 @@ function renderDefaultCellContent<TRow>(context: {
           {
             type: "button",
             class: "youp-grid-vue__tree-button",
+            "aria-label": context.rowNode.expanded ? "Collapse row" : "Expand row",
             "aria-expanded": context.rowNode.expanded,
             onClick: (event: MouseEvent) => {
               event.stopPropagation();
               context.onToggleTreeRow(context.rowNode.id);
             },
           },
-          context.rowNode.expanded ? "-" : "+",
+          h("span", {
+            class: [
+              "youp-grid-vue__expander",
+              context.rowNode.expanded ? "youp-grid-vue__expander--expanded" : undefined,
+            ],
+            "aria-hidden": "true",
+          }),
         ),
       );
     }

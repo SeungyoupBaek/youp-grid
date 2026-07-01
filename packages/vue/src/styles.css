@@ -34,7 +34,7 @@
   min-height: 28px;
   padding: 4px 9px;
   border: 1px solid var(--youp-grid-vue-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: #fff;
   color: var(--youp-grid-vue-text);
   cursor: pointer;
@@ -60,7 +60,7 @@
 .youp-grid-vue__density-control select {
   height: 28px;
   border: 1px solid var(--youp-grid-vue-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: #fff;
   color: var(--youp-grid-vue-text);
   font: inherit;
@@ -160,7 +160,8 @@
 
 .youp-grid-vue__viewport {
   border: 1px solid var(--youp-grid-vue-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  background: #fff;
   overflow: auto;
 }
 
@@ -204,7 +205,7 @@
 }
 
 .youp-grid-vue__row--group {
-  background: #fbfcfe;
+  background: #f9fbfe;
 }
 
 .youp-grid-vue__row--detail {
@@ -562,16 +563,26 @@
 .youp-grid-vue__group-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-weight: 600;
 }
 
 .youp-grid-vue__tree-button,
 .youp-grid-vue__detail-button {
-  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   margin-right: 4px;
+  border-radius: 999px;
+  color: var(--youp-grid-vue-muted);
+}
+
+.youp-grid-vue__tree-button:hover,
+.youp-grid-vue__detail-button:hover {
   color: var(--youp-grid-vue-accent);
-  font-weight: 700;
+  background: #eff6ff;
 }
 
 .youp-grid-vue__tree-spacer {
@@ -580,13 +591,46 @@
 }
 
 .youp-grid-vue__expander {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: currentColor;
+}
+
+.youp-grid-vue__expander::before {
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+
+.youp-grid-vue__expander--expanded::before {
+  transform: rotate(45deg);
+}
+
+.youp-grid-vue__group-button:hover .youp-grid-vue__expander {
   color: var(--youp-grid-vue-accent);
-  font-weight: 700;
+  background: #eff6ff;
 }
 
 .youp-grid-vue__group-count {
-  color: var(--youp-grid-vue-muted);
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #52637a;
   font-size: 12px;
+  font-weight: 700;
 }
 
 .youp-grid-vue__empty {
@@ -616,7 +660,7 @@
 .youp-grid-vue__pagination-button {
   height: 30px;
   border: 1px solid var(--youp-grid-vue-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: #fff;
   color: var(--youp-grid-vue-text);
   font: inherit;
@@ -631,6 +675,11 @@
   width: 30px;
   padding: 0;
   cursor: pointer;
+}
+
+.youp-grid-vue__pagination-button:hover:not(:disabled) {
+  border-color: #b8c4d4;
+  background: #f8fafc;
 }
 
 .youp-grid-vue__pagination-button:disabled {
