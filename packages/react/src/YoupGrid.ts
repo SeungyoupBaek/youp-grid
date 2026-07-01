@@ -134,6 +134,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     [expandedDetailRowIds],
   );
   const displayRows = rowModel.displayRows;
+  const cellRows = useMemo(
+    () => displayRows.filter((row): row is RowNode<TRow> => !isRowGroupNode(row)),
+    [displayRows],
+  );
+  const cellRowModel = useMemo<RowModel<TRow>>(
+    () => ({ ...rowModel, visibleRows: cellRows }),
+    [cellRows, rowModel],
+  );
   const virtualRange = useMemo(() => {
     return getVirtualRange({
       itemCount: displayRows.length,
@@ -173,7 +181,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   }, [controller.state, infiniteScrollTrigger.rowCount]);
   const currentSelectedRowIds = controller.state.selectedRowIds ?? [];
   const selectedRowIds = new Set(currentSelectedRowIds);
-  const visibleRowIds = useMemo(() => rowModel.visibleRows.map((row) => row.id), [rowModel.visibleRows]);
+  const visibleRowIds = useMemo(() => cellRows.map((row) => row.id), [cellRows]);
   const selectedVisibleRowCount = visibleRowIds.filter((rowId) => selectedRowIds.has(rowId)).length;
   const allVisibleRowsSelected = visibleRowIds.length > 0 && selectedVisibleRowCount === visibleRowIds.length;
   const someVisibleRowsSelected = selectedVisibleRowCount > 0 && !allVisibleRowsSelected;
@@ -187,10 +195,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     });
   }, [pinnedColumnOffset, rowModel.visibleColumns]);
   const visibleColumns = useMemo(() => columnLayouts.map((layout) => layout.column), [columnLayouts]);
-  const visibleRowIndexById = useMemo(() => {
-    return new Map(rowModel.visibleRows.map((row, index) => [row.id, index]));
-  }, [rowModel.visibleRows]);
-  const displayIndexByVisibleRowIndex = useMemo(() => {
+  const cellRowIndexById = useMemo(() => {
+    return new Map(cellRows.map((row, index) => [row.id, index]));
+  }, [cellRows]);
+  const displayIndexByCellRowIndex = useMemo(() => {
     const displayIndexByRowId = new Map<GridRowId, number>();
 
     displayRows.forEach((row, index) => {
@@ -200,12 +208,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     });
 
     return new Map(
-      rowModel.visibleRows.map((row, index) => [
+      cellRows.map((row, index) => [
         index,
         displayIndexByRowId.get(row.id) ?? index,
       ]),
     );
-  }, [displayRows, rowModel.visibleRows]);
+  }, [cellRows, displayRows]);
   const headerGroupLayouts = useMemo(() => getHeaderGroupLayouts(columnLayouts), [columnLayouts]);
   const originalColumnIds = useMemo(() => getColumnDefIds(props.columns), [props.columns]);
   const resetColumnDrag = () => {
@@ -368,7 +376,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       overscan: props.overscan,
       scrollTop,
       viewportHeight,
-      visibleRowIndexById,
+      cellRowIndexById,
     });
   }, [
     detailRowsEnabled,
@@ -379,14 +387,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     rowHeight,
     scrollTop,
     viewportHeight,
-    visibleRowIndexById,
+    cellRowIndexById,
   ]);
 
   useEffect(() => {
-    if (focusedRowIndex >= rowModel.visibleRows.length) {
-      setFocusedRowIndex(Math.max(0, rowModel.visibleRows.length - 1));
+    if (focusedRowIndex >= cellRows.length) {
+      setFocusedRowIndex(Math.max(0, cellRows.length - 1));
     }
-  }, [focusedRowIndex, rowModel.visibleRows.length]);
+  }, [cellRows.length, focusedRowIndex]);
 
   useEffect(() => {
     if (focusedColumnIndex >= columnLayouts.length) {
@@ -599,7 +607,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     applyCellValueChanges(
       getHistoryEntryValueChanges({
         entry,
-        rowModel,
+        rowModel: cellRowModel,
         source,
         canEditCell: canEditGridCell,
       }),
@@ -645,7 +653,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     const change = commitEditingCell({
       cell,
-      rowModel,
+      rowModel: cellRowModel,
       canEditCell: canEditGridCell,
     });
 
@@ -821,7 +829,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         columnIndex: cellContextMenu.columnIndex,
       },
       selectionRange: getCellContextMenuRange(),
-      rows: rowModel.visibleRows,
+      rows: cellRows,
       columns: visibleColumns,
     })).catch(() => undefined);
   };
@@ -839,7 +847,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             columnIndex: cellContextMenu.columnIndex,
           },
           selectionRange: getCellContextMenuRange(),
-          rows: rowModel.visibleRows,
+          rows: cellRows,
           columns: visibleColumns,
           sourceRows: props.rows,
           createRow: props.createRow,
@@ -862,7 +870,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         columnIndex: cellContextMenu.columnIndex,
       },
       selectionRange: getCellContextMenuRange(),
-      rows: rowModel.visibleRows,
+      rows: cellRows,
       columns: visibleColumns,
       canEditCell: canEditGridCell,
       applyCellValueChanges,
@@ -873,7 +881,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return;
     }
 
-    const row = rowModel.visibleRows[cellContextMenu.rowIndex];
+    const row = cellRows[cellContextMenu.rowIndex];
 
     if (row) {
       controller.setRowSelected(row.id, true);
@@ -884,16 +892,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return [];
     }
 
-    const row = rowModel.visibleRows[cellContextMenu.rowIndex];
+    const row = cellRows[cellContextMenu.rowIndex];
 
     if (!row || isRowGroupNode(row)) {
       return [];
     }
 
     if (selectedRowIds.has(row.id)) {
-      return rowModel.visibleRows.filter((visibleRow): visibleRow is RowNode<TRow> => {
-        return !isRowGroupNode(visibleRow) && selectedRowIds.has(visibleRow.id);
-      });
+      return cellRows.filter((visibleRow) => selectedRowIds.has(visibleRow.id));
     }
 
     return [row];
@@ -909,10 +915,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     const visibleRowIndexByRowId = new Map<GridRowId, number>();
 
-    rowModel.visibleRows.forEach((row, index) => {
-      if (!isRowGroupNode(row)) {
-        visibleRowIndexByRowId.set(row.id, index);
-      }
+    cellRows.forEach((row, index) => {
+      visibleRowIndexByRowId.set(row.id, index);
     });
 
     setRowClipboard(targetRows.map((row) => ({
@@ -927,7 +931,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return;
     }
 
-    const anchorRow = rowModel.visibleRows[cellContextMenu.rowIndex];
+    const anchorRow = cellRows[cellContextMenu.rowIndex];
 
     if (!anchorRow || isRowGroupNode(anchorRow)) {
       return;
@@ -972,7 +976,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return;
     }
 
-    const anchorRow = rowModel.visibleRows[cellContextMenu.rowIndex];
+    const anchorRow = cellRows[cellContextMenu.rowIndex];
 
     if (!anchorRow || isRowGroupNode(anchorRow)) {
       return;
@@ -1053,10 +1057,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     const visibleRowIndexByRowId = new Map<GridRowId, number>();
 
-    rowModel.visibleRows.forEach((row, index) => {
-      if (!isRowGroupNode(row)) {
-        visibleRowIndexByRowId.set(row.id, index);
-      }
+    cellRows.forEach((row, index) => {
+      visibleRowIndexByRowId.set(row.id, index);
     });
 
     const deleteRowIds = new Set(targetRows.map((row) => row.id));
@@ -1081,7 +1083,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     setSelectionRange(undefined);
     setFocusedRowIndex(Math.min(
       cellContextMenu?.rowIndex ?? 0,
-      Math.max(0, rowModel.visibleRows.length - targetRows.length - 1),
+      Math.max(0, cellRows.length - targetRows.length - 1),
     ));
   };
   const autoSizeCellContextMenuColumn = () => {
@@ -1097,7 +1099,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         getAutoSizeColumnWidth({
           anchor: cellContextMenu.anchor,
           column,
-          rows: rowModel.visibleRows,
+          rows: cellRows,
         }),
       );
     }
@@ -1181,7 +1183,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     columnLayouts: readonly ColumnLayout<TRow>[];
     rowHeight: number;
     bodyElement: HTMLDivElement | null;
-    displayIndexByVisibleRowIndex: Map<number, number>;
+    displayIndexByCellRowIndex: Map<number, number>;
     setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
     selectionRange: GridCellRange | undefined;
     focusedCell: FocusedCell;
@@ -1202,7 +1204,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       columnCount: context.columnLayouts.length,
       rowHeight: context.rowHeight,
       bodyElement: context.bodyElement,
-      getDisplayRowIndex: (rowIndex) => context.displayIndexByVisibleRowIndex.get(rowIndex) ?? rowIndex,
+      getDisplayRowIndex: (rowIndex) => context.displayIndexByCellRowIndex.get(rowIndex) ?? rowIndex,
       setFocusedCell: context.setFocusedCell,
       selectionRange: context.selectionRange,
       startEditing: context.startEditingCell,
@@ -1289,7 +1291,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             event,
             focusedCell,
             selectionRange,
-            rows: rowModel.visibleRows,
+            rows: cellRows,
             columns: visibleColumns,
           });
         },
@@ -1302,7 +1304,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             event,
             focusedCell,
             selectionRange,
-            rows: rowModel.visibleRows,
+            rows: cellRows,
             columns: visibleColumns,
             sourceRows: props.rows,
             createRow: props.createRow,
@@ -1402,7 +1404,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                 autoSizeColumnToFit({
                   event,
                   column: layout.column,
-                  rows: rowModel.visibleRows,
+                  rows: cellRows,
                   resizeColumn: (width) => controller.setColumnWidth(layout.column.id, width),
                 });
               },
@@ -1487,7 +1489,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                             rowHeight,
                             detailRowHeight,
                             selectedRowIds,
-                            visibleRowIndexById,
+                            cellRowIndexById,
                             focusedCell,
                             selectionRange,
                             fillRange,
@@ -1495,7 +1497,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                             gridEditable,
                             disabledReason: props.disabledReason,
                             treeData: props.treeData ?? false,
-                            rowModel,
+                            rowModel: cellRowModel,
                             visibleColumns,
                             canEditGridCell,
                             getGridCellMeta,
@@ -1518,7 +1520,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                                   anchor: focusedCell,
                                   focus: focusedCell,
                                 }),
-                                rowModel,
+                                rowModel: cellRowModel,
                                 columnLayouts,
                                 visibleColumns,
                                 setFillRange,
@@ -1533,7 +1535,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                               autoSizeColumnToFit({
                                 event,
                                 column,
-                                rows: rowModel.visibleRows,
+                                rows: cellRows,
                                 resizeColumn: (width) => controller.setColumnWidth(column.id, width),
                               });
                             },
@@ -1553,11 +1555,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                                 event,
                                 cell,
                                 row: sourceRow,
-                                rowModel,
+                                rowModel: cellRowModel,
                                 columnLayouts,
                                 rowHeight,
                                 bodyElement: bodyRef.current,
-                                displayIndexByVisibleRowIndex,
+                                displayIndexByCellRowIndex,
                                 setFocusedCell,
                                 selectionRange,
                                 focusedCell,
@@ -1569,7 +1571,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                                   deleteGridCellValues({
                                     focusedCell,
                                     selectionRange,
-                                    rows: rowModel.visibleRows,
+                                    rows: cellRows,
                                     columns: visibleColumns,
                                     canEditCell: canEditGridCell,
                                     applyCellValueChanges,
@@ -1610,7 +1612,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   });
                 }
 
-                const rowIndex = visibleRowIndexById.get(row.id) ?? displayIndex;
+                const rowIndex = cellRowIndexById.get(row.id) ?? displayIndex;
 
                 return renderRow({
                   row,
@@ -1653,14 +1655,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                     startFillHandleDrag({
                       event,
                       sourceRange,
-                      rowCount: rowModel.visibleRows.length,
+                      rowCount: cellRows.length,
                       columnCount: columnLayouts.length,
                       setFillRange,
                       applyFillRange: (targetRange) => {
                         applyFillHandleValues({
                           sourceRange,
                           targetRange,
-                          rows: rowModel.visibleRows,
+                          rows: cellRows,
                           columns: visibleColumns,
                           canEditCell: canEditGridCell,
                           applyCellValueChanges,
@@ -1677,7 +1679,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                     autoSizeColumnToFit({
                       event,
                       column,
-                      rows: rowModel.visibleRows,
+                      rows: cellRows,
                       resizeColumn: (width) => controller.setColumnWidth(column.id, width),
                     });
                   },
@@ -1702,11 +1704,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                       event,
                       cell,
                       navigationCell: focusedCell,
-                      rowCount: rowModel.visibleRows.length,
+                      rowCount: cellRows.length,
                       columnCount: columnLayouts.length,
                       rowHeight,
                       bodyElement: bodyRef.current,
-                      getDisplayRowIndex: (rowIndex) => displayIndexByVisibleRowIndex.get(rowIndex) ?? rowIndex,
+                      getDisplayRowIndex: (rowIndex) => displayIndexByCellRowIndex.get(rowIndex) ?? rowIndex,
                       setFocusedCell,
                       selectionRange,
                       startEditing: startEditingCell,
@@ -1717,7 +1719,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                         deleteGridCellValues({
                           focusedCell,
                           selectionRange,
-                          rows: rowModel.visibleRows,
+                          rows: cellRows,
                           columns: visibleColumns,
                           canEditCell: canEditGridCell,
                           applyCellValueChanges,
@@ -2458,7 +2460,7 @@ function getDetailRenderModel<TRow>(context: {
   overscan?: number;
   scrollTop: number;
   viewportHeight: number;
-  visibleRowIndexById: Map<GridRowId, number>;
+  cellRowIndexById: Map<GridRowId, number>;
 }) {
   const entries: DetailRenderEntry<TRow>[] = [];
   const overscanPx = (context.overscan ?? 3) * context.rowHeight;
@@ -2481,7 +2483,7 @@ function getDetailRenderModel<TRow>(context: {
       return;
     }
 
-    const rowIndex = context.visibleRowIndexById.get(row.id) ?? displayIndex;
+    const rowIndex = context.cellRowIndexById.get(row.id) ?? displayIndex;
 
     if (!context.expandedDetailRowIdSet.has(row.id) || !context.isRowDetailAvailable(row, rowIndex)) {
       return;
@@ -2595,7 +2597,7 @@ function renderDisplayRow<TRow>(context: {
   rowHeight: number;
   detailRowHeight: number;
   selectedRowIds: ReadonlySet<GridRowId>;
-  visibleRowIndexById: Map<GridRowId, number>;
+  cellRowIndexById: Map<GridRowId, number>;
   focusedCell: FocusedCell;
   selectionRange?: GridCellRange;
   fillRange?: NormalizedGridCellRange;
@@ -2662,7 +2664,7 @@ function renderDisplayRow<TRow>(context: {
   }
 
   const rowNode = context.row as RowNode<TRow>;
-  const rowIndex = context.visibleRowIndexById.get(rowNode.id) ?? context.displayIndex;
+  const rowIndex = context.cellRowIndexById.get(rowNode.id) ?? context.displayIndex;
   const detailAvailable = context.isRowDetailAvailable(rowNode, rowIndex);
   const detailExpanded = detailAvailable && context.expandedDetailRowIdSet.has(rowNode.id);
   const detailContext = context.getRowDetailContext(rowNode, rowIndex);
