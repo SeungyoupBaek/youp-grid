@@ -114,6 +114,20 @@ export function App() {
     return rows.slice(start, start + pagination.pageSize);
   }, [cursorMode, cursorPagination, infiniteMode, infiniteRowLimit, rows, serverMode, state.pagination]);
   const hasMoreInfiniteRows = infiniteMode && infiniteRowLimit < rows.length;
+  const tradeSummary = useMemo(() => {
+    const openRows = rows.filter((row) => row.status === "Open").length;
+    const filledRows = rows.filter((row) => row.status === "Filled").length;
+    const rejectedRows = rows.filter((row) => row.status === "Rejected").length;
+    const notional = rows.reduce((total, row) => total + row.quantity * row.price, 0);
+
+    return {
+      rows: rows.length.toLocaleString(),
+      openRows: openRows.toLocaleString(),
+      filledRows: filledRows.toLocaleString(),
+      rejectedRows: rejectedRows.toLocaleString(),
+      notional: formatCurrencyCompact(notional),
+    };
+  }, [rows]);
 
   return (
     <main className="demo-page">
@@ -122,7 +136,8 @@ export function App() {
           <p className="site-header__eyebrow">Open-source TypeScript data grid</p>
           <h1>Youp Grid</h1>
           <p className="site-header__copy">
-            Try the React adapter below, then install the public packages from npm.
+            Fast, editable React and Vue grids for operational tools that need selection, grouping, export,
+            and server-side row models.
           </p>
         </div>
         <div className="site-header__actions" aria-label="Package links">
@@ -153,6 +168,29 @@ export function App() {
       </header>
 
       <section className="demo-shell" id="demo">
+        <div className="demo-summary" aria-label="Trading grid summary">
+          <div className="demo-stat">
+            <span>Total rows</span>
+            <strong>{tradeSummary.rows}</strong>
+          </div>
+          <div className="demo-stat">
+            <span>Open</span>
+            <strong>{tradeSummary.openRows}</strong>
+          </div>
+          <div className="demo-stat">
+            <span>Filled</span>
+            <strong>{tradeSummary.filledRows}</strong>
+          </div>
+          <div className="demo-stat">
+            <span>Rejected</span>
+            <strong>{tradeSummary.rejectedRows}</strong>
+          </div>
+          <div className="demo-stat">
+            <span>Notional</span>
+            <strong>{tradeSummary.notional}</strong>
+          </div>
+        </div>
+
         <div className="demo-toolbar">
           <div>
             <h2>Live trading grid</h2>
@@ -253,6 +291,7 @@ export function App() {
             });
             setRowEvent(`Load more after ${rowCount} rows`);
           }}
+          renderCell={({ column, value }) => renderTradeCell(column.id, value)}
           editable
           loading={loading}
           loadingContent="Loading trades"
@@ -283,4 +322,35 @@ function getCursorStart(cursor: string | undefined): number {
   const start = Number(cursor ?? 0);
 
   return Number.isFinite(start) && start > 0 ? start : 0;
+}
+
+function renderTradeCell(columnId: string, value: unknown) {
+  if (columnId === "status") {
+    const status = String(value ?? "");
+
+    return <span className={`trade-status trade-status--${status.toLowerCase()}`}>{status}</span>;
+  }
+
+  if (columnId === "symbol") {
+    return <span className="trade-symbol">{String(value ?? "")}</span>;
+  }
+
+  if (columnId === "quantity") {
+    return <span className="trade-number">{Number(value).toLocaleString()}</span>;
+  }
+
+  if (columnId === "price") {
+    return <span className="trade-number">${Number(value).toFixed(2)}</span>;
+  }
+
+  return <span>{String(value ?? "")}</span>;
+}
+
+function formatCurrencyCompact(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+    style: "currency",
+    currency: "USD",
+  }).format(value);
 }
