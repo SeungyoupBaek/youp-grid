@@ -19,6 +19,7 @@ export type {
   YoupGridProps,
   YoupGridRowChange,
   YoupGridRowDeleteChange,
+  YoupGridRowDetailContext,
   YoupGridRowEvent,
   YoupGridRowInsertChange,
   YoupGridRowInsertPosition,

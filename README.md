@@ -185,7 +185,7 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
 </template>
 ```
 
-The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, a cell context menu for copy, paste, clear contents, row selection, row copy/paste, row insert/delete, and auto-size, `cell-edit-commit`, `cell-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Row insert, row paste, and TSV paste auto-append require `createRow`; pasted rows keep newly created row IDs while copying field-backed column values.
+The Vue adapter includes basic `text`, `number`, `select`, and `checkbox` editing with row number and selection columns, keyboard cell focus and range selection, a cell context menu for copy, paste, clear contents, row selection, row copy/paste, row insert/delete, and auto-size, `cell-edit-commit`, `cell-value-change`, `cells-value-change`, `rows-change`, cell metadata, native/rich cell tooltips, and pagination footer controls. Row insert, row paste, and TSV paste auto-append require `createRow`; pasted rows keep newly created row IDs while copying field-backed column values.
 
 ## Current Boundary
 
@@ -195,7 +195,7 @@ Implemented now:
 - React adapter package
 - Vue adapter package
 - row, column, and selection state helpers
-- fixed-height virtualized React body renderer
+- fixed-height and master-detail virtualized React body renderers
 - built-in header filters
 - pagination controls
 - column resize handles and double-click auto-size
@@ -236,6 +236,7 @@ Implemented now:
 - basic editable Vue grid component
 - Vue cell metadata and native/rich cell tooltips
 - Vite React demo
+- Playwright interaction smoke test
 - static HTML preview
 - npm package publishing setup
 
@@ -244,6 +245,7 @@ Implemented now:
 ```sh
 npm install
 npm test
+npm run test:smoke
 npm run build
 npm run pack:dry-run
 npm run release:check
@@ -258,6 +260,7 @@ npm run release:check
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the phased implementation plan.
 See [docs/REACT_ADAPTER.md](docs/REACT_ADAPTER.md) for React usage.
+See [docs/EXAMPLES.md](docs/EXAMPLES.md) for local demo and smoke test usage.
 See [docs/RELEASE.md](docs/RELEASE.md) for the release checklist.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and contribution rules.
 

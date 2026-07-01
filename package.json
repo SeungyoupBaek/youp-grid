@@ -33,9 +33,11 @@
     "release:check": "npm test && npm run build && npm run pack:dry-run && node scripts/check-release.mjs",
     "test": "npm run test:core && npm run test:vue",
     "test:core": "node --test packages/core/test/*.test.ts",
+    "test:smoke": "playwright test --config tests/playwright.config.ts",
     "test:vue": "node --test packages/vue/test/*.test.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "react": "^18.2.0",

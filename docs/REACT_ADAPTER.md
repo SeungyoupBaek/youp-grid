@@ -162,7 +162,7 @@ Each header can show a column menu for common column actions.
 
 `renderRowDetail` renders an expandable detail row below each data row. Use `defaultExpandedDetailRowIds` for uncontrolled initial state, or `expandedDetailRowIds` with `onDetailExpandedRowsChange` for controlled expansion.
 
-When row detail rendering is enabled, the React adapter renders the current display rows in normal flow so detail row height stays correct.
+When row detail rendering is enabled, the React adapter keeps the body virtualized with a variable-height render model. Data rows use `rowHeight`, expanded detail rows use `detailRowHeight`, and closed detail rows do not add scroll height.
 
 ## Grouped Headers
 

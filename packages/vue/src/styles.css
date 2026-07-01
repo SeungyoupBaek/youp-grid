@@ -182,6 +182,19 @@
   background: #edf4ff;
 }
 
+.youp-grid-vue__cell--range-selected {
+  background: #dbeafe;
+}
+
+.youp-grid-vue__cell--focused {
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px var(--youp-grid-vue-accent);
+}
+
+.youp-grid-vue__cell--focused.youp-grid-vue__cell--range-selected {
+  background: #bfdbfe;
+}
+
 .youp-grid-vue__row--header {
   position: sticky;
   top: 0;

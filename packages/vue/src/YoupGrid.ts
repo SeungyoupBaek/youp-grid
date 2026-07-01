@@ -3,6 +3,7 @@ import type {
   ColumnDef,
   ColumnEditorOption,
   ColumnPin,
+  GridCellRange,
   GridRowId,
   GridRowModelType,
   GridState,
@@ -19,6 +20,7 @@ import {
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
+  isCellInRange,
   parseClipboardText,
 } from "@youp-grid/core";
 import {
@@ -76,6 +78,11 @@ type ActiveEdit = {
   rowId: GridRowId;
   columnId: string;
   draft: string;
+};
+
+type FocusedCell = {
+  rowIndex: number;
+  columnIndex: number;
 };
 
 type ActiveCellContextMenu<TRow = unknown> = {
@@ -371,6 +378,8 @@ export const YoupGrid = defineComponent({
     const activeTooltipCellKey = ref<string>();
     const activeCellContextMenu = ref<ActiveCellContextMenu>();
     const rowClipboard = ref<RowClipboardEntry[]>([]);
+    const focusedCell = ref<FocusedCell>({ rowIndex: 0, columnIndex: 0 });
+    const selectionRange = ref<GridCellRange>();
     const columnChooserOpen = ref(false);
     const internalExpandedDetailRowIds = ref<GridRowId[]>([
       ...(props.defaultExpandedDetailRowIds ?? []),
@@ -431,6 +440,9 @@ export const YoupGrid = defineComponent({
     const selectedRowIds = computed(
       () => new Set<GridRowId>(grid.state.value.selectedRowIds ?? []),
     );
+    const visibleRowIndexById = computed(() => {
+      return new Map(grid.rowModel.value.visibleRows.map((rowNode, index) => [rowNode.id, index]));
+    });
     const expandedDetailRowIds = computed(
       () => props.expandedDetailRowIds ?? internalExpandedDetailRowIds.value,
     );
@@ -537,6 +549,20 @@ export const YoupGrid = defineComponent({
       return props.isRowDetailAvailable?.(getRowDetailContext(rowNode)) ?? true;
     };
     watch(
+      () => [grid.rowModel.value.visibleRows.length, visibleColumns.value.length] as const,
+      () => {
+        const nextCell = getClampedFocusedCell(focusedCell.value);
+
+        if (
+          nextCell.rowIndex !== focusedCell.value.rowIndex ||
+          nextCell.columnIndex !== focusedCell.value.columnIndex
+        ) {
+          focusedCell.value = nextCell;
+          selectionRange.value = undefined;
+        }
+      },
+    );
+    watch(
       () => [
         props.infiniteScroll,
         infiniteScrollTrigger.value.shouldLoadMore,
@@ -624,6 +650,97 @@ export const YoupGrid = defineComponent({
       }
 
       grid.setSelectedRows([...currentSelection]);
+    };
+    const focusCellElement = (cell: FocusedCell) => {
+      void nextTick(() => {
+        rootRef.value
+          ?.querySelector<HTMLElement>(
+            `[data-youp-row-index="${cell.rowIndex}"][data-youp-column-index="${cell.columnIndex}"]`,
+          )
+          ?.focus();
+      });
+    };
+    const getClampedFocusedCell = (cell: FocusedCell): FocusedCell => ({
+      rowIndex: clamp(cell.rowIndex, 0, Math.max(0, grid.rowModel.value.visibleRows.length - 1)),
+      columnIndex: clamp(cell.columnIndex, 0, Math.max(0, visibleColumns.value.length - 1)),
+    });
+    const setFocusedCell = (
+      cell: FocusedCell,
+      extendSelection = false,
+      selectionAnchor?: FocusedCell,
+    ) => {
+      const nextCell = getClampedFocusedCell(cell);
+
+      if (extendSelection) {
+        selectionRange.value = {
+          anchor: selectionRange.value?.anchor ?? selectionAnchor ?? focusedCell.value,
+          focus: nextCell,
+        };
+      } else {
+        selectionRange.value = undefined;
+      }
+
+      focusedCell.value = nextCell;
+      focusCellElement(nextCell);
+    };
+    const handleCellKeyDown = (
+      event: KeyboardEvent,
+      rowNode: RowNode<unknown>,
+      columnIndex: number,
+    ) => {
+      if (activeEdit.value) {
+        return;
+      }
+
+      const rowIndex = visibleRowIndexById.value.get(rowNode.id) ?? rowNode.index;
+      const currentCell = { rowIndex, columnIndex };
+      let nextCell: FocusedCell | undefined;
+
+      switch (event.key) {
+        case "ArrowDown":
+          nextCell = { rowIndex: rowIndex + 1, columnIndex };
+          break;
+        case "ArrowUp":
+          nextCell = { rowIndex: rowIndex - 1, columnIndex };
+          break;
+        case "ArrowRight":
+          nextCell = { rowIndex, columnIndex: columnIndex + 1 };
+          break;
+        case "ArrowLeft":
+          nextCell = { rowIndex, columnIndex: columnIndex - 1 };
+          break;
+        case "Home":
+          nextCell = { rowIndex: event.metaKey || event.ctrlKey ? 0 : rowIndex, columnIndex: 0 };
+          break;
+        case "End":
+          nextCell = {
+            rowIndex: event.metaKey || event.ctrlKey ? grid.rowModel.value.visibleRows.length - 1 : rowIndex,
+            columnIndex: visibleColumns.value.length - 1,
+          };
+          break;
+        case "Tab":
+          nextCell = getNextTabCell({
+            rowIndex,
+            columnIndex,
+            rowCount: grid.rowModel.value.visibleRows.length,
+            columnCount: visibleColumns.value.length,
+            reverse: event.shiftKey,
+          });
+          break;
+        case " ":
+          event.preventDefault();
+          grid.toggleRowSelected(rowNode.id);
+          return;
+        default:
+          return;
+      }
+
+      if (!nextCell) {
+        return;
+      }
+
+      event.preventDefault();
+      setFocusedCell(nextCell, event.shiftKey && event.key !== "Tab", currentCell);
     };
     const startCellEdit = (
       rowNode: RowNode<unknown>,
@@ -1389,12 +1506,17 @@ export const YoupGrid = defineComponent({
                     selectionColumnOffset: selectionColumnOffset.value,
                     detailRowHeight: props.detailRowHeight,
                     selectedRowIds: selectedRowIds.value,
+                    visibleRowIndexById: visibleRowIndexById.value,
+                    focusedCell: focusedCell.value,
+                    selectionRange: selectionRange.value,
                     expandedDetailRowIds: expandedDetailRowIdSet.value,
                     slots,
                     onToggleGroup: (groupId) => grid.toggleRowGroupExpanded(groupId),
                     onToggleTreeRow: (rowId) => grid.toggleTreeRowExpanded(rowId),
                     onToggleDetailRow: toggleDetailRowExpanded,
                     onSetRowSelected: (rowId, selected) => grid.setRowSelected(rowId, selected),
+                    onSetFocusedCell: setFocusedCell,
+                    onCellKeyDown: handleCellKeyDown,
                     onRowClick: (event) => emit("rowClick", event),
                     onRowDoubleClick: (event) => emit("rowDoubleClick", event),
                     activeEdit: activeEdit.value,
@@ -1495,6 +1617,27 @@ function getPageIndex(pageIndex: number | undefined, pageCount: number): number 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function getNextTabCell(context: {
+  rowIndex: number;
+  columnIndex: number;
+  rowCount: number;
+  columnCount: number;
+  reverse: boolean;
+}): FocusedCell {
+  if (context.rowCount <= 0 || context.columnCount <= 0) {
+    return { rowIndex: 0, columnIndex: 0 };
+  }
+
+  const flatIndex = context.rowIndex * context.columnCount + context.columnIndex;
+  const delta = context.reverse ? -1 : 1;
+  const nextFlatIndex = clamp(flatIndex + delta, 0, context.rowCount * context.columnCount - 1);
+
+  return {
+    rowIndex: Math.floor(nextFlatIndex / context.columnCount),
+    columnIndex: nextFlatIndex % context.columnCount,
+  };
 }
 
 function renderPaginationFooter(context: PaginationRenderContext) {
@@ -1984,12 +2127,21 @@ function renderDisplayRow<TRow>(context: {
   selectionColumnOffset: number;
   detailRowHeight: number;
   selectedRowIds: ReadonlySet<GridRowId>;
+  visibleRowIndexById: Map<GridRowId, number>;
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
   expandedDetailRowIds: ReadonlySet<GridRowId>;
   slots: Slots;
   onToggleGroup: (groupId: string) => void;
   onToggleTreeRow: (rowId: GridRowId) => void;
   onToggleDetailRow: (rowId: GridRowId) => void;
   onSetRowSelected: (rowId: GridRowId, selected: boolean) => void;
+  onSetFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
+  onCellKeyDown: (
+    event: KeyboardEvent,
+    rowNode: RowNode<TRow>,
+    columnIndex: number,
+  ) => void;
   onRowClick: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick: (event: YoupGridRowEvent<TRow>) => void;
   activeEdit?: ActiveEdit;
@@ -2043,9 +2195,11 @@ function renderDisplayRow<TRow>(context: {
   const detailAvailable = context.isRowDetailAvailable(context.displayNode);
   const detailExpanded = detailAvailable && context.expandedDetailRowIds.has(context.displayNode.id);
   const detailContext = context.getRowDetailContext(context.displayNode);
+  const rowIndex = context.visibleRowIndexById.get(context.displayNode.id) ?? context.displayIndex;
   const row = renderDataRow({
     rowNode: context.displayNode,
     displayIndex: context.displayIndex,
+    rowIndex,
     columns: context.columns,
     leadingColumnCount: context.leadingColumnCount,
     templateColumns: context.templateColumns,
@@ -2057,9 +2211,13 @@ function renderDisplayRow<TRow>(context: {
     onToggleTreeRow: context.onToggleTreeRow,
     onToggleDetailRow: context.onToggleDetailRow,
     onSetRowSelected: context.onSetRowSelected,
+    onSetFocusedCell: context.onSetFocusedCell,
+    onCellKeyDown: context.onCellKeyDown,
     onRowClick: context.onRowClick,
     onRowDoubleClick: context.onRowDoubleClick,
     activeEdit: context.activeEdit,
+    focusedCell: context.focusedCell,
+    selectionRange: context.selectionRange,
     activeTooltipCellKey: context.activeTooltipCellKey,
     cellTooltipMode: context.cellTooltipMode,
     canEditCell: context.canEditCell,
@@ -2207,6 +2365,7 @@ function renderGroupRow<TRow>(context: {
 function renderDataRow<TRow>(context: {
   rowNode: RowNode<TRow>;
   displayIndex: number;
+  rowIndex: number;
   columns: readonly ResolvedColumnDef<TRow>[];
   leadingColumnCount: number;
   templateColumns: string;
@@ -2218,9 +2377,17 @@ function renderDataRow<TRow>(context: {
   onToggleTreeRow: (rowId: GridRowId) => void;
   onToggleDetailRow: (rowId: GridRowId) => void;
   onSetRowSelected: (rowId: GridRowId, selected: boolean) => void;
+  onSetFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
+  onCellKeyDown: (
+    event: KeyboardEvent,
+    rowNode: RowNode<TRow>,
+    columnIndex: number,
+  ) => void;
   onRowClick: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick: (event: YoupGridRowEvent<TRow>) => void;
   activeEdit?: ActiveEdit;
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
   activeTooltipCellKey?: string;
   cellTooltipMode: YoupGridCellTooltipMode;
   canEditCell: (rowNode: RowNode<TRow>, column: ResolvedColumnDef<TRow>) => boolean;
@@ -2305,6 +2472,7 @@ function renderDataRow<TRow>(context: {
           rowNode: context.rowNode,
           column,
           columnIndex,
+          rowIndex: context.rowIndex,
           ariaColumnOffset: context.leadingColumnCount,
           slots: context.slots,
           onToggleTreeRow: context.onToggleTreeRow,
@@ -2312,6 +2480,8 @@ function renderDataRow<TRow>(context: {
           detailAvailable: context.detailAvailable && columnIndex === 0,
           detailExpanded: context.detailExpanded,
           activeEdit: context.activeEdit,
+          focusedCell: context.focusedCell,
+          selectionRange: context.selectionRange,
           activeTooltipCellKey: context.activeTooltipCellKey,
           cellTooltipMode: context.cellTooltipMode,
           editable: context.canEditCell(context.rowNode, column),
@@ -2324,6 +2494,8 @@ function renderDataRow<TRow>(context: {
           commitCellEdit: context.commitCellEdit,
           commitCheckboxEdit: context.commitCheckboxEdit,
           openCellContextMenu: context.openCellContextMenu,
+          setFocusedCell: context.onSetFocusedCell,
+          onCellKeyDown: context.onCellKeyDown,
         }),
       ),
     ],
@@ -2392,6 +2564,7 @@ function renderDataCell<TRow>(context: {
   rowNode: RowNode<TRow>;
   column: ResolvedColumnDef<TRow>;
   columnIndex: number;
+  rowIndex: number;
   ariaColumnOffset: number;
   slots: Slots;
   onToggleTreeRow: (rowId: GridRowId) => void;
@@ -2399,6 +2572,8 @@ function renderDataCell<TRow>(context: {
   detailAvailable: boolean;
   detailExpanded: boolean;
   activeEdit?: ActiveEdit;
+  focusedCell: FocusedCell;
+  selectionRange?: GridCellRange;
   activeTooltipCellKey?: string;
   cellTooltipMode: YoupGridCellTooltipMode;
   editable: boolean;
@@ -2429,6 +2604,12 @@ function renderDataCell<TRow>(context: {
     column: ResolvedColumnDef<TRow>,
     columnIndex: number,
   ) => void;
+  setFocusedCell: (cell: FocusedCell, extendSelection?: boolean, selectionAnchor?: FocusedCell) => void;
+  onCellKeyDown: (
+    event: KeyboardEvent,
+    rowNode: RowNode<TRow>,
+    columnIndex: number,
+  ) => void;
 }) {
   const value = context.column.accessor(context.rowNode.original);
   const formattedValue = formatCellValue(context.column, value, context.rowNode.original);
@@ -2436,6 +2617,12 @@ function renderDataCell<TRow>(context: {
   const editing =
     context.activeEdit?.rowId === context.rowNode.id &&
     context.activeEdit.columnId === context.column.id;
+  const focused =
+    context.focusedCell.rowIndex === context.rowIndex &&
+    context.focusedCell.columnIndex === context.columnIndex;
+  const rangeSelected = context.selectionRange
+    ? isCellInRange(context.rowIndex, context.columnIndex, context.selectionRange)
+    : false;
   const cellKey = getCellKey(context.rowNode.id, context.column.id);
   const tooltipId =
     context.cellTooltipMode === "rich" &&
@@ -2506,6 +2693,8 @@ function renderDataCell<TRow>(context: {
         "youp-grid-vue__cell",
         `youp-grid-vue__cell--align-${align}`,
         context.editable ? "youp-grid-vue__cell--editable" : undefined,
+        focused ? "youp-grid-vue__cell--focused" : undefined,
+        rangeSelected ? "youp-grid-vue__cell--range-selected" : undefined,
         editing ? "youp-grid-vue__cell--editing" : undefined,
         tooltipId ? "youp-grid-vue__cell--tooltip-open" : undefined,
         formattedValue.length === 0 && context.column.placeholder
@@ -2515,8 +2704,18 @@ function renderDataCell<TRow>(context: {
       role: "gridcell",
       "aria-colindex": context.ariaColumnOffset + context.columnIndex + 1,
       "aria-describedby": tooltipId,
-      tabindex: context.editable ? 0 : undefined,
+      "aria-selected": rangeSelected || focused ? "true" : undefined,
+      "data-youp-row-index": context.rowIndex,
+      "data-youp-column-index": context.columnIndex,
+      "data-youp-column-id": context.column.id,
+      tabindex: focused && !editing ? 0 : -1,
       title: getCellTitle(context.meta, context.cellTooltipMode, formattedValue),
+      onClick: (event: MouseEvent) => {
+        context.setFocusedCell(
+          { rowIndex: context.rowIndex, columnIndex: context.columnIndex },
+          event.shiftKey,
+        );
+      },
       onContextmenu: (event: MouseEvent) =>
         context.openCellContextMenu(event, context.rowNode, context.column, context.columnIndex),
       onPaste: (event: ClipboardEvent) => {
@@ -2547,6 +2746,12 @@ function renderDataCell<TRow>(context: {
       onMouseleave: () =>
         clearTooltipWhenCurrent(context.activeTooltipCellKey, cellKey, context.setActiveTooltipCellKey),
       onKeydown: (event: KeyboardEvent) => {
+        context.onCellKeyDown(event, context.rowNode, context.columnIndex);
+
+        if (event.defaultPrevented) {
+          return;
+        }
+
         if (!context.editable || editing) {
           return;
         }

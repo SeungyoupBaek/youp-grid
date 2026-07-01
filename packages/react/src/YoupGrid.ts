@@ -256,14 +256,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const gridStyle = {
     ...props.style,
   };
-  const renderedRows = (detailRowsEnabled
-    ? displayRows.map((row, index) => ({ row, displayIndex: index }))
-    : virtualRange.items
-      .map((item) => {
-        const row = displayRows[item.index];
+  const renderedRows = virtualRange.items
+    .map((item) => {
+      const row = displayRows[item.index];
 
-        return row ? { row, displayIndex: item.index } : undefined;
-      }))
+      return row ? { row, displayIndex: item.index } : undefined;
+    })
     .filter((item): item is { row: RowDisplayNode<TRow>; displayIndex: number } => Boolean(item));
   const getCellEditContext = (
     row: RowNode<TRow>,
@@ -354,6 +352,33 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     return props.isRowDetailAvailable?.(getRowDetailContext(row, rowIndex)) ?? true;
   };
+  const detailRenderModel = useMemo(() => {
+    if (!detailRowsEnabled) {
+      return undefined;
+    }
+
+    return getDetailRenderModel({
+      displayRows,
+      expandedDetailRowIdSet,
+      isRowDetailAvailable,
+      rowHeight,
+      detailRowHeight,
+      overscan: props.overscan,
+      scrollTop,
+      viewportHeight,
+      visibleRowIndexById,
+    });
+  }, [
+    detailRowsEnabled,
+    detailRowHeight,
+    displayRows,
+    expandedDetailRowIdSet,
+    props.overscan,
+    rowHeight,
+    scrollTop,
+    viewportHeight,
+    visibleRowIndexById,
+  ]);
 
   useEffect(() => {
     if (focusedRowIndex >= rowModel.visibleRows.length) {
@@ -1323,114 +1348,142 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             : detailRowsEnabled
               ? createElement(
                   "div",
-                  { className: "youp-grid__detail-window" },
-                  renderedRows.map(({ row, displayIndex }) => {
-                    return renderDisplayRow({
-                      row,
-                      displayIndex,
-                      columnLayouts,
-                      showRowNumberColumn,
-                      showRowSelectionColumn,
-                      selectionColumnOffset,
-                      rowHeight,
-                      detailRowHeight,
-                      selectedRowIds,
-                      visibleRowIndexById,
-                      focusedCell,
-                      selectionRange,
-                      fillRange,
-                      editingCell,
-                      gridEditable,
-                      disabledReason: props.disabledReason,
-                      treeData: props.treeData ?? false,
-                      rowModel,
-                      visibleColumns,
-                      canEditGridCell,
-                      getGridCellMeta,
-                      setRowSelected: controller.setRowSelected,
-                      setFocusedCell,
-                      toggleTreeRowExpanded: controller.toggleTreeRowExpanded,
-                      toggleRowGroupExpanded: controller.toggleRowGroupExpanded,
-                      isRowDetailAvailable,
-                      getRowDetailContext,
-                      renderRowDetail: props.renderRowDetail,
-                      expandedDetailRowIdSet,
-                      startFillHandle: (event, sourceRow) => {
-                        if (!gridEditable) {
-                          return;
-                        }
+                  {
+                    className: "youp-grid__virtual-spacer youp-grid__virtual-spacer--detail",
+                    style: { height: detailRenderModel?.totalSize ?? 0 },
+                  },
+                  detailRenderModel?.entries.map((entry) =>
+                    createElement(
+                      "div",
+                      {
+                        key: getDetailRenderEntryKey(entry),
+                        className: "youp-grid__virtual-entry",
+                        style: {
+                          height: entry.height,
+                          transform: `translateY(${entry.offset}px)`,
+                        },
+                      },
+                      entry.type === "detail"
+                        ? props.renderRowDetail
+                          ? renderDetailRow({
+                              row: entry.row,
+                              displayIndex: entry.displayIndex,
+                              detailRowHeight: entry.height,
+                              columns: columnLayouts,
+                              showRowNumberColumn,
+                              showSelectionColumn: showRowSelectionColumn,
+                              selectionColumnOffset,
+                              detailContext: getRowDetailContext(entry.row, entry.rowIndex),
+                              renderRowDetail: props.renderRowDetail,
+                            })
+                          : undefined
+                        : renderDisplayRow({
+                            row: entry.row,
+                            displayIndex: entry.displayIndex,
+                            columnLayouts,
+                            showRowNumberColumn,
+                            showRowSelectionColumn,
+                            selectionColumnOffset,
+                            rowHeight,
+                            detailRowHeight,
+                            selectedRowIds,
+                            visibleRowIndexById,
+                            focusedCell,
+                            selectionRange,
+                            fillRange,
+                            editingCell,
+                            gridEditable,
+                            disabledReason: props.disabledReason,
+                            treeData: props.treeData ?? false,
+                            rowModel,
+                            visibleColumns,
+                            canEditGridCell,
+                            getGridCellMeta,
+                            setRowSelected: controller.setRowSelected,
+                            setFocusedCell,
+                            toggleTreeRowExpanded: controller.toggleTreeRowExpanded,
+                            toggleRowGroupExpanded: controller.toggleRowGroupExpanded,
+                            isRowDetailAvailable,
+                            getRowDetailContext,
+                            renderRowDetail: undefined,
+                            expandedDetailRowIdSet,
+                            startFillHandle: (event) => {
+                              if (!gridEditable) {
+                                return;
+                              }
 
-                        startGridFillHandle({
-                          event,
-                          sourceRange: normalizeCellRange(selectionRange ?? {
-                            anchor: focusedCell,
-                            focus: focusedCell,
+                              startGridFillHandle({
+                                event,
+                                sourceRange: normalizeCellRange(selectionRange ?? {
+                                  anchor: focusedCell,
+                                  focus: focusedCell,
+                                }),
+                                rowModel,
+                                columnLayouts,
+                                visibleColumns,
+                                setFillRange,
+                                setSelectionRange,
+                                setFocusedRowIndex,
+                                setFocusedColumnIndex,
+                                canEditGridCell,
+                                applyCellValueChanges,
+                              });
+                            },
+                            autoSizeColumn: (event, column) => {
+                              autoSizeColumnToFit({
+                                event,
+                                column,
+                                rows: rowModel.visibleRows,
+                                resizeColumn: (width) => controller.setColumnWidth(column.id, width),
+                              });
+                            },
+                            applyCellValue,
+                            startEditingCell,
+                            setEditingCell,
+                            cancelEditingCell,
+                            commitEditingValue,
+                            cellTooltipMode,
+                            activeTooltipCellKey,
+                            setActiveTooltipCellKey,
+                            openCellContextMenu: showCellContextMenu ? openCellContextMenu : undefined,
+                            onRowClick: props.onRowClick,
+                            onRowDoubleClick: props.onRowDoubleClick,
+                            handleCellKeyDown: (event, cell, sourceRow) => {
+                              handleGridCellKeyDown({
+                                event,
+                                cell,
+                                row: sourceRow,
+                                rowModel,
+                                columnLayouts,
+                                rowHeight,
+                                bodyElement: bodyRef.current,
+                                displayIndexByVisibleRowIndex,
+                                setFocusedCell,
+                                selectionRange,
+                                focusedCell,
+                                startEditingCell,
+                                commitEditingValue,
+                                cancelEditingCell,
+                                applyCellValue,
+                                deleteGridCellValues: () => {
+                                  deleteGridCellValues({
+                                    focusedCell,
+                                    selectionRange,
+                                    rows: rowModel.visibleRows,
+                                    columns: visibleColumns,
+                                    canEditCell: canEditGridCell,
+                                    applyCellValueChanges,
+                                  });
+                                },
+                                undoCellValueChange,
+                                redoCellValueChange,
+                                toggleSelected: () => controller.toggleRowSelected(sourceRow.id),
+                              });
+                            },
+                            renderCell: props.renderCell,
                           }),
-                          rowModel,
-                          columnLayouts,
-                          visibleColumns,
-                          setFillRange,
-                          setSelectionRange,
-                          setFocusedRowIndex,
-                          setFocusedColumnIndex,
-                          canEditGridCell,
-                          applyCellValueChanges,
-                        });
-                      },
-                      autoSizeColumn: (event, column) => {
-                        autoSizeColumnToFit({
-                          event,
-                          column,
-                          rows: rowModel.visibleRows,
-                          resizeColumn: (width) => controller.setColumnWidth(column.id, width),
-                        });
-                      },
-                      applyCellValue,
-                      startEditingCell,
-                      setEditingCell,
-                      cancelEditingCell,
-                      commitEditingValue,
-                      cellTooltipMode,
-                      activeTooltipCellKey,
-                      setActiveTooltipCellKey,
-                      openCellContextMenu: showCellContextMenu ? openCellContextMenu : undefined,
-                      onRowClick: props.onRowClick,
-                      onRowDoubleClick: props.onRowDoubleClick,
-                      handleCellKeyDown: (event, cell, sourceRow) => {
-                        handleGridCellKeyDown({
-                          event,
-                          cell,
-                          row: sourceRow,
-                          rowModel,
-                          columnLayouts,
-                          rowHeight,
-                          bodyElement: bodyRef.current,
-                          displayIndexByVisibleRowIndex,
-                          setFocusedCell,
-                          selectionRange,
-                          focusedCell,
-                          startEditingCell,
-                          commitEditingValue,
-                          cancelEditingCell,
-                          applyCellValue,
-                          deleteGridCellValues: () => {
-                            deleteGridCellValues({
-                              focusedCell,
-                              selectionRange,
-                              rows: rowModel.visibleRows,
-                              columns: visibleColumns,
-                              canEditCell: canEditGridCell,
-                              applyCellValueChanges,
-                            });
-                          },
-                          undoCellValueChange,
-                          redoCellValueChange,
-                          toggleSelected: () => controller.toggleRowSelected(sourceRow.id),
-                        });
-                      },
-                      renderCell: props.renderCell,
-                    });
-                  }),
+                    ),
+                  ),
                 )
               : createElement(
                   "div",
@@ -2278,6 +2331,97 @@ function renderSelectionGroupCell(leftOffset: number) {
   });
 }
 
+type DetailRenderEntry<TRow> =
+  | {
+      type: "row";
+      row: RowDisplayNode<TRow>;
+      displayIndex: number;
+      offset: number;
+      height: number;
+    }
+  | {
+      type: "detail";
+      row: RowNode<TRow>;
+      displayIndex: number;
+      rowIndex: number;
+      offset: number;
+      height: number;
+    };
+
+function getDetailRenderModel<TRow>(context: {
+  displayRows: readonly RowDisplayNode<TRow>[];
+  expandedDetailRowIdSet: ReadonlySet<GridRowId>;
+  isRowDetailAvailable: (row: RowNode<TRow>, rowIndex: number) => boolean;
+  rowHeight: number;
+  detailRowHeight: number;
+  overscan?: number;
+  scrollTop: number;
+  viewportHeight: number;
+  visibleRowIndexById: Map<GridRowId, number>;
+}) {
+  const entries: DetailRenderEntry<TRow>[] = [];
+  const overscanPx = (context.overscan ?? 3) * context.rowHeight;
+  let offset = 0;
+
+  context.displayRows.forEach((row, displayIndex) => {
+    if (isRenderEntryVisible(offset, context.rowHeight, context.scrollTop, context.viewportHeight, overscanPx)) {
+      entries.push({
+        type: "row",
+        row,
+        displayIndex,
+        offset,
+        height: context.rowHeight,
+      });
+    }
+
+    offset += context.rowHeight;
+
+    if (isRowGroupNode(row)) {
+      return;
+    }
+
+    const rowIndex = context.visibleRowIndexById.get(row.id) ?? displayIndex;
+
+    if (!context.expandedDetailRowIdSet.has(row.id) || !context.isRowDetailAvailable(row, rowIndex)) {
+      return;
+    }
+
+    if (isRenderEntryVisible(offset, context.detailRowHeight, context.scrollTop, context.viewportHeight, overscanPx)) {
+      entries.push({
+        type: "detail",
+        row,
+        displayIndex,
+        rowIndex,
+        offset,
+        height: context.detailRowHeight,
+      });
+    }
+
+    offset += context.detailRowHeight;
+  });
+
+  return {
+    entries,
+    totalSize: offset,
+  };
+}
+
+function isRenderEntryVisible(
+  offset: number,
+  height: number,
+  scrollTop: number,
+  viewportHeight: number,
+  overscanPx: number,
+) {
+  return offset + height >= scrollTop - overscanPx && offset <= scrollTop + viewportHeight + overscanPx;
+}
+
+function getDetailRenderEntryKey<TRow>(entry: DetailRenderEntry<TRow>) {
+  const id = entry.type === "detail" ? entry.row.id : isRowGroupNode(entry.row) ? entry.row.groupId : entry.row.id;
+
+  return `${entry.type}:${rowKey(id)}`;
+}
+
 function renderDetailRow<TRow>(context: {
   row: RowNode<TRow>;
   displayIndex: number;
@@ -2304,7 +2448,7 @@ function renderDetailRow<TRow>(context: {
       className: "youp-grid__row youp-grid__row--detail",
       role: "row",
       "aria-rowindex": context.displayIndex + 2,
-      style: { minHeight: context.detailRowHeight },
+      style: { height: context.detailRowHeight, minHeight: context.detailRowHeight },
     },
     context.showRowNumberColumn
       ? createElement("div", {
@@ -2331,6 +2475,7 @@ function renderDetailRow<TRow>(context: {
         style: {
           width,
           flex: `0 0 ${width}px`,
+          height: context.detailRowHeight,
           minHeight: context.detailRowHeight,
         },
       },

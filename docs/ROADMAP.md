@@ -98,16 +98,17 @@ Exit criteria:
 
 ## Phase 5: Library Quality
 
-Status: planned
+Status: in progress
 
 - TypeScript build
 - package exports for ESM
 - bundled CSS theme
+- Playwright interaction smoke tests
+- example gallery
 - visual regression tests
 - accessibility tests
 - performance benchmarks
 - docs site
-- example gallery
 - semver release process
 - migration guide
 

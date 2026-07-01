@@ -241,6 +241,12 @@
   inset: 0 0 auto;
 }
 
+.youp-grid__virtual-entry {
+  position: absolute;
+  inset: 0 0 auto;
+  min-width: max-content;
+}
+
 .youp-grid__row--selected {
   background: var(--youp-grid-row-selected);
 }

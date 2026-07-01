@@ -71,11 +71,13 @@ const columns: ColumnDef<User>[] = [
 ];
 ```
 
-Use `editable`, `readOnly`, or `canEditCell` to guard editing. `cell-edit-commit` reports the commit reason as `"enter"`, `"tab"`, or `"blur"`; `rows-change` emits a new rows array when the edited column has a `field`.
+Use `editable`, `readOnly`, or `canEditCell` to guard editing. `cell-edit-commit` reports the commit reason as `"enter"`, `"tab"`, or `"blur"`; `cell-value-change` and `cells-value-change` report committed edits, paste, and fill-style batches.
 
 ## Row Number and Selection Columns
 
 Enable Excel-style row numbers and checkbox row selection with `showRowNumberColumn` and `showRowSelectionColumn`. `pinRowSelectionColumn` keeps the selection column aligned while horizontally scrolling.
+
+Cells support keyboard focus with `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, and `Tab`. Hold `Shift` while using arrow, Home, or End navigation to extend the active cell range. Press `Space` on a focused cell to toggle the row selection state.
 
 ## Pagination Footer
 
@@ -163,8 +165,6 @@ grid.setSort("age", "desc");
 
 ## Boundary
 
-The Vue component currently provides row rendering, row number and selection columns, a basic cell context menu, inline editing, header sorting, column drag reorder, column order controls, expandable row detail slots, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell slots.
+The Vue component currently provides row rendering, row number and selection columns, keyboard cell focus and range selection, a basic cell context menu, inline editing, header sorting, column drag reorder, column order controls, expandable row detail slots, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell slots.
 
 The headless composable provides state, row model, sorting, filtering, pagination, column state, row selection, tree expansion, grouping, aggregation, and remote-cache helpers through Vue `computed` refs.
-
-Advanced editing UX lands first in `@youp-grid/react`.

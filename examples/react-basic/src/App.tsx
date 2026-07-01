@@ -218,9 +218,19 @@ export function App() {
         error={error}
         errorContent="Unable to load trades"
         showColumnChooser
+        showCellContextMenu
         showFilters
         showPagination={!infiniteMode}
         showRowSelectionColumn
+        detailRowHeight={88}
+        renderRowDetail={({ row }) => (
+          <div className="trade-detail">
+            <strong>{row.symbol}</strong>
+            <span>Desk {row.desk}</span>
+            <span>{row.quantity.toLocaleString()} shares</span>
+            <span>{row.status}</span>
+          </div>
+        )}
         height={520}
       />
     </main>
