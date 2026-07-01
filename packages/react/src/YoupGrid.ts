@@ -101,6 +101,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
   const skipNextBlurCommitRef = useRef(false);
   const valueHistoryRef = useRef<GridValueHistoryState>(createValueHistoryState());
+  const cellSelectionDragRef = useRef<CellSelectionDragState | undefined>();
+  const suppressNextCellClickRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [focusedColumnIndex, setFocusedColumnIndex] = useState(0);
@@ -393,6 +395,18 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   }, [columnLayouts.length, focusedColumnIndex]);
 
   useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    document.addEventListener("mouseup", endCellRangeSelection);
+
+    return () => {
+      document.removeEventListener("mouseup", endCellRangeSelection);
+    };
+  }, []);
+
+  useEffect(() => {
     if (columnMenuOpenId && !visibleColumns.some((column) => column.id === columnMenuOpenId)) {
       setColumnMenuOpenId(undefined);
     }
@@ -660,6 +674,87 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     setFocusedRowIndex(cell.rowIndex);
     setFocusedColumnIndex(cell.columnIndex);
+  };
+  const startCellRangeSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || shouldIgnoreCellRangeMouseEvent(event)) {
+      return;
+    }
+
+    const target = getCellRangeMouseTarget(event, rootRef.current);
+
+    if (!target) {
+      return;
+    }
+
+    event.preventDefault();
+    target.element.focus({ preventScroll: true });
+
+    const anchor = event.shiftKey ? selectionRange?.anchor ?? focusedCell : target.cell;
+
+    cellSelectionDragRef.current = {
+      anchor,
+      focus: target.cell,
+      moved: false,
+    };
+    setFocusedCell(target.cell, event.shiftKey, anchor);
+  };
+  const extendCellRangeSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const dragState = cellSelectionDragRef.current;
+
+    if (!dragState) {
+      return;
+    }
+
+    if ((event.buttons & 1) !== 1) {
+      cellSelectionDragRef.current = undefined;
+      return;
+    }
+
+    const target = getCellRangeMouseTarget(event, rootRef.current);
+
+    if (!target) {
+      return;
+    }
+
+    if (
+      target.cell.rowIndex === dragState.focus.rowIndex &&
+      target.cell.columnIndex === dragState.focus.columnIndex
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    target.element.focus({ preventScroll: true });
+    cellSelectionDragRef.current = {
+      ...dragState,
+      focus: target.cell,
+      moved: true,
+    };
+    setFocusedCell(target.cell, true, dragState.anchor);
+  };
+  const endCellRangeSelection = () => {
+    if (cellSelectionDragRef.current?.moved) {
+      suppressNextCellClickRef.current = true;
+
+      window.setTimeout(() => {
+        suppressNextCellClickRef.current = false;
+      }, 0);
+    }
+
+    cellSelectionDragRef.current = undefined;
+  };
+  const suppressCellClickAfterDrag = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressNextCellClickRef.current) {
+      return;
+    }
+
+    if (!getCellRangeMouseTarget(event, rootRef.current)) {
+      return;
+    }
+
+    suppressNextCellClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
   };
   const setDensity = (nextDensity: YoupGridDensity) => {
     if (props.density === undefined) {
@@ -1102,6 +1197,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     handleCellKeyDown({
       event: context.event,
       cell: context.cell,
+      navigationCell: context.focusedCell,
       rowCount: context.rowModel.visibleRows.length,
       columnCount: context.columnLayouts.length,
       rowHeight: context.rowHeight,
@@ -1216,6 +1312,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             applyCellValueChanges,
           });
         },
+        onMouseDownCapture: startCellRangeSelection,
+        onMouseOverCapture: extendCellRangeSelection,
+        onMouseUpCapture: endCellRangeSelection,
+        onClickCapture: suppressCellClickAfterDrag,
       },
       createElement(
         "div",
@@ -1601,6 +1701,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                     handleCellKeyDown({
                       event,
                       cell,
+                      navigationCell: focusedCell,
                       rowCount: rowModel.visibleRows.length,
                       columnCount: columnLayouts.length,
                       rowHeight,
@@ -2853,6 +2954,48 @@ function shouldIgnoreRowMouseEvent(event: ReactMouseEvent<HTMLDivElement>): bool
   }
 
   return Boolean(target.closest("button,input,select,textarea,a,[contenteditable='true']"));
+}
+
+function shouldIgnoreCellRangeMouseEvent(event: ReactMouseEvent<HTMLElement>): boolean {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest(".youp-grid__fill-handle,button,input,select,textarea,a,[contenteditable='true']"));
+}
+
+function getCellRangeMouseTarget(
+  event: ReactMouseEvent<HTMLElement>,
+  rootElement: HTMLElement | null,
+): CellRangeMouseTarget | undefined {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+
+  const element = target.closest("[data-youp-row-index][data-youp-column-index]");
+
+  if (!(element instanceof HTMLElement) || !rootElement?.contains(element)) {
+    return undefined;
+  }
+
+  const rowIndex = Number(element.dataset.youpRowIndex);
+  const columnIndex = Number(element.dataset.youpColumnIndex);
+
+  if (!Number.isInteger(rowIndex) || !Number.isInteger(columnIndex)) {
+    return undefined;
+  }
+
+  return {
+    element,
+    cell: {
+      rowIndex,
+      columnIndex,
+    },
+  };
 }
 
 function renderCell<TRow>(context: {
@@ -4138,6 +4281,17 @@ type FocusedCell = {
   columnIndex: number;
 };
 
+type CellSelectionDragState = {
+  anchor: FocusedCell;
+  focus: FocusedCell;
+  moved: boolean;
+};
+
+type CellRangeMouseTarget = {
+  element: HTMLElement;
+  cell: FocusedCell;
+};
+
 type CellContextMenuState = FocusedCell & {
   clientX: number;
   clientY: number;
@@ -4191,6 +4345,7 @@ type PendingClipboardRowInsert<TRow> = {
 function handleCellKeyDown<TRow>(context: {
   event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>;
   cell: CellRenderState<TRow>;
+  navigationCell?: FocusedCell;
   rowCount: number;
   columnCount: number;
   rowHeight: number;
@@ -4211,6 +4366,10 @@ function handleCellKeyDown<TRow>(context: {
     return;
   }
 
+  const navigationCell = context.navigationCell ?? {
+    rowIndex: context.cell.rowIndex,
+    columnIndex: context.cell.columnIndex,
+  };
   const editingCell = context.event.currentTarget.classList.contains("youp-grid__cell-editor")
     ? createEditingCell(context.cell, (context.event.currentTarget as HTMLInputElement | HTMLSelectElement).value)
     : undefined;
@@ -4291,7 +4450,7 @@ function handleCellKeyDown<TRow>(context: {
     }
 
     if (context.event.shiftKey) {
-      context.setFocusedCell(context.cell, true);
+      context.setFocusedCell(navigationCell, true);
     } else {
       context.toggleSelected();
     }
@@ -4310,7 +4469,12 @@ function handleCellKeyDown<TRow>(context: {
     return;
   }
 
-  const nextCell = getNextNavigationCell(context);
+  const nextCell = getNextNavigationCell({
+    event: context.event,
+    cell: navigationCell,
+    rowCount: context.rowCount,
+    columnCount: context.columnCount,
+  });
 
   if (!nextCell) {
     return;
@@ -4321,16 +4485,13 @@ function handleCellKeyDown<TRow>(context: {
     ...context,
     nextCell,
     extendSelection: context.event.shiftKey,
-    selectionAnchor: {
-      rowIndex: context.cell.rowIndex,
-      columnIndex: context.cell.columnIndex,
-    },
+    selectionAnchor: navigationCell,
   });
 }
 
-function getNextNavigationCell<TRow>(context: {
+function getNextNavigationCell(context: {
   event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>;
-  cell: CellRenderState<TRow>;
+  cell: FocusedCell;
   rowCount: number;
   columnCount: number;
 }): FocusedCell | undefined {
@@ -4372,8 +4533,8 @@ function getNextNavigationCell<TRow>(context: {
   return undefined;
 }
 
-function getNextTabCell<TRow>(
-  cell: CellRenderState<TRow>,
+function getNextTabCell(
+  cell: FocusedCell,
   rowCount: number,
   columnCount: number,
   backwards: boolean,

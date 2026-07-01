@@ -45,7 +45,6 @@ export function App() {
       { columnId: "price", function: "avg" },
       { columnId: "status", function: "count", label: "Rows" },
     ],
-    rowGrouping: { columnIds: ["desk"] },
     pagination: { pageIndex: 0, pageSize: 100 },
   });
   const columns = useMemo<ColumnDef<Trade>[]>(
