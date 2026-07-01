@@ -681,6 +681,7 @@
 
 .youp-grid__cell--header.youp-grid__cell--pinned-left,
 .youp-grid__cell--header.youp-grid__cell--pinned-right {
+  position: sticky;
   z-index: 3;
   background: var(--youp-grid-header);
 }
@@ -893,18 +894,24 @@
 .youp-grid__header-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   gap: 4px;
+  min-width: 0;
+  height: 22px;
 }
 
 .youp-grid__sort-button {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
+  height: 22px;
   padding: 0;
   border: 0;
   color: inherit;
   font: inherit;
   font-weight: 700;
   text-align: left;
+  overflow: hidden;
   cursor: pointer;
   background: transparent;
 }
@@ -913,7 +920,18 @@
   cursor: default;
 }
 
+.youp-grid__header-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .youp-grid__column-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   min-width: 22px;
   height: 22px;
@@ -1005,14 +1023,17 @@
 }
 
 .youp-grid__filter {
+  display: block;
   width: 100%;
   min-width: 0;
-  padding: 5px 7px;
+  height: 26px;
+  padding: 4px 7px;
   border: 1px solid var(--youp-grid-border);
   border-radius: 4px;
   color: var(--youp-grid-text);
   font: inherit;
   font-weight: 500;
+  line-height: 1.2;
   background: #fff;
 }
 
