@@ -3258,6 +3258,26 @@ function renderDefaultCellContent<TRow>(context: {
     });
   }
 
+  if (context.cell.column.editor === "tags") {
+    const tags = getTagDisplayItems(context.cell.column, context.cell.value);
+
+    if (tags.length > 0) {
+      return createElement(
+        "span",
+        { className: "youp-grid__tag-list" },
+        tags.map((tag, index) => renderTagChip(tag, `${tag.inputValue}-${index}`)),
+      );
+    }
+  }
+
+  if (context.cell.column.editor === "select" || context.cell.column.editor === "combobox") {
+    const option = findEditorOptionByValue(context.cell.column.options, context.cell.value);
+
+    if (option?.color || option?.description) {
+      return renderOptionBadge(option);
+    }
+  }
+
   const text = formatCellValue(context.cell.column, context.row, context.cell.value);
   const placeholder = context.cell.column.placeholder;
   const hasPlaceholder = text.length === 0 && Boolean(placeholder);
@@ -3271,6 +3291,49 @@ function renderDefaultCellContent<TRow>(context: {
       ].filter(Boolean).join(" "),
     },
     hasPlaceholder ? placeholder : text,
+  );
+}
+
+function renderOptionBadge(option: NormalizedEditorOption) {
+  return createElement(
+    "span",
+    {
+      className: [
+        "youp-grid__option-badge",
+        option.disabled ? "youp-grid__option-badge--disabled" : "",
+      ].filter(Boolean).join(" "),
+      title: option.description,
+    },
+    option.color
+      ? createElement("span", {
+          className: "youp-grid__option-color",
+          style: { "--youp-grid-option-color": option.color } as CSSProperties,
+          "aria-hidden": "true",
+        })
+      : undefined,
+    createElement("span", { className: "youp-grid__option-label" }, option.label),
+  );
+}
+
+function renderTagChip(tag: NormalizedEditorOption, key: string) {
+  return createElement(
+    "span",
+    {
+      key,
+      className: [
+        "youp-grid__tag",
+        tag.disabled ? "youp-grid__tag--disabled" : "",
+      ].filter(Boolean).join(" "),
+      title: tag.description,
+    },
+    tag.color
+      ? createElement("span", {
+          className: "youp-grid__tag-color",
+          style: { "--youp-grid-option-color": tag.color } as CSSProperties,
+          "aria-hidden": "true",
+        })
+      : undefined,
+    createElement("span", { className: "youp-grid__tag-label" }, tag.label),
   );
 }
 
@@ -3407,10 +3470,62 @@ function renderCellEditor<TRow>(context: {
         : undefined,
       options.map((option) => createElement(
         "option",
-        { key: option.inputValue, value: option.inputValue },
+        {
+          key: option.inputValue,
+          value: option.inputValue,
+          disabled: option.disabled,
+          title: option.description,
+        },
         option.label,
       )),
     );
+  }
+
+  if (context.cell.column.editor === "combobox") {
+    const options = normalizeEditorOptions(context.cell.column.options);
+    const listId = `youp-grid-combobox-${getCellKey(context.cell.row.id, context.cell.column.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+    return createElement(
+      Fragment,
+      undefined,
+      createElement("input", {
+        className: "youp-grid__cell-editor youp-grid__cell-editor--combobox",
+        type: "text",
+        list: listId,
+        value: context.editingCell?.draftValue ?? "",
+        placeholder: context.cell.column.placeholder,
+        autoFocus: true,
+        disabled: !context.cell.editable,
+        onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+          context.updateEditingDraft(event.currentTarget.value);
+        },
+        onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+          context.commitEditing(
+            createEditingCell(context.cell, event.currentTarget.value),
+            "blur",
+          );
+        },
+        onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+          event.stopPropagation();
+          context.onKeyDown(event, context.cell);
+        },
+      }),
+      createElement(
+        "datalist",
+        { id: listId },
+        options
+          .filter((option) => !option.disabled)
+          .map((option) => createElement(
+            "option",
+            { key: option.inputValue, value: option.label },
+            option.description,
+          )),
+      ),
+    );
+  }
+
+  if (context.cell.column.editor === "tags") {
+    return renderTagsEditor(context);
   }
 
   return createElement("input", {
@@ -3434,6 +3549,101 @@ function renderCellEditor<TRow>(context: {
       context.onKeyDown(event, context.cell);
     },
   });
+}
+
+function renderTagsEditor<TRow>(context: {
+  cell: CellRenderState<TRow>;
+  editingCell?: EditingCell;
+  updateEditingDraft: (draftValue: string) => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
+  onKeyDown: (
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
+}) {
+  const draft = context.editingCell?.draftValue ?? "";
+  const parts = parseTagEditorDraft(draft);
+  const tags = parts.tags.map((tag) => getTagDisplayItem(context.cell.column, tag));
+  const commitDraft = (draftValue: string, reason: YoupGridCellEditCommitReason) => {
+    context.commitEditing(createEditingCell(context.cell, draftValue), reason);
+  };
+
+  return createElement(
+    "div",
+    {
+      className: "youp-grid__cell-editor youp-grid__cell-editor--tags",
+      onClick: (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation(),
+    },
+    tags.map((tag, index) =>
+      createElement(
+        "span",
+        {
+          key: `${tag.inputValue}-${index}`,
+          className: [
+            "youp-grid__tag",
+            tag.disabled ? "youp-grid__tag--disabled" : "",
+          ].filter(Boolean).join(" "),
+          title: tag.description,
+        },
+        tag.color
+          ? createElement("span", {
+              className: "youp-grid__tag-color",
+              style: { "--youp-grid-option-color": tag.color } as CSSProperties,
+              "aria-hidden": "true",
+            })
+          : undefined,
+        createElement("span", { className: "youp-grid__tag-label" }, tag.label),
+        createElement(
+          "button",
+          {
+            type: "button",
+            className: "youp-grid__tag-remove",
+            "aria-label": `Remove ${tag.label}`,
+            disabled: !context.cell.editable,
+            onMouseDown: (event: ReactMouseEvent<HTMLButtonElement>) => event.preventDefault(),
+            onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+              event.stopPropagation();
+              const nextTags = parts.tags.filter((_, tagIndex) => tagIndex !== index);
+              context.updateEditingDraft(serializeTagEditorDraft(nextTags, parts.input));
+            },
+          },
+          "×",
+        ),
+      ),
+    ),
+    createElement("input", {
+      className: "youp-grid__cell-editor youp-grid__tag-input",
+      value: parts.input,
+      placeholder: tags.length === 0 ? context.cell.column.placeholder : undefined,
+      autoFocus: true,
+      disabled: !context.cell.editable,
+      "data-youp-editor-draft": serializeTagEditorDraft(parts.tags, parts.input),
+      onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+        context.updateEditingDraft(serializeTagEditorDraft(parts.tags, event.currentTarget.value));
+      },
+      onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+        commitDraft(serializeTagEditorDraftWithInput(parts.tags, event.currentTarget.value), "blur");
+      },
+      onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+        event.stopPropagation();
+        const inputValue = event.currentTarget.value;
+
+        if ((event.key === "Enter" || event.key === ",") && inputValue.trim().length > 0) {
+          event.preventDefault();
+          context.updateEditingDraft(serializeTagEditorDraft([...parts.tags, inputValue], ""));
+          return;
+        }
+
+        if (event.key === "Backspace" && inputValue.length === 0 && parts.tags.length > 0) {
+          event.preventDefault();
+          context.updateEditingDraft(serializeTagEditorDraft(parts.tags.slice(0, -1), ""));
+          return;
+        }
+
+        context.onKeyDown(event, context.cell);
+      },
+    }),
+  );
 }
 
 function renderCellStatus(meta: YoupGridCellMeta | undefined, tooltipMode: YoupGridCellTooltipMode) {
@@ -4389,7 +4599,11 @@ function handleCellKeyDown<TRow>(context: {
     columnIndex: context.cell.columnIndex,
   };
   const editingCell = context.event.currentTarget.classList.contains("youp-grid__cell-editor")
-    ? createEditingCell(context.cell, (context.event.currentTarget as HTMLInputElement | HTMLSelectElement).value)
+    ? createEditingCell(
+        context.cell,
+        (context.event.currentTarget as HTMLInputElement | HTMLSelectElement).dataset.youpEditorDraft ??
+          (context.event.currentTarget as HTMLInputElement | HTMLSelectElement).value,
+      )
     : undefined;
 
   if (editingCell) {
@@ -4691,7 +4905,7 @@ function createEditingCell<TRow>(cell: CellRenderState<TRow>, value: unknown): E
     rowIndex: cell.rowIndex,
     columnId: cell.column.id,
     columnIndex: cell.columnIndex,
-    draftValue: String(value ?? ""),
+    draftValue: getEditorDraftValue(cell.column, value),
   };
 }
 
@@ -5397,12 +5611,40 @@ function formatCellValue<TRow>(
     return column.valueFormatter(value, row);
   }
 
-  if (column.editor === "select") {
-    const option = normalizeEditorOptions(column.options).find((item) => Object.is(item.value, value));
+  if (column.editor === "select" || column.editor === "combobox") {
+    const option = findEditorOptionByValue(column.options, value);
 
     if (option) {
       return option.label;
     }
+  }
+
+  if (column.editor === "tags") {
+    return getTagDisplayItems(column, value).map((tag) => tag.label).join(", ");
+  }
+
+  return String(value ?? "");
+}
+
+function getEditorDraftValue<TRow>(column: ResolvedColumnDef<TRow>, value: unknown): string {
+  if (column.editor === "select") {
+    const option = findEditorOptionByValue(column.options, value);
+
+    if (option) {
+      return option.inputValue;
+    }
+  }
+
+  if (column.editor === "combobox") {
+    const option = findEditorOptionByValue(column.options, value);
+
+    if (option) {
+      return option.label;
+    }
+  }
+
+  if (column.editor === "tags") {
+    return serializeTagEditorDraft(getTagDisplayItems(column, value).map((tag) => tag.label), "");
   }
 
   return String(value ?? "");
@@ -5425,10 +5667,14 @@ function parseDraftValue<TRow>(
     return draftValue === "true";
   }
 
-  if (column.editor === "select") {
-    const option = normalizeEditorOptions(column.options).find((item) => item.inputValue === draftValue);
+  if (column.editor === "select" || column.editor === "combobox") {
+    const option = findEditorOptionByInput(column.options, draftValue);
 
     return option ? option.value : draftValue;
+  }
+
+  if (column.editor === "tags") {
+    return parseTagEditorValue(column, draftValue);
   }
 
   return draftValue;
@@ -5447,6 +5693,10 @@ function getEmptyCellValue<TRow>(column: ResolvedColumnDef<TRow>, row: TRow): un
     return undefined;
   }
 
+  if (column.editor === "tags") {
+    return [];
+  }
+
   return "";
 }
 
@@ -5454,22 +5704,120 @@ type NormalizedEditorOption = {
   value: ColumnEditorOptionValue;
   label: string;
   inputValue: string;
+  disabled: boolean;
+  color?: string;
+  description?: string;
 };
 
 function normalizeEditorOptions(options?: readonly ColumnEditorOption[]): NormalizedEditorOption[] {
   return (options ?? []).map((option) => {
     const value = getEditorOptionValue(option);
+    const objectOption = typeof option === "object" ? option : undefined;
 
     return {
       value,
-      label: typeof option === "object" ? option.label : String(option),
+      label: objectOption ? objectOption.label : String(option),
       inputValue: String(value),
+      disabled: Boolean(objectOption?.disabled),
+      color: objectOption?.color,
+      description: objectOption?.description,
     };
   });
 }
 
 function getEditorOptionValue(option: ColumnEditorOption): ColumnEditorOptionValue {
   return typeof option === "object" ? option.value : option;
+}
+
+function findEditorOptionByValue(
+  options: readonly ColumnEditorOption[] | undefined,
+  value: unknown,
+): NormalizedEditorOption | undefined {
+  const normalizedOptions = normalizeEditorOptions(options);
+
+  return normalizedOptions.find((option) => Object.is(option.value, value)) ??
+    normalizedOptions.find((option) => option.inputValue === String(value));
+}
+
+function findEditorOptionByInput(
+  options: readonly ColumnEditorOption[] | undefined,
+  input: string,
+): NormalizedEditorOption | undefined {
+  return normalizeEditorOptions(options)
+    .filter((option) => !option.disabled)
+    .find((option) => option.inputValue === input || option.label === input);
+}
+
+function parseTagEditorDraft(draft: string): { tags: string[]; input: string } {
+  if (!draft.includes(",")) {
+    return { tags: [], input: draft };
+  }
+
+  const parts = draft.split(",");
+  const input = draft.endsWith(",") ? "" : parts.pop() ?? "";
+
+  return {
+    tags: parts.map((part) => part.trim()).filter(Boolean),
+    input: input.trimStart(),
+  };
+}
+
+function serializeTagEditorDraft(tags: readonly string[], input: string): string {
+  const cleanTags = tags.map((tag) => tag.trim()).filter(Boolean);
+  const cleanInput = input.trimStart();
+
+  if (cleanInput.length > 0) {
+    return cleanTags.length > 0 ? `${cleanTags.join(", ")}, ${cleanInput}` : cleanInput;
+  }
+
+  return cleanTags.length > 0 ? `${cleanTags.join(", ")},` : "";
+}
+
+function serializeTagEditorDraftWithInput(tags: readonly string[], input: string): string {
+  const cleanInput = input.trim();
+
+  return cleanInput.length > 0
+    ? serializeTagEditorDraft([...tags, cleanInput], "")
+    : serializeTagEditorDraft(tags, "");
+}
+
+function parseTagEditorValue<TRow>(column: ResolvedColumnDef<TRow>, draft: string): unknown[] {
+  const parts = parseTagEditorDraft(draft);
+  const tagInputs = parts.input.trim().length > 0 ? [...parts.tags, parts.input] : parts.tags;
+
+  return tagInputs.map((tag) => findEditorOptionByInput(column.options, tag)?.value ?? tag);
+}
+
+function getTagDisplayItems<TRow>(
+  column: ResolvedColumnDef<TRow>,
+  value: unknown,
+): NormalizedEditorOption[] {
+  return getTagInputValues(value).map((tag) => getTagDisplayItem(column, tag));
+}
+
+function getTagDisplayItem<TRow>(column: ResolvedColumnDef<TRow>, value: unknown): NormalizedEditorOption {
+  return findEditorOptionByValue(column.options, value) ?? {
+    value: String(value ?? ""),
+    label: String(value ?? ""),
+    inputValue: String(value ?? ""),
+    disabled: false,
+  };
+}
+
+function getTagInputValues(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return [];
+  }
+
+  if (typeof value === "string" && value.includes(",")) {
+    return value.split(",").map((part) => part.trim()).filter(Boolean);
+  }
+
+  return [value];
 }
 
 function getCellTitle(

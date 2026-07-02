@@ -480,6 +480,107 @@
   padding: 8px 12px;
 }
 
+.youp-grid-vue__editor--combobox {
+  padding-right: 18px;
+}
+
+.youp-grid-vue__editor--tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 6px;
+}
+
+.youp-grid-vue__tag-list {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.youp-grid-vue__tag,
+.youp-grid-vue__option-badge {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.youp-grid-vue__tag {
+  min-height: 22px;
+  padding: 2px 7px;
+}
+
+.youp-grid-vue__option-badge {
+  min-height: 24px;
+  padding: 3px 8px;
+}
+
+.youp-grid-vue__tag--disabled,
+.youp-grid-vue__option-badge--disabled {
+  opacity: 0.58;
+}
+
+.youp-grid-vue__tag-color,
+.youp-grid-vue__option-color {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--youp-grid-vue-option-color, #64748b);
+}
+
+.youp-grid-vue__tag-label,
+.youp-grid-vue__option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.youp-grid-vue__tag-remove {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+
+.youp-grid-vue__tag-remove:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.youp-grid-vue__tag-input.youp-grid-vue__editor {
+  flex: 1 1 48px;
+  min-width: 48px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 4px;
+  background: transparent;
+}
+
 .youp-grid-vue__header-button {
   display: flex;
   width: 100%;

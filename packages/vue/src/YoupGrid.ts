@@ -2,6 +2,7 @@ import type {
   ColumnAlign,
   ColumnDef,
   ColumnEditorOption,
+  ColumnEditorOptionValue,
   ColumnPin,
   GridCellRange,
   GridRowId,
@@ -3052,6 +3053,30 @@ function renderDefaultCellContent<TRow>(context: {
         },
       }),
     );
+  } else if (context.column.editor === "tags") {
+    const tags = getTagDisplayItems(context.column, context.value);
+
+    if (tags.length === 0 && context.column.placeholder) {
+      children.push(h("span", { class: "youp-grid-vue__placeholder" }, context.column.placeholder));
+    } else {
+      children.push(
+        h(
+          "span",
+          { class: "youp-grid-vue__tag-list" },
+          tags.map((tag, index) => renderTagChip(tag, `${tag.inputValue}-${index}`)),
+        ),
+      );
+    }
+  } else if (context.column.editor === "select" || context.column.editor === "combobox") {
+    const option = findColumnEditorOptionByValue(context.column.options, context.value);
+
+    if (option?.color || option?.description) {
+      children.push(renderOptionBadge(option));
+    } else if (context.formattedValue.length === 0 && context.column.placeholder) {
+      children.push(h("span", { class: "youp-grid-vue__placeholder" }, context.column.placeholder));
+    } else {
+      children.push(context.formattedValue);
+    }
   } else if (context.formattedValue.length === 0 && context.column.placeholder) {
     children.push(h("span", { class: "youp-grid-vue__placeholder" }, context.column.placeholder));
   } else {
@@ -3059,6 +3084,53 @@ function renderDefaultCellContent<TRow>(context: {
   }
 
   return children;
+}
+
+function renderOptionBadge(option: NormalizedEditorOption) {
+  return h(
+    "span",
+    {
+      class: [
+        "youp-grid-vue__option-badge",
+        option.disabled ? "youp-grid-vue__option-badge--disabled" : undefined,
+      ],
+      title: option.description,
+    },
+    [
+      option.color
+        ? h("span", {
+            class: "youp-grid-vue__option-color",
+            style: { "--youp-grid-vue-option-color": option.color } as StyleValue,
+            "aria-hidden": "true",
+          })
+        : undefined,
+      h("span", { class: "youp-grid-vue__option-label" }, option.label),
+    ],
+  );
+}
+
+function renderTagChip(option: NormalizedEditorOption, key: string) {
+  return h(
+    "span",
+    {
+      key,
+      class: [
+        "youp-grid-vue__tag",
+        option.disabled ? "youp-grid-vue__tag--disabled" : undefined,
+      ],
+      title: option.description,
+    },
+    [
+      option.color
+        ? h("span", {
+            class: "youp-grid-vue__tag-color",
+            style: { "--youp-grid-vue-option-color": option.color } as StyleValue,
+            "aria-hidden": "true",
+          })
+        : undefined,
+      h("span", { class: "youp-grid-vue__tag-label" }, option.label),
+    ],
+  );
 }
 
 function renderEditor<TRow>(context: {
@@ -3116,11 +3188,48 @@ function renderEditor<TRow>(context: {
           "option",
           {
             value: String(getColumnEditorOptionValue(option)),
+            disabled: isColumnEditorOptionDisabled(option),
+            title: getColumnEditorOptionDescription(option),
           },
           getColumnEditorOptionLabel(option),
         ),
       ),
     );
+  }
+
+  if (context.column.editor === "combobox") {
+    const listId = `youp-grid-vue-combobox-${getCellKey(context.rowNode.id, context.column.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+    return [
+      h("input", {
+        ...commonProps,
+        class: "youp-grid-vue__editor youp-grid-vue__editor--combobox",
+        type: "text",
+        list: listId,
+        placeholder: context.column.placeholder,
+        onInput: (event: Event) => {
+          const target = event.target as HTMLInputElement;
+          context.updateDraft(target.value);
+        },
+      }),
+      h(
+        "datalist",
+        { id: listId },
+        normalizeEditorOptions(context.column.options)
+          .filter((option) => !option.disabled)
+          .map((option) =>
+            h(
+              "option",
+              { value: option.label },
+              option.description,
+            ),
+          ),
+      ),
+    ];
+  }
+
+  if (context.column.editor === "tags") {
+    return renderTagsEditor(context);
   }
 
   return h("input", {
@@ -3131,6 +3240,125 @@ function renderEditor<TRow>(context: {
       context.updateDraft(target.value);
     },
   });
+}
+
+function renderTagsEditor<TRow>(context: {
+  rowNode: RowNode<TRow>;
+  column: ResolvedColumnDef<TRow>;
+  draft: string;
+  updateDraft: (draft: string) => void;
+  cancelCellEdit: () => void;
+  commitCellEdit: (
+    rowNode: RowNode<TRow>,
+    column: ResolvedColumnDef<TRow>,
+    reason: YoupGridCellEditCommitReason,
+    draft?: string,
+  ) => void;
+}) {
+  const parts = parseTagEditorDraft(context.draft);
+  const tags = parts.tags.map((tag) => getTagDisplayItem(context.column, tag));
+  const commitDraft = (reason: YoupGridCellEditCommitReason, draft: string) =>
+    context.commitCellEdit(context.rowNode, context.column, reason, draft);
+  const handleInputKeydown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    const target = event.currentTarget as HTMLInputElement;
+    const input = target.value;
+
+    if ((event.key === "Enter" || event.key === ",") && input.trim().length > 0) {
+      event.preventDefault();
+      context.updateDraft(serializeTagEditorDraft([...parts.tags, input], ""));
+      return;
+    }
+
+    if (event.key === "Backspace" && input.length === 0 && parts.tags.length > 0) {
+      event.preventDefault();
+      context.updateDraft(serializeTagEditorDraft(parts.tags.slice(0, -1), ""));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitDraft("enter", serializeTagEditorDraft(parts.tags, ""));
+      return;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      commitDraft("tab", serializeTagEditorDraftWithInput(parts.tags, input));
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      context.cancelCellEdit();
+    }
+  };
+
+  return h(
+    "div",
+    {
+      class: "youp-grid-vue__editor youp-grid-vue__editor--tags",
+      onClick: (event: MouseEvent) => event.stopPropagation(),
+    },
+    [
+      ...tags.map((tag, index) =>
+        h(
+          "span",
+          {
+            key: `${tag.inputValue}-${index}`,
+            class: [
+              "youp-grid-vue__tag",
+              tag.disabled ? "youp-grid-vue__tag--disabled" : undefined,
+            ],
+            title: tag.description,
+          },
+          [
+            tag.color
+              ? h("span", {
+                  class: "youp-grid-vue__tag-color",
+                  style: { "--youp-grid-vue-option-color": tag.color } as StyleValue,
+                  "aria-hidden": "true",
+                })
+              : undefined,
+            h("span", { class: "youp-grid-vue__tag-label" }, tag.label),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "youp-grid-vue__tag-remove",
+                "aria-label": `Remove ${tag.label}`,
+                onMousedown: (event: MouseEvent) => event.preventDefault(),
+                onClick: (event: MouseEvent) => {
+                  event.stopPropagation();
+                  context.updateDraft(serializeTagEditorDraft(
+                    parts.tags.filter((_, tagIndex) => tagIndex !== index),
+                    parts.input,
+                  ));
+                },
+              },
+              "×",
+            ),
+          ],
+        ),
+      ),
+      h("input", {
+        class: "youp-grid-vue__editor youp-grid-vue__tag-input",
+        autofocus: true,
+        value: parts.input,
+        placeholder: tags.length === 0 ? context.column.placeholder : undefined,
+        onClick: (event: MouseEvent) => event.stopPropagation(),
+        onInput: (event: Event) => {
+          const target = event.target as HTMLInputElement;
+          context.updateDraft(serializeTagEditorDraft(parts.tags, target.value));
+        },
+        onKeydown: handleInputKeydown,
+        onBlur: (event: FocusEvent) => {
+          const target = event.currentTarget as HTMLInputElement;
+          commitDraft("blur", serializeTagEditorDraftWithInput(parts.tags, target.value));
+        },
+      }),
+    ],
+  );
 }
 
 function renderHeaderSlot<TRow>(
@@ -3158,6 +3386,18 @@ function formatCellValue<TRow>(
     return "";
   }
 
+  if (column.editor === "select" || column.editor === "combobox") {
+    const option = findColumnEditorOptionByValue(column.options, value);
+
+    if (option) {
+      return option.label;
+    }
+  }
+
+  if (column.editor === "tags") {
+    return getTagDisplayItems(column, value).map((tag) => tag.label).join(", ");
+  }
+
   return String(value);
 }
 
@@ -3178,11 +3418,23 @@ function getCellEditContext<TRow>(
 
 function getEditorDraftValue<TRow>(column: ResolvedColumnDef<TRow>, value: unknown): string {
   if (column.editor === "select") {
-    const option = findColumnEditorOption(column.options, value);
+    const option = findColumnEditorOptionByValue(column.options, value);
 
-    if (option !== undefined) {
-      return String(getColumnEditorOptionValue(option));
+    if (option) {
+      return option.inputValue;
     }
+  }
+
+  if (column.editor === "combobox") {
+    const option = findColumnEditorOptionByValue(column.options, value);
+
+    if (option) {
+      return option.label;
+    }
+  }
+
+  if (column.editor === "tags") {
+    return serializeTagEditorDraft(getTagDisplayItems(column, value).map((tag) => tag.label), "");
   }
 
   if (value === null || value === undefined) {
@@ -3205,12 +3457,16 @@ function parseEditorValue<TRow>(
     return draft.trim().length === 0 ? "" : Number(draft);
   }
 
-  if (column.editor === "select") {
-    const option = findColumnEditorOption(column.options, draft);
+  if (column.editor === "select" || column.editor === "combobox") {
+    const option = findColumnEditorOptionByInput(column.options, draft);
 
-    if (option !== undefined) {
-      return getColumnEditorOptionValue(option);
+    if (option) {
+      return option.value;
     }
+  }
+
+  if (column.editor === "tags") {
+    return parseTagEditorValue(column, draft);
   }
 
   return draft;
@@ -3748,20 +4004,139 @@ function isSameRowIdValue(value: unknown, rowId: GridRowId | undefined): boolean
     ((typeof value === "string" || typeof value === "number") && String(value) === String(rowId));
 }
 
-function findColumnEditorOption(
+type NormalizedEditorOption = {
+  value: ColumnEditorOptionValue;
+  label: string;
+  inputValue: string;
+  disabled: boolean;
+  color?: string;
+  description?: string;
+};
+
+function normalizeEditorOptions(options?: readonly ColumnEditorOption[]): NormalizedEditorOption[] {
+  return (options ?? []).map((option) => {
+    const value = getColumnEditorOptionValue(option);
+
+    return {
+      value,
+      label: getColumnEditorOptionLabel(option),
+      inputValue: String(value),
+      disabled: isColumnEditorOptionDisabled(option),
+      color: getColumnEditorOptionColor(option),
+      description: getColumnEditorOptionDescription(option),
+    };
+  });
+}
+
+function findColumnEditorOptionByValue(
   options: readonly ColumnEditorOption[] | undefined,
   value: unknown,
-): ColumnEditorOption | undefined {
-  return options?.find((option) => Object.is(getColumnEditorOptionValue(option), value)) ??
-    options?.find((option) => String(getColumnEditorOptionValue(option)) === String(value));
+): NormalizedEditorOption | undefined {
+  const normalizedOptions = normalizeEditorOptions(options);
+
+  return normalizedOptions.find((option) => Object.is(option.value, value)) ??
+    normalizedOptions.find((option) => option.inputValue === String(value));
 }
 
-function getColumnEditorOptionValue(option: ColumnEditorOption) {
-  return isObjectRecord(option) && "value" in option ? option.value : option;
+function findColumnEditorOptionByInput(
+  options: readonly ColumnEditorOption[] | undefined,
+  input: string,
+): NormalizedEditorOption | undefined {
+  return normalizeEditorOptions(options)
+    .filter((option) => !option.disabled)
+    .find((option) => option.inputValue === input || option.label === input);
 }
 
-function getColumnEditorOptionLabel(option: ColumnEditorOption) {
+function getColumnEditorOptionValue(option: ColumnEditorOption): ColumnEditorOptionValue {
+  return isObjectRecord(option) && "value" in option ? option.value as ColumnEditorOptionValue : option;
+}
+
+function getColumnEditorOptionLabel(option: ColumnEditorOption): string {
   return isObjectRecord(option) && "label" in option ? String(option.label) : String(option);
+}
+
+function isColumnEditorOptionDisabled(option: ColumnEditorOption): boolean {
+  return isObjectRecord(option) && option.disabled === true;
+}
+
+function getColumnEditorOptionColor(option: ColumnEditorOption): string | undefined {
+  return isObjectRecord(option) && typeof option.color === "string" ? option.color : undefined;
+}
+
+function getColumnEditorOptionDescription(option: ColumnEditorOption): string | undefined {
+  return isObjectRecord(option) && typeof option.description === "string" ? option.description : undefined;
+}
+
+function parseTagEditorDraft(draft: string): { tags: string[]; input: string } {
+  if (!draft.includes(",")) {
+    return { tags: [], input: draft };
+  }
+
+  const parts = draft.split(",");
+  const input = draft.endsWith(",") ? "" : parts.pop() ?? "";
+
+  return {
+    tags: parts.map((part) => part.trim()).filter(Boolean),
+    input: input.trimStart(),
+  };
+}
+
+function serializeTagEditorDraft(tags: readonly string[], input: string): string {
+  const cleanTags = tags.map((tag) => tag.trim()).filter(Boolean);
+  const cleanInput = input.trimStart();
+
+  if (cleanInput.length > 0) {
+    return cleanTags.length > 0 ? `${cleanTags.join(", ")}, ${cleanInput}` : cleanInput;
+  }
+
+  return cleanTags.length > 0 ? `${cleanTags.join(", ")},` : "";
+}
+
+function serializeTagEditorDraftWithInput(tags: readonly string[], input: string): string {
+  const cleanInput = input.trim();
+
+  return cleanInput.length > 0
+    ? serializeTagEditorDraft([...tags, cleanInput], "")
+    : serializeTagEditorDraft(tags, "");
+}
+
+function parseTagEditorValue<TRow>(column: ResolvedColumnDef<TRow>, draft: string): unknown[] {
+  const parts = parseTagEditorDraft(draft);
+  const tagInputs = parts.input.trim().length > 0 ? [...parts.tags, parts.input] : parts.tags;
+
+  return tagInputs.map((tag) => findColumnEditorOptionByInput(column.options, tag)?.value ?? tag);
+}
+
+function getTagDisplayItems<TRow>(
+  column: ResolvedColumnDef<TRow>,
+  value: unknown,
+): NormalizedEditorOption[] {
+  return getTagInputValues(value).map((tag) => getTagDisplayItem(column, tag));
+}
+
+function getTagDisplayItem<TRow>(column: ResolvedColumnDef<TRow>, value: unknown): NormalizedEditorOption {
+  return findColumnEditorOptionByValue(column.options, value) ?? {
+    value: String(value ?? ""),
+    label: String(value ?? ""),
+    inputValue: String(value ?? ""),
+    disabled: false,
+  };
+}
+
+function getTagInputValues(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return [];
+  }
+
+  if (typeof value === "string" && value.includes(",")) {
+    return value.split(",").map((part) => part.trim()).filter(Boolean);
+  }
+
+  return [value];
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

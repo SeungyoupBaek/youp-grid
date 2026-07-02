@@ -94,6 +94,54 @@ test("YoupGrid renders headers and rows", async () => {
   assert.match(html, /Kim/);
 });
 
+test("YoupGrid renders select labels and tag chips", async () => {
+  type Task = {
+    id: string;
+    status: string;
+    tags: string[];
+  };
+  const taskRows: Task[] = [
+    { id: "1", status: "open", tags: ["priority", "review"] },
+  ];
+  const taskColumns: ColumnDef<Task>[] = [
+    {
+      field: "status",
+      headerName: "Status",
+      editor: "select",
+      options: [
+        { value: "open", label: "Open", color: "#2563eb", description: "Active item" },
+        { value: "closed", label: "Closed", disabled: true },
+      ],
+    },
+    {
+      field: "tags",
+      headerName: "Tags",
+      editor: "tags",
+      options: [
+        { value: "priority", label: "Priority", color: "#dc2626" },
+        { value: "review", label: "Review", color: "#d97706" },
+      ],
+    },
+  ];
+  const app = createSSRApp({
+    render: () =>
+      h(YoupGrid, {
+        rows: taskRows,
+        columns: taskColumns,
+        getRowId: (row: Task) => row.id,
+      }),
+  });
+
+  const html = await renderToString(app);
+
+  assert.match(html, /youp-grid-vue__option-badge/);
+  assert.match(html, /Open/);
+  assert.match(html, /Active item/);
+  assert.match(html, /youp-grid-vue__tag-list/);
+  assert.match(html, /Priority/);
+  assert.match(html, /Review/);
+});
+
 test("YoupGrid renders optional pagination footer", async () => {
   const app = createSSRApp({
     render: () =>

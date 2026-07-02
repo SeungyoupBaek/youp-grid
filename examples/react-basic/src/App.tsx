@@ -9,21 +9,48 @@ type Trade = {
   id: string;
   desk: string;
   symbol: string;
+  strategy: string;
   quantity: number;
   price: number;
   status: "Open" | "Filled" | "Rejected";
+  tags: string[];
 };
 
 const initialRows: Trade[] = Array.from({ length: 10000 }, (_, index) => ({
   id: `trade-${index + 1}`,
   desk: ["Equity", "Rates", "Credit", "FX"][index % 4],
   symbol: ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"][index % 5],
+  strategy: ["Momentum", "Hedge", "Rebalance", "Carry"][index % 4],
   quantity: 100 + index * 3,
   price: Number((92 + (index % 37) * 1.73).toFixed(2)),
   status: index % 9 === 0 ? "Rejected" : index % 3 === 0 ? "Filled" : "Open",
+  tags: [
+    index % 4 === 0 ? "priority" : "auto",
+    index % 7 === 0 ? "review" : "desk",
+  ],
 }));
 
 const packageVersion = rootPackage.version;
+const deskOptions = [
+  { value: "Equity", label: "Equity", color: "#2563eb" },
+  { value: "Rates", label: "Rates", color: "#7c3aed" },
+  { value: "Credit", label: "Credit", color: "#0891b2" },
+  { value: "FX", label: "FX", color: "#059669" },
+];
+const symbolOptions = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META"];
+const strategyOptions = ["Momentum", "Hedge", "Rebalance", "Carry", "Manual override"];
+const statusOptions = [
+  { value: "Open", label: "Open", color: "#2563eb", description: "Working order" },
+  { value: "Filled", label: "Filled", color: "#16a34a", description: "Completed order" },
+  { value: "Rejected", label: "Rejected", color: "#dc2626", description: "Rejected by venue" },
+];
+const tagOptions = [
+  { value: "priority", label: "Priority", color: "#dc2626" },
+  { value: "review", label: "Review", color: "#d97706" },
+  { value: "auto", label: "Auto", color: "#2563eb" },
+  { value: "desk", label: "Desk", color: "#64748b" },
+  { value: "hedged", label: "Hedged", color: "#059669" },
+];
 
 export function App() {
   const [rows, setRows] = useState(initialRows);
@@ -50,14 +77,39 @@ export function App() {
   });
   const columns = useMemo<ColumnDef<Trade>[]>(
     () => [
-      { field: "desk", headerName: "Desk", width: 140, editable: true },
-      { field: "symbol", headerName: "Symbol", width: 120, editable: true },
+      {
+        field: "desk",
+        headerName: "Desk",
+        width: 140,
+        editable: true,
+        editor: "select",
+        options: deskOptions,
+      },
+      {
+        field: "symbol",
+        headerName: "Symbol",
+        width: 120,
+        editable: true,
+        editor: "combobox",
+        options: symbolOptions,
+        placeholder: "Ticker",
+      },
+      {
+        field: "strategy",
+        headerName: "Strategy",
+        width: 160,
+        editable: true,
+        editor: "combobox",
+        options: strategyOptions,
+        placeholder: "Type strategy",
+      },
       {
         field: "quantity",
         headerName: "Quantity",
         width: 140,
         minWidth: 110,
         editable: true,
+        editor: "number",
         valueParser: (value) => Number(value),
       },
       {
@@ -66,10 +118,28 @@ export function App() {
         width: 120,
         minWidth: 100,
         editable: true,
+        editor: "number",
         valueFormatter: (value) => `$${Number(value).toFixed(2)}`,
         valueParser: (value) => Number(value),
       },
-      { field: "status", headerName: "Status", width: 140, editable: true },
+      {
+        field: "status",
+        headerName: "Status",
+        width: 140,
+        editable: true,
+        editor: "select",
+        options: statusOptions,
+      },
+      {
+        field: "tags",
+        headerName: "Tags",
+        width: 190,
+        minWidth: 150,
+        editable: true,
+        editor: "tags",
+        options: tagOptions,
+        placeholder: "Add tag",
+      },
     ],
     [],
   );
@@ -291,7 +361,6 @@ export function App() {
             });
             setRowEvent(`Load more after ${rowCount} rows`);
           }}
-          renderCell={({ column, value }) => renderTradeCell(column.id, value)}
           editable
           loading={loading}
           loadingContent="Loading trades"
@@ -309,6 +378,7 @@ export function App() {
               <span>Desk {row.desk}</span>
               <span>{row.quantity.toLocaleString()} shares</span>
               <span>{row.status}</span>
+              <span>{row.tags.join(", ")}</span>
             </div>
           )}
           height={520}
@@ -322,28 +392,6 @@ function getCursorStart(cursor: string | undefined): number {
   const start = Number(cursor ?? 0);
 
   return Number.isFinite(start) && start > 0 ? start : 0;
-}
-
-function renderTradeCell(columnId: string, value: unknown) {
-  if (columnId === "status") {
-    const status = String(value ?? "");
-
-    return <span className={`trade-status trade-status--${status.toLowerCase()}`}>{status}</span>;
-  }
-
-  if (columnId === "symbol") {
-    return <span className="trade-symbol">{String(value ?? "")}</span>;
-  }
-
-  if (columnId === "quantity") {
-    return <span className="trade-number">{Number(value).toLocaleString()}</span>;
-  }
-
-  if (columnId === "price") {
-    return <span className="trade-number">${Number(value).toFixed(2)}</span>;
-  }
-
-  return <span>{String(value ?? "")}</span>;
 }
 
 function formatCurrencyCompact(value: number): string {
