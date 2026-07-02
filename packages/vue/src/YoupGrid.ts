@@ -3167,7 +3167,9 @@ function renderEditor<TRow>(context: {
     class: "youp-grid-vue__editor",
     autofocus: true,
     value: context.draft,
+    onMousedown: (event: MouseEvent) => event.stopPropagation(),
     onClick: (event: MouseEvent) => event.stopPropagation(),
+    onDblclick: (event: MouseEvent) => event.stopPropagation(),
     onKeydown: handleKeydown,
     onBlur: (event: FocusEvent) =>
       context.commitCellEdit(context.rowNode, context.column, "blur", readEditorValue(event)),
@@ -3298,7 +3300,9 @@ function renderTagsEditor<TRow>(context: {
     "div",
     {
       class: "youp-grid-vue__editor youp-grid-vue__editor--tags",
+      onMousedown: (event: MouseEvent) => event.stopPropagation(),
       onClick: (event: MouseEvent) => event.stopPropagation(),
+      onDblclick: (event: MouseEvent) => event.stopPropagation(),
     },
     [
       ...tags.map((tag, index) =>
@@ -3346,7 +3350,9 @@ function renderTagsEditor<TRow>(context: {
         autofocus: true,
         value: parts.input,
         placeholder: tags.length === 0 ? context.column.placeholder : undefined,
+        onMousedown: (event: MouseEvent) => event.stopPropagation(),
         onClick: (event: MouseEvent) => event.stopPropagation(),
+        onDblclick: (event: MouseEvent) => event.stopPropagation(),
         onInput: (event: Event) => {
           const target = event.target as HTMLInputElement;
           context.updateDraft(serializeTagEditorDraft(parts.tags, target.value));

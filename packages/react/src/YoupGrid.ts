@@ -3447,6 +3447,9 @@ function renderCellEditor<TRow>(context: {
         value: context.editingCell?.draftValue ?? "",
         autoFocus: true,
         disabled: !context.cell.editable,
+        onMouseDown: stopEditorMouseEvent,
+        onClick: stopEditorMouseEvent,
+        onDoubleClick: stopEditorMouseEvent,
         onChange: (event: ReactChangeEvent<HTMLSelectElement>) => {
           context.updateEditingDraft(event.currentTarget.value);
         },
@@ -3496,6 +3499,9 @@ function renderCellEditor<TRow>(context: {
         placeholder: context.cell.column.placeholder,
         autoFocus: true,
         disabled: !context.cell.editable,
+        onMouseDown: stopEditorMouseEvent,
+        onClick: stopEditorMouseEvent,
+        onDoubleClick: stopEditorMouseEvent,
         onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
           context.updateEditingDraft(event.currentTarget.value);
         },
@@ -3535,6 +3541,9 @@ function renderCellEditor<TRow>(context: {
     placeholder: context.cell.column.placeholder,
     autoFocus: true,
     disabled: !context.cell.editable,
+    onMouseDown: stopEditorMouseEvent,
+    onClick: stopEditorMouseEvent,
+    onDoubleClick: stopEditorMouseEvent,
     onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
       context.updateEditingDraft(event.currentTarget.value);
     },
@@ -3572,7 +3581,9 @@ function renderTagsEditor<TRow>(context: {
     "div",
     {
       className: "youp-grid__cell-editor youp-grid__cell-editor--tags",
+      onMouseDown: stopEditorMouseEvent,
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation(),
+      onDoubleClick: stopEditorMouseEvent,
     },
     tags.map((tag, index) =>
       createElement(
@@ -3618,6 +3629,9 @@ function renderTagsEditor<TRow>(context: {
       autoFocus: true,
       disabled: !context.cell.editable,
       "data-youp-editor-draft": serializeTagEditorDraft(parts.tags, parts.input),
+      onMouseDown: stopEditorMouseEvent,
+      onClick: stopEditorMouseEvent,
+      onDoubleClick: stopEditorMouseEvent,
       onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
         context.updateEditingDraft(serializeTagEditorDraft(parts.tags, event.currentTarget.value));
       },
@@ -3644,6 +3658,10 @@ function renderTagsEditor<TRow>(context: {
       },
     }),
   );
+}
+
+function stopEditorMouseEvent(event: ReactMouseEvent<HTMLElement>) {
+  event.stopPropagation();
 }
 
 function renderCellStatus(meta: YoupGridCellMeta | undefined, tooltipMode: YoupGridCellTooltipMode) {

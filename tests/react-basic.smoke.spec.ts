@@ -58,6 +58,16 @@ test("react basic demo supports grid interactions", async ({ page }) => {
   await page.keyboard.press("Tab");
   await expect(firstTagsCell).toContainText("Hedged");
 
+  const firstStatusCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="status"]');
+  await firstStatusCell.dblclick();
+  const selectEditor = page.locator(".youp-grid__cell-editor--select");
+  await expect(selectEditor).toBeVisible();
+  await selectEditor.click();
+  await expect(selectEditor).toBeVisible();
+  await selectEditor.selectOption("Open");
+  await page.keyboard.press("Enter");
+  await expect(firstStatusCell).toContainText("Open");
+
   await page.getByRole("button", { name: "Desk column menu" }).click();
   await expect(page.getByRole("menuitem", { name: "Move right" })).toBeEnabled();
   await page.getByRole("menuitem", { name: "Move right" }).click();
