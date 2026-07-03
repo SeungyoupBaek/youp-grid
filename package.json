@@ -28,7 +28,7 @@
   "scripts": {
     "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react && npm run build -w @youp-grid/vue && npm run build -w @youp-grid/vanilla",
     "build:pages": "npm run build && npm run build --prefix examples/react-basic -- --base=/youp-grid/",
-    "clean": "rm -rf packages/core/dist packages/react/dist packages/vue/dist",
+    "clean": "rm -rf packages/core/dist packages/react/dist packages/vue/dist packages/vanilla/dist",
     "pack:dry-run": "npm pack --workspaces --dry-run --cache /private/tmp/youp-grid-npm-cache",
     "publish:dry-run": "npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vanilla --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run",
     "check:parity": "node scripts/check-adapter-parity.mjs",

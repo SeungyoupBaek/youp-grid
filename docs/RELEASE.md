@@ -32,14 +32,16 @@ Update the root workspace version and all package versions together:
 - `packages/core/package.json`
 - `packages/react/package.json`
 - `packages/vue/package.json`
+- `packages/vanilla/package.json`
 - `package-lock.json`
 
-`@youp-grid/react` and `@youp-grid/vue` must depend on the same `@youp-grid/core` version.
+`@youp-grid/react`, `@youp-grid/vue`, and `@youp-grid/vanilla` must depend on the same `@youp-grid/core` version.
 
 ```sh
 npm version 0.0.0 --workspaces --include-workspace-root --no-git-tag-version
 npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/react
 npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/vue
+npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/vanilla
 npm install --package-lock-only --ignore-scripts --fund=false --audit=false
 npm run release:check
 ```
@@ -52,6 +54,7 @@ Publish from core to adapters. Enter OTP only in the npm prompt when required; d
 npm publish -w @youp-grid/core --access public
 npm publish -w @youp-grid/react --access public
 npm publish -w @youp-grid/vue --access public
+npm publish -w @youp-grid/vanilla --access public
 ```
 
 If the local npm cache has permission issues, use the project release cache explicitly:
@@ -60,6 +63,7 @@ If the local npm cache has permission issues, use the project release cache expl
 npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
+npm publish -w @youp-grid/vanilla --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 ```
 
 ## Verify
@@ -68,6 +72,7 @@ npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.
 npm view @youp-grid/core version
 npm view @youp-grid/react version
 npm view @youp-grid/vue version
+npm view @youp-grid/vanilla version
 ```
 
 Create and push a git tag, then create the GitHub release after the npm versions are visible:

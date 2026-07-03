@@ -16,10 +16,12 @@ const packagePaths = [
   "packages/core",
   "packages/react",
   "packages/vue",
+  "packages/vanilla",
 ];
 const adapterPaths = [
   "packages/react",
   "packages/vue",
+  "packages/vanilla",
 ];
 const errors = [];
 

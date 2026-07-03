@@ -6,6 +6,17 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+- No unreleased changes.
+
+## [0.3.0] - 2026-07-03
+
+- Add advanced grid features across core, React, and Vue, including advanced filters, pinned rows, column presets, fit-to-width sizing, row reorder helpers, import helpers, and state persistence.
+- Add the first `@youp-grid/vanilla` package.
+- Add React demo coverage for accessibility and visual smoke checks.
+- Align release metadata, package versions, and publish flow for all public packages.
+
+## [0.2.17] - 2026-07-03
+
 - Add public contribution, security, and GitHub maintenance templates.
 - Improve npm package metadata for open-source discovery.
 - Add release metadata checks for workspace version, package-lock, and adapter core dependency alignment.
