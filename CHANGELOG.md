@@ -8,6 +8,11 @@ The project follows semantic versioning while the public API stabilizes.
 
 - No unreleased changes.
 
+## [0.3.1] - 2026-07-03
+
+- Fix advanced header filters clipping in narrow columns.
+- Align right-pinned React header and aggregation cells with the body scrollbar gutter.
+
 ## [0.3.0] - 2026-07-03
 
 - Add advanced grid features across core, React, and Vue, including advanced filters, pinned rows, column presets, fit-to-width sizing, row reorder helpers, import helpers, and state persistence.

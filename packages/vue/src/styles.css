@@ -648,8 +648,9 @@
 
 .youp-grid-vue__advanced-filter {
   display: grid;
-  grid-template-columns: minmax(74px, auto) minmax(70px, 1fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 4px;
+  min-width: 0;
   padding: 0 8px 8px;
 }
 
@@ -659,6 +660,7 @@
 }
 
 .youp-grid-vue__filter-operator {
+  width: 100%;
   min-width: 0;
   height: 26px;
   padding: 3px 4px;

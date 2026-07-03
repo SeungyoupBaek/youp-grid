@@ -122,6 +122,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [columnChooserSearch, setColumnChooserSearch] = useState("");
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
   const [cellContextMenu, setCellContextMenu] = useState<CellContextMenuState | undefined>();
+  const [bodyScrollbarWidth, setBodyScrollbarWidth] = useState(0);
   const [rowClipboard, setRowClipboard] = useState<RowClipboardEntry<TRow>[]>([]);
   const [internalExpandedDetailRowIds, setInternalExpandedDetailRowIds] = useState<GridRowId[]>(() => [
     ...(props.defaultExpandedDetailRowIds ?? []),
@@ -528,6 +529,37 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       return { ...current, placement };
     });
   });
+
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+
+    if (!body) {
+      return;
+    }
+
+    const updateScrollbarWidth = () => {
+      const nextWidth = Math.max(0, body.offsetWidth - body.clientWidth);
+      setBodyScrollbarWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(updateScrollbarWidth);
+
+    updateScrollbarWidth();
+    resizeObserver?.observe(body);
+    window.addEventListener("resize", updateScrollbarWidth);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollbarWidth);
+    };
+  }, [
+    displayRows.length,
+    rowHeight,
+    rowModel.pinnedBottomRows.length,
+    rowModel.pinnedTopRows.length,
+    viewportHeight,
+  ]);
 
   useEffect(() => {
     if (cellTooltipMode !== "rich") {
@@ -1459,7 +1491,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
               showRowSelectionColumn
                 ? renderSelectionHeaderGroupCell(selectionColumnOffset)
                 : undefined,
-              headerGroupLayouts.map((layout) => renderHeaderGroupCell(layout)),
+              headerGroupLayouts.map((layout) => renderHeaderGroupCell(layout, bodyScrollbarWidth)),
             )
           : undefined,
         createElement(
@@ -1508,6 +1540,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                 }
               },
               resizeColumn: (width) => controller.setColumnWidth(layout.column.id, width),
+              rightPinnedOffset: bodyScrollbarWidth,
               dragged: draggedColumnId === layout.column.id,
               dragOver: dragOverColumnId === layout.column.id && draggedColumnId !== layout.column.id,
               startColumnDrag: (event) => {
@@ -1918,6 +1951,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         showRowNumberColumn,
         showSelectionColumn: showRowSelectionColumn,
         selectionColumnOffset,
+        rightPinnedOffset: bodyScrollbarWidth,
       }),
     ),
     cellContextMenuPortal,
@@ -1983,6 +2017,7 @@ function renderAggregationFooter<TRow>(context: {
   showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
   selectionColumnOffset: number;
+  rightPinnedOffset: number;
 }) {
   if (!context.enabled) {
     return undefined;
@@ -2007,7 +2042,7 @@ function renderAggregationFooter<TRow>(context: {
             key: layout.column.id,
             className: getCellClassName("youp-grid__cell youp-grid__cell--aggregation", layout),
             role: "gridcell",
-            style: getCellStyle(layout),
+            style: getCellStyle(layout, { rightPinnedOffset: context.rightPinnedOffset }),
           },
           results.map(formatAggregationResult).join(" · "),
         );
@@ -2066,7 +2101,7 @@ function formatAggregationValue(value: number | undefined): string {
   return value.toFixed(2);
 }
 
-function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>) {
+function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>, rightPinnedOffset = 0) {
   return createElement(
     "div",
     {
@@ -2075,7 +2110,7 @@ function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>) {
       role: "columnheader",
       "aria-colspan": layout.columnCount,
       "aria-hidden": layout.headerGroup ? undefined : true,
-      style: getHeaderGroupStyle(layout),
+      style: getHeaderGroupStyle(layout, { rightPinnedOffset }),
     },
     layout.headerGroup ?? "",
   );
@@ -2196,6 +2231,7 @@ function renderHeaderCell<TRow>(context: {
   canResetColumnOrder: boolean;
   resetColumnOrder: () => void;
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
+  rightPinnedOffset: number;
 }) {
   const sortable = context.layout.column.sortable !== false;
   const filterValue = getFilterRuleValue(context.filterRule);
@@ -2216,7 +2252,7 @@ function renderHeaderCell<TRow>(context: {
         context.layout,
       ),
       role: "columnheader",
-      style: getCellStyle(context.layout),
+      style: getCellStyle(context.layout, { rightPinnedOffset: context.rightPinnedOffset }),
       "aria-sort": context.sorted === "desc" ? "descending" : context.sorted === "asc" ? "ascending" : "none",
       "data-youp-column-id": context.layout.column.id,
       draggable: true,
@@ -4546,7 +4582,10 @@ function getHeaderGroupClassName<TRow>(layout: HeaderGroupLayout<TRow>): string 
     .join(" ");
 }
 
-function getCellStyle<TRow>(layout: ColumnLayout<TRow>): CSSProperties {
+function getCellStyle<TRow>(
+  layout: ColumnLayout<TRow>,
+  options: { rightPinnedOffset?: number } = {},
+): CSSProperties {
   const width = getColumnWidth(layout.column);
   const style: CSSProperties = {
     width,
@@ -4558,13 +4597,16 @@ function getCellStyle<TRow>(layout: ColumnLayout<TRow>): CSSProperties {
   }
 
   if (layout.pinned === "right") {
-    style.right = layout.stickyOffset ?? 0;
+    style.right = (layout.stickyOffset ?? 0) + (options.rightPinnedOffset ?? 0);
   }
 
   return style;
 }
 
-function getHeaderGroupStyle<TRow>(layout: HeaderGroupLayout<TRow>): CSSProperties {
+function getHeaderGroupStyle<TRow>(
+  layout: HeaderGroupLayout<TRow>,
+  options: { rightPinnedOffset?: number } = {},
+): CSSProperties {
   const style: CSSProperties = {
     width: layout.width,
     flex: `0 0 ${layout.width}px`,
@@ -4575,7 +4617,7 @@ function getHeaderGroupStyle<TRow>(layout: HeaderGroupLayout<TRow>): CSSProperti
   }
 
   if (layout.pinned === "right") {
-    style.right = layout.stickyOffset ?? 0;
+    style.right = (layout.stickyOffset ?? 0) + (options.rightPinnedOffset ?? 0);
   }
 
   return style;
