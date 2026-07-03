@@ -12,10 +12,14 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
   const columns = applyColumnState(normalizeColumns(options.columns), options.state?.columns);
   const visibleColumns = getVisibleColumns(columns);
   const allRows = createRowNodes(options.rows, options.getRowId);
+  const pinnedTopRows = createRowNodes(options.pinnedTopRows ?? [], options.getRowId);
+  const pinnedBottomRows = createRowNodes(options.pinnedBottomRows ?? [], options.getRowId);
 
   if (options.rowModelType === "server") {
     return buildServerRowModel({
       allRows,
+      pinnedTopRows,
+      pinnedBottomRows,
       columns,
       visibleColumns,
       state: options.state,
@@ -45,6 +49,8 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
     sortedRows,
     visibleRows: paginated.rows,
     displayRows,
+    pinnedTopRows,
+    pinnedBottomRows,
     aggregation,
     totalRowCount: allRows.length,
     filteredRowCount: filteredRows.length,
@@ -55,6 +61,8 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
 
 function buildServerRowModel<TRow>(context: {
   allRows: RowNode<TRow>[];
+  pinnedTopRows: RowNode<TRow>[];
+  pinnedBottomRows: RowNode<TRow>[];
   columns: RowModel<TRow>["columns"];
   visibleColumns: RowModel<TRow>["visibleColumns"];
   state: BuildRowModelOptions<TRow>["state"];
@@ -79,6 +87,8 @@ function buildServerRowModel<TRow>(context: {
     sortedRows: context.allRows,
     visibleRows,
     displayRows: applyRowGrouping(visibleRows, context.columns, context.state?.rowGrouping),
+    pinnedTopRows: context.pinnedTopRows,
+    pinnedBottomRows: context.pinnedBottomRows,
     aggregation: applyAggregation(context.allRows, context.columns, context.state?.aggregation),
     totalRowCount,
     filteredRowCount,

@@ -3,6 +3,7 @@
 [![npm core](https://img.shields.io/npm/v/@youp-grid/core?label=@youp-grid/core&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/core)
 [![npm react](https://img.shields.io/npm/v/@youp-grid/react?label=@youp-grid/react&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/react)
 [![npm vue](https://img.shields.io/npm/v/@youp-grid/vue?label=@youp-grid/vue&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/vue)
+[![npm vanilla](https://img.shields.io/npm/v/@youp-grid/vanilla?label=@youp-grid/vanilla&cacheSeconds=300)](https://www.npmjs.com/package/@youp-grid/vanilla)
 
 Framework-agnostic data grid core for building UI adapters such as React, Vue, Angular, Svelte, Vanilla JS, or Web Components.
 
@@ -10,7 +11,7 @@ Youp Grid is an MIT-licensed open-source project maintained in public on GitHub.
 
 Try the live demo at [seungyoupbaek.github.io/youp-grid](https://seungyoupbaek.github.io/youp-grid/).
 
-This repository starts with a reusable engine, a React UI adapter, and a Vue adapter:
+This repository starts with a reusable engine, React and Vue UI adapters, and a small Vanilla DOM adapter:
 
 - column normalization
 - typed row model generation
@@ -21,6 +22,7 @@ This repository starts with a reusable engine, a React UI adapter, and a Vue ada
 - serializable grid state helpers
 - reusable React editing, selection, tooltip, and row operation UI
 - reusable Vue 3 component and composable for grid editing, state, and row-model integration
+- reusable Vanilla DOM renderer for framework-free screens
 
 The first goal is not to copy every AG Grid feature. The goal is to keep reusable grid behavior small and stable so application screens can adopt it incrementally.
 
@@ -31,6 +33,7 @@ The first goal is not to copy every AG Grid feature. The goal is to keep reusabl
 | `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, tree data, and data helpers. |
 | `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, row actions, tooltips, and bundled styles. |
 | `@youp-grid/vue` | Vue 3 adapter with a basic editable grid component plus reactive state, row model, sorting, filtering, pagination, selection, grouping, and tree helpers. |
+| `@youp-grid/vanilla` | Vanilla DOM adapter for framework-free rendering with the core row model. |
 
 ## Installation
 
@@ -50,6 +53,15 @@ npm install @youp-grid/core @youp-grid/vue
 ```ts
 import { YoupGrid, useYoupGrid } from "@youp-grid/vue";
 import "@youp-grid/vue/styles.css";
+```
+
+```sh
+npm install @youp-grid/core @youp-grid/vanilla
+```
+
+```ts
+import { createYoupGrid } from "@youp-grid/vanilla";
+import "@youp-grid/vanilla/styles.css";
 ```
 
 ## Core API
@@ -196,13 +208,18 @@ Implemented now:
 - core package
 - React adapter package
 - Vue adapter package
+- Vanilla DOM adapter package
 - row, column, and selection state helpers
+- grid state persistence helpers
 - fixed-height and master-detail virtualized React body renderers
 - built-in header filters
+- advanced filter operator UI
 - pagination controls
 - column resize handles and double-click auto-size
+- size columns to fit helper and toolbar action
 - column drag reorder within the same pin group
 - column chooser with visibility controls
+- column chooser search and presets
 - column menu for sort, pin, order, reset order, hide, and filter actions
 - grouped headers
 - density control
@@ -216,6 +233,8 @@ Implemented now:
 - inline cell editing
 - edit commit events with enter, tab, and blur reasons
 - text, number, checkbox, and select editors
+- date and datetime editors
+- custom React editor render prop and Vue editor slots
 - cell placeholders and column alignment
 - cell status metadata with native or rich tooltips
 - read-only and per-cell edit guards
@@ -225,6 +244,7 @@ Implemented now:
 - fill handle for repeated cell values
 - undo/redo for cell value changes
 - CSV and Excel export
+- delimited CSV/TSV import helper
 - loading and error overlays
 - server-side row model contract
 - cursor pagination adapter
@@ -235,11 +255,15 @@ Implemented now:
 - row grouping
 - tree data
 - expandable master-detail rows
+- pinned top and bottom rows
+- controlled row drag reorder
 - basic editable Vue grid component
 - Vue cell metadata and native/rich cell tooltips
 - Vite React demo
 - GitHub Pages live demo
 - Playwright interaction smoke test
+- accessibility and visual smoke tests
+- React/Vue adapter parity check script
 - static HTML preview
 - npm package publishing setup
 

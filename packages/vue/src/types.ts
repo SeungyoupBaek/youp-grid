@@ -4,6 +4,8 @@ import type {
   ColumnAlign,
   ColumnPin,
   CursorPaginationState,
+  FilterOperator,
+  FilterRule,
   GridRowId,
   GridRowModelType,
   GridState,
@@ -35,6 +37,8 @@ export type YoupGridOptions<TRow> = {
   serverFilteredRowCount?: number;
   rowHeight?: number;
   overscan?: number;
+  pinnedTopRows?: readonly TRow[];
+  pinnedBottomRows?: readonly TRow[];
   infiniteScroll?: boolean;
   infiniteScrollThreshold?: number;
   infiniteScrollLoading?: boolean;
@@ -42,6 +46,13 @@ export type YoupGridOptions<TRow> = {
 };
 
 export type YoupGridDensity = "compact" | "standard" | "comfortable";
+export type YoupGridFilterMode = "text" | "advanced";
+
+export type YoupGridColumnPreset = {
+  id: string;
+  label: string;
+  columnIds: readonly string[];
+};
 
 export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   className?: string;
@@ -60,7 +71,9 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   showCsvExport?: boolean;
   showExcelExport?: boolean;
   showDensityControl?: boolean;
+  showSizeColumnsToFit?: boolean;
   showFilters?: boolean;
+  filterMode?: YoupGridFilterMode;
   csvFileName?: string;
   excelFileName?: string;
   density?: YoupGridDensity;
@@ -70,6 +83,7 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
   showCellContextMenu?: boolean;
+  rowDragReorder?: boolean;
   detailRowHeight?: number;
   expandedDetailRowIds?: readonly GridRowId[];
   defaultExpandedDetailRowIds?: readonly GridRowId[];
@@ -82,6 +96,8 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   cellMeta?: Record<string, YoupGridCellMeta | undefined>;
   getCellMeta?: (context: YoupGridCanEditCellContext<TRow>) => YoupGridCellMeta | undefined;
   cellTooltip?: YoupGridCellTooltipOptions;
+  columnPresets?: readonly YoupGridColumnPreset[];
+  onColumnPresetApply?: (preset: YoupGridColumnPreset) => void;
 };
 
 export type YoupGridPaginationOptions = {
@@ -232,7 +248,7 @@ export type YoupGridRowChange<TRow> = YoupGridRowInsertChange<TRow> | YoupGridRo
 export type YoupGridRowsChange<TRow> = {
   rows: TRow[];
   changes: YoupGridRowChange<TRow>[];
-  source: "context-menu" | "clipboard";
+  source: "context-menu" | "clipboard" | "row-drag";
 };
 
 export type YoupGridRowsEndReachedEvent<TRow> = {
@@ -252,6 +268,7 @@ export type YoupGridController<TRow> = {
   setSort: (columnId: string, direction: "asc" | "desc", multi?: boolean) => void;
   clearSort: (columnId: string) => void;
   setFilter: (columnId: string, value: unknown) => void;
+  setFilterRule: (filter: FilterRule) => void;
   clearFilter: (columnId: string) => void;
   setPage: (pageIndex: number) => void;
   setPageSize: (pageSize: number) => void;

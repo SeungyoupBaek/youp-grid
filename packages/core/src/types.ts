@@ -45,7 +45,15 @@ export type ValueParser<TValue = unknown, TRow = unknown> = (
   row: TRow,
 ) => TValue;
 
-export type ColumnEditor = "text" | "number" | "checkbox" | "select" | "combobox" | "tags";
+export type ColumnEditor =
+  | "text"
+  | "number"
+  | "checkbox"
+  | "select"
+  | "combobox"
+  | "tags"
+  | "date"
+  | "datetime";
 
 export type ColumnAlign = "left" | "center" | "right";
 
@@ -213,6 +221,8 @@ export type BuildRowModelOptions<TRow> = {
   columns: readonly ColumnDef<TRow>[];
   state?: GridState;
   getRowId?: (row: TRow, index: number) => GridRowId;
+  pinnedTopRows?: readonly TRow[];
+  pinnedBottomRows?: readonly TRow[];
   treeData?: boolean;
   getParentRowId?: (row: TRow, index: number) => GridRowId | null | undefined;
   rowModelType?: GridRowModelType;
@@ -228,6 +238,8 @@ export type RowModel<TRow> = {
   sortedRows: RowNode<TRow>[];
   visibleRows: RowNode<TRow>[];
   displayRows: RowDisplayNode<TRow>[];
+  pinnedTopRows: RowNode<TRow>[];
+  pinnedBottomRows: RowNode<TRow>[];
   aggregation: AggregationResult[];
   totalRowCount: number;
   filteredRowCount: number;

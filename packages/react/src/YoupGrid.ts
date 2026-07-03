@@ -15,7 +15,12 @@ import {
   parseClipboardText,
   pushValueHistoryEntry,
   redoValueHistory,
+  reorderRows,
   serializeGridRange,
+  setColumnHidden as setCoreColumnHidden,
+  setColumnOrder as setCoreColumnOrder,
+  setColumnWidth as setCoreColumnWidth,
+  sizeColumnsToFit,
   undoValueHistory,
   type AggregationResult,
   type ColumnAlign,
@@ -24,6 +29,8 @@ import {
   type ColumnEditorOptionValue,
   type ColumnPin,
   type CursorPaginationState,
+  type FilterOperator,
+  type FilterRule,
   type GridCellRange,
   type GridValueHistoryEntry,
   type GridValueHistoryState,
@@ -58,7 +65,9 @@ import type {
   YoupGridCellValueChangeSource,
   YoupGridCellsValueChangeSource,
   YoupGridCreateRowContext,
+  YoupGridCustomEditorContext,
   YoupGridDensity,
+  YoupGridFilterMode,
   YoupGridHeaderContext,
   YoupGridProps,
   YoupGridRowDetailContext,
@@ -110,6 +119,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [fillRange, setFillRange] = useState<NormalizedGridCellRange | undefined>();
   const [editingCell, setEditingCell] = useState<EditingCell | undefined>();
   const [columnChooserOpen, setColumnChooserOpen] = useState(false);
+  const [columnChooserSearch, setColumnChooserSearch] = useState("");
   const [columnMenuOpenId, setColumnMenuOpenId] = useState<string | undefined>();
   const [cellContextMenu, setCellContextMenu] = useState<CellContextMenuState | undefined>();
   const [rowClipboard, setRowClipboard] = useState<RowClipboardEntry<TRow>[]>([]);
@@ -119,6 +129,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [draggedColumnId, setDraggedColumnId] = useState<string | undefined>();
   const [dragOverColumnId, setDragOverColumnId] = useState<string | undefined>();
   const [dragOverColumnPosition, setDragOverColumnPosition] = useState<ColumnDropPosition | undefined>();
+  const [draggedRowId, setDraggedRowId] = useState<GridRowId | undefined>();
   const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
   const showRowNumberColumn = props.showRowNumberColumn ?? false;
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
@@ -126,8 +137,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const showCellContextMenu = props.showCellContextMenu ?? false;
   const cellTooltipMode = props.cellTooltip?.mode ?? "native";
   const gridEditable = (props.editable ?? true) && !props.readOnly;
+  const filterMode = props.filterMode ?? "text";
   const detailRowHeight = props.detailRowHeight ?? DEFAULT_DETAIL_ROW_HEIGHT;
   const detailRowsEnabled = Boolean(props.renderRowDetail);
+  const rowDragReorderEnabled = Boolean(props.rowDragReorder && props.onRowsChange && gridEditable);
   const expandedDetailRowIds = props.expandedDetailRowIds ?? internalExpandedDetailRowIds;
   const expandedDetailRowIdSet = useMemo(
     () => new Set(expandedDetailRowIds),
@@ -220,6 +233,33 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     setDraggedColumnId(undefined);
     setDragOverColumnId(undefined);
     setDragOverColumnPosition(undefined);
+  };
+  const resetRowDrag = () => {
+    setDraggedRowId(undefined);
+  };
+  const dropReorderedRow = (targetRow: RowNode<TRow>) => {
+    if (!rowDragReorderEnabled || draggedRowId === undefined || !props.onRowsChange) {
+      resetRowDrag();
+      return;
+    }
+
+    const sourceRow = cellRows.find((row) => row.id === draggedRowId);
+
+    if (!sourceRow || sourceRow.id === targetRow.id) {
+      resetRowDrag();
+      return;
+    }
+
+    props.onRowsChange({
+      rows: reorderRows({
+        rows: props.rows,
+        sourceIndex: sourceRow.index,
+        targetIndex: targetRow.index,
+      }),
+      changes: [],
+      source: "row-drag",
+    });
+    resetRowDrag();
   };
   const reorderColumn = (
     sourceColumnId: string | undefined,
@@ -1217,6 +1257,63 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       toggleSelected: context.toggleSelected,
     });
   };
+  const renderPinnedGridRow = (row: RowNode<TRow>, index: number, placement: "top" | "bottom") => {
+    const rowIndex = placement === "top" ? -index - 1 : cellRows.length + index;
+
+    return renderRow({
+      row,
+      columns: columnLayouts,
+      selected: false,
+      showRowNumberColumn,
+      showSelectionColumn: showRowSelectionColumn,
+      selectionColumnOffset,
+      displayIndex: rowIndex,
+      rowIndex,
+      rowHeight,
+      focusedCell: { rowIndex: -1, columnIndex: -1 },
+      selectionRange: undefined,
+      fillRange: undefined,
+      editingCell: undefined,
+      editable: false,
+      disabledReason: props.disabledReason,
+      treeData: false,
+      detailAvailable: false,
+      detailExpanded: false,
+      toggleDetailRowExpanded: () => undefined,
+      canEditCell: () => false,
+      getCellMeta: getGridCellMeta,
+      setRowSelected: () => undefined,
+      setFocusedCell: () => undefined,
+      toggleTreeRowExpanded: () => undefined,
+      startFillHandle: () => undefined,
+      autoSizeColumn: (event, column) => {
+        autoSizeColumnToFit({
+          event,
+          column,
+          rows: cellRows,
+          resizeColumn: (width) => controller.setColumnWidth(column.id, width),
+        });
+      },
+      applyCellValue: () => undefined,
+      startEditing: () => undefined,
+      updateEditingDraft: () => undefined,
+      cancelEditing: () => undefined,
+      commitEditing: () => undefined,
+      cellTooltipMode,
+      activeTooltipCellKey,
+      openCellTooltip: setActiveTooltipCellKey,
+      closeCellTooltip: (cellKey) => {
+        setActiveTooltipCellKey((current) => current === cellKey ? undefined : current);
+      },
+      openCellContextMenu: undefined,
+      onRowClick: props.onRowClick,
+      onRowDoubleClick: props.onRowDoubleClick,
+      rowDragReorder: false,
+      onCellKeyDown: () => undefined,
+      renderCell: props.renderCell,
+      renderEditor: props.renderEditor,
+    });
+  };
 
   return createElement(
     "div",
@@ -1236,9 +1333,24 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       showColumnChooser: props.showColumnChooser ?? true,
       showCsvExport: props.showCsvExport ?? true,
       showDensityControl: props.showDensityControl ?? true,
+      showSizeColumnsToFit: props.showSizeColumnsToFit ?? false,
       density,
       open: columnChooserOpen,
       columns: rowModel.columns,
+      search: columnChooserSearch,
+      setSearch: setColumnChooserSearch,
+      presets: props.columnPresets,
+      applyPreset: (preset) => {
+        const visibleColumnIds = new Set(preset.columnIds);
+        let nextState = controller.state;
+
+        rowModel.columns.forEach((column) => {
+          nextState = setCoreColumnHidden(nextState, column.id, !visibleColumnIds.has(column.id));
+        });
+        nextState = setCoreColumnOrder(nextState, preset.columnIds);
+        controller.setState(nextState);
+        props.onColumnPresetApply?.(preset);
+      },
       showExcelExport: props.showExcelExport ?? true,
       toggleOpen: () => setColumnChooserOpen((current) => !current),
       setDensity,
@@ -1248,6 +1360,21 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       moveColumn,
       canResetColumnOrder,
       resetColumnOrder,
+      sizeColumnsToFit: () => {
+        const width = bodyRef.current?.clientWidth ?? rootRef.current?.clientWidth ?? 0;
+        const columnStates = sizeColumnsToFit({
+          columns: rowModel.visibleColumns,
+          width: Math.max(0, width - rowNumberColumnOffset - (showRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0)),
+        });
+        let nextState = controller.state;
+
+        columnStates.forEach((columnState) => {
+          if (columnState.width) {
+            nextState = setCoreColumnWidth(nextState, columnState.columnId, columnState.width);
+          }
+        });
+        controller.setState(nextState);
+      },
       exportCsv: () => {
         downloadTextFile({
           fileName: props.csvFileName ?? "youp-grid.csv",
@@ -1359,11 +1486,23 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
               toggleSort: () => controller.toggleSort(layout.column.id),
               setSort: (direction) => controller.setSort(layout.column.id, direction),
               clearSort: () => controller.clearSort(layout.column.id),
-              filterValue: getFilterValue(controller.state, layout.column.id),
+              filterRule: getFilterRule(controller.state, layout.column.id),
+              filterMode,
               showFilter: props.showFilters ?? true,
               setFilter: (value) => {
                 if (value) {
                   controller.setFilter(layout.column.id, value);
+                } else {
+                  controller.clearFilter(layout.column.id);
+                }
+              },
+              setAdvancedFilter: (change) => {
+                if (change.operator === "isEmpty" || change.operator === "isNotEmpty" || change.value !== undefined) {
+                  controller.setFilterRule({
+                    columnId: layout.column.id,
+                    operator: change.operator,
+                    value: change.value,
+                  });
                 } else {
                   controller.clearFilter(layout.column.id);
                 }
@@ -1443,7 +1582,18 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             setScrollTop(event.currentTarget.scrollTop);
           },
         },
-        rowModel.visibleRows.length === 0 && !props.loading && !props.error
+        rowModel.pinnedTopRows.length > 0
+          ? createElement(
+              "div",
+              { className: "youp-grid__pinned-rows youp-grid__pinned-rows--top" },
+              rowModel.pinnedTopRows.map((row, index) => renderPinnedGridRow(row, index, "top")),
+            )
+          : undefined,
+        rowModel.visibleRows.length === 0 &&
+        rowModel.pinnedTopRows.length === 0 &&
+        rowModel.pinnedBottomRows.length === 0 &&
+        !props.loading &&
+        !props.error
           ? createElement("div", { className: "youp-grid__empty" }, props.emptyContent ?? "No rows")
           : rowModel.visibleRows.length === 0
             ? undefined
@@ -1550,6 +1700,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                             openCellContextMenu: showCellContextMenu ? openCellContextMenu : undefined,
                             onRowClick: props.onRowClick,
                             onRowDoubleClick: props.onRowDoubleClick,
+                            rowDragReorder: rowDragReorderEnabled,
+                            draggedRowId,
+                            startRowDrag: (row) => setDraggedRowId(row.id),
+                            dropRow: dropReorderedRow,
+                            endRowDrag: resetRowDrag,
                             handleCellKeyDown: (event, cell, sourceRow) => {
                               handleGridCellKeyDown({
                                 event,
@@ -1583,6 +1738,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                               });
                             },
                             renderCell: props.renderCell,
+                            renderEditor: props.renderEditor,
                           }),
                     ),
                   ),
@@ -1699,6 +1855,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   openCellContextMenu: showCellContextMenu ? openCellContextMenu : undefined,
                   onRowClick: props.onRowClick,
                   onRowDoubleClick: props.onRowDoubleClick,
+                  rowDragReorder: rowDragReorderEnabled,
+                  dragged: draggedRowId === row.id,
+                  startRowDrag: () => setDraggedRowId(row.id),
+                  dropRow: () => dropReorderedRow(row),
+                  endRowDrag: resetRowDrag,
                   onCellKeyDown: (event, cell) => {
                     handleCellKeyDown({
                       event,
@@ -1731,10 +1892,18 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                     });
                   },
                   renderCell: props.renderCell,
+                  renderEditor: props.renderEditor,
                 });
                     }),
                   ),
                 ),
+        rowModel.pinnedBottomRows.length > 0
+          ? createElement(
+              "div",
+              { className: "youp-grid__pinned-rows youp-grid__pinned-rows--bottom" },
+              rowModel.pinnedBottomRows.map((row, index) => renderPinnedGridRow(row, index, "bottom")),
+            )
+          : undefined,
         renderGridOverlay({
           loading,
           loadingContent: props.loadingContent,
@@ -2002,9 +2171,11 @@ function renderHeaderCell<TRow>(context: {
   toggleSort: () => void;
   setSort: (direction: "asc" | "desc") => void;
   clearSort: () => void;
-  filterValue: string;
+  filterRule?: FilterRule;
+  filterMode: YoupGridFilterMode;
   showFilter: boolean;
   setFilter: (value: string) => void;
+  setAdvancedFilter: (change: { operator: FilterOperator; value?: unknown }) => void;
   resizeColumn: (width: number) => void;
   dragged: boolean;
   dragOver: boolean;
@@ -2027,6 +2198,7 @@ function renderHeaderCell<TRow>(context: {
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
 }) {
   const sortable = context.layout.column.sortable !== false;
+  const filterValue = getFilterRuleValue(context.filterRule);
 
   return createElement(
     "div",
@@ -2035,6 +2207,7 @@ function renderHeaderCell<TRow>(context: {
       className: getCellClassName(
         [
           "youp-grid__cell youp-grid__cell--header",
+          context.menuOpen ? "youp-grid__cell--menu-open" : "",
           context.dragged ? "youp-grid__cell--column-dragging" : "",
           context.dragOver ? `youp-grid__cell--column-drag-over-${context.dragOverPosition ?? "before"}` : "",
         ]
@@ -2099,7 +2272,7 @@ function renderHeaderCell<TRow>(context: {
           column: context.layout.column,
           sortable,
           sorted: context.sorted,
-          filterValue: context.filterValue,
+          filterValue,
           setSort: context.setSort,
           clearSort: context.clearSort,
               clearFilter: () => context.setFilter(""),
@@ -2113,15 +2286,13 @@ function renderHeaderCell<TRow>(context: {
             })
       : undefined,
     context.showFilter && context.layout.column.filterable !== false
-      ? createElement("input", {
-          className: "youp-grid__filter",
-          value: context.filterValue,
-          placeholder: "Filter",
-          "aria-label": `Filter ${context.layout.column.headerName}`,
-          onChange: (event) => {
-            context.setFilter(event.currentTarget.value);
-          },
-          onClick: (event) => event.stopPropagation(),
+      ? renderHeaderFilter({
+          column: context.layout.column,
+          mode: context.filterMode,
+          filterRule: context.filterRule,
+          filterValue,
+          setFilter: context.setFilter,
+          setAdvancedFilter: context.setAdvancedFilter,
         })
       : undefined,
     createElement("span", {
@@ -2139,6 +2310,106 @@ function renderHeaderCell<TRow>(context: {
       onDoubleClick: context.autoSizeColumn,
     }),
   );
+}
+
+function renderHeaderFilter<TRow>(context: {
+  column: ResolvedColumnDef<TRow>;
+  mode: YoupGridFilterMode;
+  filterRule?: FilterRule;
+  filterValue: string;
+  setFilter: (value: string) => void;
+  setAdvancedFilter: (change: { operator: FilterOperator; value?: unknown }) => void;
+}) {
+  if (context.mode !== "advanced") {
+    return createElement("input", {
+      className: "youp-grid__filter",
+      value: context.filterValue,
+      placeholder: "Filter",
+      "aria-label": `Filter ${context.column.headerName}`,
+      onChange: (event) => {
+        context.setFilter(event.currentTarget.value);
+      },
+      onClick: (event) => event.stopPropagation(),
+    });
+  }
+
+  const operator = context.filterRule?.operator ?? "contains";
+  const requiresValue = operator !== "isEmpty" && operator !== "isNotEmpty";
+
+  return createElement(
+    "div",
+    { className: "youp-grid__advanced-filter", onClick: (event) => event.stopPropagation() },
+    createElement(
+      "select",
+      {
+        className: "youp-grid__filter-operator",
+        value: operator,
+        "aria-label": `Filter operator ${context.column.headerName}`,
+        onChange: (event: ReactChangeEvent<HTMLSelectElement>) => {
+          const nextOperator = event.currentTarget.value as FilterOperator;
+
+          context.setAdvancedFilter({
+            operator: nextOperator,
+            value: nextOperator === "isEmpty" || nextOperator === "isNotEmpty"
+              ? undefined
+              : parseAdvancedFilterValue(context.filterValue, nextOperator),
+          });
+        },
+      },
+      renderFilterOperatorOption("contains", "Contains"),
+      renderFilterOperatorOption("equals", "="),
+      renderFilterOperatorOption("startsWith", "Starts"),
+      renderFilterOperatorOption("endsWith", "Ends"),
+      renderFilterOperatorOption("gt", ">"),
+      renderFilterOperatorOption("gte", ">="),
+      renderFilterOperatorOption("lt", "<"),
+      renderFilterOperatorOption("lte", "<="),
+      renderFilterOperatorOption("between", "Between"),
+      renderFilterOperatorOption("in", "In"),
+      renderFilterOperatorOption("isEmpty", "Empty"),
+      renderFilterOperatorOption("isNotEmpty", "Not empty"),
+    ),
+    requiresValue
+      ? createElement("input", {
+          className: "youp-grid__filter",
+          value: context.filterValue,
+          placeholder: operator === "between" ? "min..max" : operator === "in" ? "a,b,c" : "Filter",
+          "aria-label": `Filter ${context.column.headerName}`,
+          onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+            context.setAdvancedFilter({
+              operator,
+              value: parseAdvancedFilterValue(event.currentTarget.value, operator),
+            });
+          },
+        })
+      : undefined,
+  );
+}
+
+function renderFilterOperatorOption(operator: FilterOperator, label: string) {
+  return createElement("option", { key: operator, value: operator }, label);
+}
+
+function parseAdvancedFilterValue(value: string, operator: FilterOperator): unknown {
+  if (!value && operator !== "equals") {
+    return undefined;
+  }
+
+  if (operator === "between") {
+    return value.split("..").map((part) => coerceFilterValue(part.trim()));
+  }
+
+  if (operator === "in") {
+    return value.split(",").map((part) => coerceFilterValue(part.trim())).filter((part) => part !== "");
+  }
+
+  return coerceFilterValue(value);
+}
+
+function coerceFilterValue(value: string): string | number {
+  const numberValue = Number(value);
+
+  return value !== "" && Number.isFinite(numberValue) ? numberValue : value;
 }
 
 function renderColumnMenu<TRow>(context: {
@@ -2650,12 +2921,18 @@ function renderDisplayRow<TRow>(context: {
   ) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
+  rowDragReorder: boolean;
+  draggedRowId?: GridRowId;
+  startRowDrag: (row: RowNode<TRow>) => void;
+  dropRow: (row: RowNode<TRow>) => void;
+  endRowDrag: () => void;
   handleCellKeyDown: (
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
     row: RowNode<TRow>,
   ) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
+  renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
   if (isRowGroupNode(context.row)) {
     return renderGroupRow({
@@ -2717,8 +2994,14 @@ function renderDisplayRow<TRow>(context: {
     openCellContextMenu: context.openCellContextMenu,
     onRowClick: context.onRowClick,
     onRowDoubleClick: context.onRowDoubleClick,
+    rowDragReorder: context.rowDragReorder,
+    dragged: context.draggedRowId === rowNode.id,
+    startRowDrag: () => context.startRowDrag(rowNode),
+    dropRow: () => context.dropRow(rowNode),
+    endRowDrag: context.endRowDrag,
     onCellKeyDown: (event, cell) => context.handleCellKeyDown(event, cell, rowNode),
     renderCell: context.renderCell,
+    renderEditor: context.renderEditor,
   });
   const detailElement = detailExpanded && context.renderRowDetail
     ? renderDetailRow({
@@ -2775,6 +3058,11 @@ function renderRow<TRow>(context: {
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
+  rowDragReorder?: boolean;
+  dragged?: boolean;
+  startRowDrag?: () => void;
+  dropRow?: () => void;
+  endRowDrag?: () => void;
   onCellKeyDown: (
     event: ReactKeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
@@ -2788,6 +3076,7 @@ function renderRow<TRow>(context: {
   openCellTooltip: (cellKey: string) => void;
   closeCellTooltip: (cellKey: string) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
+  renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
   return createElement(
     "div",
@@ -2796,6 +3085,7 @@ function renderRow<TRow>(context: {
       className: [
         "youp-grid__row",
         context.selected ? "youp-grid__row--selected" : "",
+        context.dragged ? "youp-grid__row--dragging" : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2803,7 +3093,28 @@ function renderRow<TRow>(context: {
       "aria-rowindex": context.displayIndex + 1,
       "aria-selected": context.selected,
       "data-youp-row-index": context.rowIndex,
+      draggable: context.rowDragReorder,
       style: { height: context.rowHeight },
+      onDragStart: context.rowDragReorder
+        ? (event: ReactDragEvent<HTMLDivElement>) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", String(context.row.id));
+            context.startRowDrag?.();
+          }
+        : undefined,
+      onDragOver: context.rowDragReorder
+        ? (event: ReactDragEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }
+        : undefined,
+      onDrop: context.rowDragReorder
+        ? (event: ReactDragEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            context.dropRow?.();
+          }
+        : undefined,
+      onDragEnd: context.rowDragReorder ? context.endRowDrag : undefined,
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
         if (!shouldIgnoreRowMouseEvent(event)) {
           context.onRowClick?.(createRowEvent(context, event));
@@ -2886,6 +3197,7 @@ function renderRow<TRow>(context: {
         openCellTooltip: context.openCellTooltip,
         closeCellTooltip: context.closeCellTooltip,
         renderCell: context.renderCell,
+        renderEditor: context.renderEditor,
       });
     }),
   );
@@ -3047,6 +3359,7 @@ function renderCell<TRow>(context: {
   openCellTooltip: (cellKey: string) => void;
   closeCellTooltip: (cellKey: string) => void;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
+  renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
   const column = context.layout.column;
   const value = column.accessor(context.row.original);
@@ -3195,6 +3508,8 @@ function renderCell<TRow>(context: {
           updateEditingDraft: context.updateEditingDraft,
           commitEditing: context.commitEditing,
           onKeyDown: context.onKeyDown,
+          cancelEditing: context.cancelEditing,
+          renderEditor: context.renderEditor,
         })
       : renderedContent,
     renderCellStatus(context.meta, context.cellTooltipMode),
@@ -3432,11 +3747,37 @@ function renderCellEditor<TRow>(context: {
   editingCell?: EditingCell;
   updateEditingDraft: (draftValue: string) => void;
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
+  cancelEditing: () => void;
+  renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
   onKeyDown: (
     event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
   ) => void;
 }) {
+  if (context.renderEditor) {
+    const draftValue = context.editingCell?.draftValue ?? "";
+    const customEditor = context.renderEditor({
+      row: context.cell.row.original,
+      rowNode: context.cell.row,
+      rowId: context.cell.row.id,
+      rowIndex: context.cell.rowIndex,
+      column: context.cell.column,
+      columnId: context.cell.column.id,
+      value: context.cell.value,
+      draftValue,
+      editable: context.cell.editable,
+      setDraftValue: context.updateEditingDraft,
+      commit: (nextDraftValue = draftValue, reason = "blur") => {
+        context.commitEditing(createEditingCell(context.cell, nextDraftValue), reason);
+      },
+      cancel: context.cancelEditing,
+    });
+
+    if (customEditor !== undefined && customEditor !== null) {
+      return customEditor;
+    }
+  }
+
   if (context.cell.column.editor === "select") {
     const options = normalizeEditorOptions(context.cell.column.options);
 
@@ -3536,7 +3877,7 @@ function renderCellEditor<TRow>(context: {
 
   return createElement("input", {
     className: "youp-grid__cell-editor",
-    type: context.cell.column.editor === "number" ? "number" : "text",
+    type: getInputEditorType(context.cell.column.editor),
     value: context.editingCell?.draftValue ?? "",
     placeholder: context.cell.column.placeholder,
     autoFocus: true,
@@ -3558,6 +3899,18 @@ function renderCellEditor<TRow>(context: {
       context.onKeyDown(event, context.cell);
     },
   });
+}
+
+function getInputEditorType(editor: ResolvedColumnDef<unknown>["editor"]): string {
+  if (editor === "number" || editor === "date") {
+    return editor;
+  }
+
+  if (editor === "datetime") {
+    return "datetime-local";
+  }
+
+  return "text";
 }
 
 function renderTagsEditor<TRow>(context: {
@@ -3697,9 +4050,14 @@ function renderColumnToolbar<TRow>(context: {
   showCsvExport: boolean;
   showExcelExport: boolean;
   showDensityControl: boolean;
+  showSizeColumnsToFit: boolean;
   density: YoupGridDensity;
   open: boolean;
   columns: readonly ResolvedColumnDef<TRow>[];
+  search: string;
+  setSearch: (search: string) => void;
+  presets?: readonly { id: string; label: string; columnIds: readonly string[] }[];
+  applyPreset: (preset: { id: string; label: string; columnIds: readonly string[] }) => void;
   toggleOpen: () => void;
   setDensity: (density: YoupGridDensity) => void;
   setColumnHidden: (columnId: string, hidden: boolean) => void;
@@ -3708,6 +4066,7 @@ function renderColumnToolbar<TRow>(context: {
   moveColumn: (columnId: string, direction: ColumnMoveDirection) => void;
   canResetColumnOrder: boolean;
   resetColumnOrder: () => void;
+  sizeColumnsToFit: () => void;
   exportCsv: () => void;
   exportExcel: () => void;
 }) {
@@ -3715,10 +4074,21 @@ function renderColumnToolbar<TRow>(context: {
     !context.showColumnChooser &&
     !context.showCsvExport &&
     !context.showExcelExport &&
-    !context.showDensityControl
+    !context.showDensityControl &&
+    !context.showSizeColumnsToFit
   ) {
     return undefined;
   }
+
+  const normalizedSearch = context.search.trim().toLocaleLowerCase();
+  const filteredColumns = normalizedSearch
+    ? context.columns.filter((column) => {
+        return (
+          column.headerName.toLocaleLowerCase().includes(normalizedSearch) ||
+          column.id.toLocaleLowerCase().includes(normalizedSearch)
+        );
+      })
+    : context.columns;
 
   return createElement(
     "div",
@@ -3757,6 +4127,17 @@ function renderColumnToolbar<TRow>(context: {
           "Export Excel",
         )
       : undefined,
+    context.showSizeColumnsToFit
+      ? createElement(
+          "button",
+          {
+            className: "youp-grid__toolbar-button",
+            type: "button",
+            onClick: context.sizeColumnsToFit,
+          },
+          "Fit columns",
+        )
+      : undefined,
     context.showDensityControl
       ? createElement(
           "label",
@@ -3790,7 +4171,32 @@ function renderColumnToolbar<TRow>(context: {
             },
             "Reset order",
           ),
-          context.columns.map((column) => {
+          context.presets && context.presets.length > 0
+            ? createElement(
+                "div",
+                { className: "youp-grid__column-presets", role: "group", "aria-label": "Column presets" },
+                context.presets.map((preset) =>
+                  createElement(
+                    "button",
+                    {
+                      key: preset.id,
+                      className: "youp-grid__column-panel-button",
+                      type: "button",
+                      onClick: () => context.applyPreset(preset),
+                    },
+                    preset.label,
+                  ),
+                ),
+              )
+            : undefined,
+          createElement("input", {
+            className: "youp-grid__column-search",
+            value: context.search,
+            placeholder: "Search columns",
+            "aria-label": "Search columns",
+            onChange: (event: ReactChangeEvent<HTMLInputElement>) => context.setSearch(event.currentTarget.value),
+          }),
+          filteredColumns.map((column) => {
             return createElement(
               "div",
               { key: column.id, className: "youp-grid__column-panel-row" },
@@ -5917,8 +6323,16 @@ function isRedoShortcut(
   return key === "y" || (event.shiftKey && key === "z");
 }
 
-function getFilterValue(state: { filters?: { columnId: string; value?: unknown }[] }, columnId: string): string {
-  const value = state.filters?.find((filter) => filter.columnId === columnId)?.value;
+function getFilterRule(state: { filters?: FilterRule[] }, columnId: string): FilterRule | undefined {
+  return state.filters?.find((filter) => filter.columnId === columnId);
+}
+
+function getFilterRuleValue(filterRule: FilterRule | undefined): string {
+  const value = filterRule?.value;
+
+  if (Array.isArray(value)) {
+    return filterRule?.operator === "between" ? value.join("..") : value.join(",");
+  }
 
   return value == null ? "" : String(value);
 }

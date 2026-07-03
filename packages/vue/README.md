@@ -61,7 +61,7 @@ function handleRowsChange({ rows: nextRows }: { rows: User[] }) {
 
 ## Editing
 
-The component supports basic `text`, `number`, `select`, and `checkbox` editors.
+The component supports `text`, `number`, `select`, `combobox`, `tags`, `date`, `datetime`, and `checkbox` editors.
 
 ```ts
 const columns: ColumnDef<User>[] = [
@@ -72,6 +72,8 @@ const columns: ColumnDef<User>[] = [
 ```
 
 Use `editable`, `readOnly`, or `canEditCell` to guard editing. `cell-edit-commit` reports the commit reason as `"enter"`, `"tab"`, or `"blur"`; `cell-value-change` and `cells-value-change` report committed edits, paste, and fill-style batches.
+
+Use the `editor` or `editor-{columnId}` slot to provide a custom editor for a specific column while keeping the built-in editors as the default.
 
 ## Row Number and Selection Columns
 
@@ -165,6 +167,6 @@ grid.setSort("age", "desc");
 
 ## Boundary
 
-The Vue component currently provides row rendering, row number and selection columns, keyboard cell focus and range selection, a basic cell context menu, inline editing, header sorting, column drag reorder, column order controls, expandable row detail slots, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell slots.
+The Vue component currently provides row rendering, row number and selection columns, keyboard cell focus and range selection, a basic cell context menu, inline editing, header sorting, advanced filter operators, column drag reorder, column chooser search and presets, column order controls, fit-to-width sizing, expandable row detail slots, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell/editor slots.
 
 The headless composable provides state, row model, sorting, filtering, pagination, column state, row selection, tree expansion, grouping, aggregation, and remote-cache helpers through Vue `computed` refs.

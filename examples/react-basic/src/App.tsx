@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import type { ColumnDef, GridState } from "@youp-grid/core";
+import {
+  importGridDelimitedText,
+  loadGridState,
+  saveGridState,
+  type ColumnDef,
+  type GridState,
+} from "@youp-grid/core";
 import { YoupGrid } from "@youp-grid/react";
 import "@youp-grid/react/styles.css";
 import rootPackage from "../../../package.json";
@@ -13,6 +19,7 @@ type Trade = {
   quantity: number;
   price: number;
   status: "Open" | "Filled" | "Rejected";
+  settlementDate: string;
   tags: string[];
 };
 
@@ -24,6 +31,7 @@ const initialRows: Trade[] = Array.from({ length: 10000 }, (_, index) => ({
   quantity: 100 + index * 3,
   price: Number((92 + (index % 37) * 1.73).toFixed(2)),
   status: index % 9 === 0 ? "Rejected" : index % 3 === 0 ? "Filled" : "Open",
+  settlementDate: `2026-07-${String((index % 20) + 1).padStart(2, "0")}`,
   tags: [
     index % 4 === 0 ? "priority" : "auto",
     index % 7 === 0 ? "review" : "desk",
@@ -63,8 +71,6 @@ export function App() {
   const [rowEvent, setRowEvent] = useState("Idle");
   const [state, setState] = useState<GridState>({
     columns: [
-      { columnId: "desk", pinned: "left" },
-      { columnId: "symbol", pinned: "left" },
       { columnId: "status", pinned: "right" },
     ],
     aggregation: [
@@ -131,6 +137,13 @@ export function App() {
         options: statusOptions,
       },
       {
+        field: "settlementDate",
+        headerName: "Settlement",
+        width: 150,
+        editable: true,
+        editor: "date",
+      },
+      {
         field: "tags",
         headerName: "Tags",
         width: 190,
@@ -138,6 +151,7 @@ export function App() {
         editable: true,
         editor: "tags",
         options: tagOptions,
+        valueParser: (value) => String(value).split(",").map((tag) => tag.trim()).filter(Boolean),
         placeholder: "Add tag",
       },
     ],
@@ -198,6 +212,55 @@ export function App() {
       notional: formatCurrencyCompact(notional),
     };
   }, [rows]);
+  const pinnedTopRows = useMemo<Trade[]>(() => [
+    {
+      id: "summary-open",
+      desk: "Pinned",
+      symbol: "OPEN",
+      strategy: "Live summary",
+      quantity: rows.filter((row) => row.status === "Open").length,
+      price: 0,
+      status: "Open",
+      settlementDate: "2026-07-03",
+      tags: ["priority"],
+    },
+  ], [rows]);
+  const pinnedBottomRows = useMemo<Trade[]>(() => [
+    {
+      id: "summary-total",
+      desk: "Pinned",
+      symbol: "TOTAL",
+      strategy: "All trades",
+      quantity: rows.length,
+      price: 0,
+      status: "Filled",
+      settlementDate: "2026-07-03",
+      tags: ["desk"],
+    },
+  ], [rows.length]);
+  const importSampleCsv = () => {
+    const imported = importGridDelimitedText<Trade>({
+      text: [
+        "desk,symbol,strategy,quantity,price,status,settlementDate,tags",
+        "FX,KRW,Manual override,240,103.21,Open,2026-07-24,\"priority,review\"",
+      ].join("\n"),
+      columns,
+      createRow: ({ rowIndex }) => ({
+        id: `imported-${Date.now()}-${rowIndex}`,
+        desk: "",
+        symbol: "",
+        strategy: "",
+        quantity: 0,
+        price: 0,
+        status: "Open",
+        settlementDate: "2026-07-03",
+        tags: [],
+      }),
+    });
+
+    setRows((currentRows) => [...imported.rows, ...currentRows]);
+    setRowEvent(`Imported ${imported.rows.length} row`);
+  };
 
   return (
     <main className="demo-page">
@@ -317,6 +380,27 @@ export function App() {
             >
               Infinite rows
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                saveGridState(window.localStorage, "youp-grid-demo-state", state);
+                setRowEvent("Saved state");
+              }}
+            >
+              Save state
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setState(loadGridState(window.localStorage, "youp-grid-demo-state", state));
+                setRowEvent("Loaded state");
+              }}
+            >
+              Load state
+            </button>
+            <button type="button" onClick={importSampleCsv}>
+              Import CSV
+            </button>
           </div>
         </div>
         <YoupGrid
@@ -324,6 +408,8 @@ export function App() {
           columns={columns}
           state={gridState}
           getRowId={(row) => row.id}
+          pinnedTopRows={pinnedTopRows}
+          pinnedBottomRows={pinnedBottomRows}
           rowModelType={serverMode || cursorMode || infiniteMode ? "server" : "client"}
           serverRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
           serverFilteredRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
@@ -346,6 +432,12 @@ export function App() {
               });
             });
           }}
+          onRowsChange={({ rows: nextRows, source }) => {
+            if (source === "row-drag") {
+              setRows(nextRows);
+              setRowEvent("Reordered rows");
+            }
+          }}
           onRowClick={({ rowId }) => {
             setRowEvent(`Click ${rowId}`);
           }}
@@ -362,13 +454,20 @@ export function App() {
             setRowEvent(`Load more after ${rowCount} rows`);
           }}
           editable
+          rowDragReorder={!serverMode && !cursorMode && !infiniteMode}
           loading={loading}
           loadingContent="Loading trades"
           error={error}
           errorContent="Unable to load trades"
           showColumnChooser
+          showSizeColumnsToFit
           showCellContextMenu
           showFilters
+          filterMode="advanced"
+          columnPresets={[
+            { id: "ops", label: "Ops", columnIds: ["desk", "symbol", "status", "settlementDate"] },
+            { id: "risk", label: "Risk", columnIds: ["desk", "strategy", "quantity", "price", "status"] },
+          ]}
           showPagination={!infiniteMode}
           showRowSelectionColumn
           detailRowHeight={88}
@@ -378,11 +477,53 @@ export function App() {
               <span>Desk {row.desk}</span>
               <span>{row.quantity.toLocaleString()} shares</span>
               <span>{row.status}</span>
+              <span>{row.settlementDate}</span>
               <span>{row.tags.join(", ")}</span>
             </div>
           )}
+          renderEditor={({ columnId, draftValue, setDraftValue, commit, cancel }) => {
+            if (columnId !== "desk") {
+              return undefined;
+            }
+
+            return (
+              <input
+                className="custom-strategy-editor"
+                autoFocus
+                value={draftValue}
+                onChange={(event) => setDraftValue(event.currentTarget.value.toUpperCase())}
+                onBlur={() => commit(undefined, "blur")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commit(event.currentTarget.value, "enter");
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancel();
+                  }
+                }}
+              />
+            );
+          }}
           height={520}
         />
+      </section>
+      <section className="feature-gallery" aria-label="Feature gallery">
+        {[
+          "Date and datetime editors",
+          "Advanced filter operators",
+          "State persistence helpers",
+          "CSV import and export",
+          "Pinned top and bottom rows",
+          "Row drag reorder",
+          "Column presets, search, and fit",
+          "Custom editor extension point",
+          "React, Vue, and Vanilla adapters",
+        ].map((feature) => (
+          <article className="feature-gallery__item" key={feature}>
+            <strong>{feature}</strong>
+          </article>
+        ))}
       </section>
     </main>
   );

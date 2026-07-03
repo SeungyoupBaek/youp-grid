@@ -74,6 +74,7 @@ export function useYoupGrid<TRow>(
     setFilter: (columnId, value) => {
       commitState(setCoreFilter(state.value, { columnId, operator: "contains", value }));
     },
+    setFilterRule: (filter) => commitState(setCoreFilter(state.value, filter)),
     clearFilter: (columnId) => commitState(clearCoreFilter(state.value, columnId)),
     setPage: (pageIndex) => {
       commitState(
@@ -141,6 +142,8 @@ function buildCurrentRowModel<TRow>(
     getRowId: options.getRowId,
     treeData: options.treeData,
     getParentRowId: options.getParentRowId,
+    pinnedTopRows: options.pinnedTopRows,
+    pinnedBottomRows: options.pinnedBottomRows,
     rowModelType: options.rowModelType,
     serverRowCount: options.serverRowCount,
     serverFilteredRowCount: options.serverFilteredRowCount,

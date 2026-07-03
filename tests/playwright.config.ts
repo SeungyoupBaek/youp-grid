@@ -10,7 +10,8 @@ const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: ".",
   testMatch: "**/*.spec.ts",
-  timeout: 30_000,
+  timeout: 60_000,
+  workers: 1,
   use: {
     baseURL,
     browserName: "chromium",

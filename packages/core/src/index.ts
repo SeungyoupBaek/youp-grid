@@ -6,6 +6,8 @@ export {
   setColumnPinned,
   setColumnWidth,
 } from "./column-state.ts";
+export { sizeColumnsToFit } from "./column-sizing.ts";
+export type { SizeColumnsToFitOptions } from "./column-sizing.ts";
 export { applyAggregation } from "./aggregation.ts";
 export {
   isCellInRange,
@@ -28,11 +30,15 @@ export { exportGridCsv } from "./csv.ts";
 export type { CsvCellFormatter, ExportGridCsvOptions } from "./csv.ts";
 export { exportGridExcel } from "./excel.ts";
 export type { ExcelCellFormatter, ExportGridExcelOptions } from "./excel.ts";
+export { importGridDelimitedText, parseDelimitedText } from "./import.ts";
+export type { ImportGridDelimitedTextOptions, ImportGridDelimitedTextResult } from "./import.ts";
 export { applyFilters, defaultFilterPredicate } from "./filtering.ts";
 export { getInfiniteScrollTrigger } from "./infinite-scroll.ts";
 export { applyPagination } from "./pagination.ts";
 export { buildRowModel } from "./row-model.ts";
 export { applyRowGrouping, isRowGroupNode } from "./row-grouping.ts";
+export { reorderRows } from "./row-reorder.ts";
+export type { ReorderRowsOptions } from "./row-reorder.ts";
 export { applySorting } from "./sorting.ts";
 export { applyTreeData } from "./tree-data.ts";
 export type { ApplyTreeDataOptions } from "./tree-data.ts";
@@ -63,6 +69,14 @@ export {
   toggleTreeRowExpanded,
   toggleSort,
 } from "./state.ts";
+export {
+  clearSavedGridState,
+  loadGridState,
+  parseGridState,
+  saveGridState,
+  serializeGridState,
+} from "./state-persistence.ts";
+export type { GridStateStorage, PersistedGridState } from "./state-persistence.ts";
 export { getVirtualRange } from "./virtualizer.ts";
 export {
   createValueHistoryState,

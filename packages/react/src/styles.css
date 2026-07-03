@@ -134,6 +134,23 @@
   background: #fff;
 }
 
+.youp-grid__column-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.youp-grid__column-search {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--youp-grid-border);
+  border-radius: 6px;
+  color: var(--youp-grid-text);
+  font: inherit;
+  background: #fff;
+}
+
 .youp-grid__column-toggle {
   display: inline-flex;
   align-items: center;
@@ -193,6 +210,10 @@
   background: var(--youp-grid-row-hover);
 }
 
+.youp-grid__row--dragging {
+  opacity: 0.55;
+}
+
 .youp-grid__header {
   --youp-grid-header-scroll-left: 0px;
 }
@@ -236,6 +257,27 @@
 .youp-grid__body {
   position: relative;
   overflow: auto;
+}
+
+.youp-grid__pinned-rows {
+  position: sticky;
+  z-index: 2;
+  min-width: max-content;
+  background: #fff;
+}
+
+.youp-grid__pinned-rows--top {
+  top: 0;
+  border-bottom: 1px solid var(--youp-grid-border);
+}
+
+.youp-grid__pinned-rows--bottom {
+  bottom: 0;
+  border-top: 1px solid var(--youp-grid-border);
+}
+
+.youp-grid__pinned-rows .youp-grid__row {
+  background: #f8fafc;
 }
 
 .youp-grid__virtual-spacer {
@@ -910,8 +952,13 @@
   color: var(--youp-grid-muted);
   font: inherit;
   font-weight: 700;
-  overflow: visible;
+  overflow: hidden;
   background: var(--youp-grid-header);
+}
+
+.youp-grid__cell--header.youp-grid__cell--menu-open {
+  z-index: 6;
+  overflow: visible;
 }
 
 .youp-grid__cell--header[draggable="true"] {
@@ -1159,6 +1206,8 @@
 .youp-grid__column-menu-button:focus-visible,
 .youp-grid__column-menu-item:focus-visible,
 .youp-grid__filter:focus-visible,
+.youp-grid__filter-operator:focus-visible,
+.youp-grid__column-search:focus-visible,
 .youp-grid__density-control select:focus-visible,
 .youp-grid__selection-checkbox:focus-visible,
 .youp-grid__toolbar-button:focus-visible,
@@ -1181,6 +1230,24 @@
   font: inherit;
   font-weight: 500;
   line-height: 1.2;
+  background: #fff;
+}
+
+.youp-grid__advanced-filter {
+  display: grid;
+  grid-template-columns: minmax(74px, auto) minmax(70px, 1fr);
+  gap: 4px;
+}
+
+.youp-grid__filter-operator {
+  min-width: 0;
+  height: 26px;
+  padding: 3px 4px;
+  border: 1px solid var(--youp-grid-border);
+  border-radius: 4px;
+  color: var(--youp-grid-text);
+  font: inherit;
+  font-weight: 500;
   background: #fff;
 }
 

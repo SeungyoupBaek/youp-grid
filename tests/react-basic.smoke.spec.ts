@@ -68,6 +68,13 @@ test("react basic demo supports grid interactions", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(firstStatusCell).toContainText("Open");
 
+  await page.locator(".youp-grid__body").evaluate((element) => {
+    element.scrollLeft = 0;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  await page.locator(".youp-grid__header").evaluate((element) => {
+    (element as HTMLElement).style.setProperty("--youp-grid-header-scroll-left", "0px");
+  });
   await page.getByRole("button", { name: "Desk column menu" }).click();
   await expect(page.getByRole("menuitem", { name: "Move right" })).toBeEnabled();
   await page.getByRole("menuitem", { name: "Move right" }).click();

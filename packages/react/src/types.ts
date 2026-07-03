@@ -3,6 +3,8 @@ import type {
   ColumnDef,
   ColumnPin,
   CursorPaginationState,
+  FilterOperator,
+  FilterRule,
   GridRowId,
   GridRowModelType,
   GridState,
@@ -48,7 +50,7 @@ export type YoupGridCellsValueChange<TRow> = {
   source: YoupGridCellsValueChangeSource;
 };
 
-export type YoupGridRowsChangeSource = "context-menu" | "clipboard";
+export type YoupGridRowsChangeSource = "context-menu" | "clipboard" | "row-drag";
 
 export type YoupGridRowInsertPosition = "above" | "below";
 
@@ -129,6 +131,28 @@ export type YoupGridCanEditCellContext<TRow> = {
 };
 
 export type YoupGridDensity = "compact" | "standard" | "comfortable";
+export type YoupGridFilterMode = "text" | "advanced";
+
+export type YoupGridColumnPreset = {
+  id: string;
+  label: string;
+  columnIds: readonly string[];
+};
+
+export type YoupGridCustomEditorContext<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowId: GridRowId;
+  rowIndex: number;
+  column: ResolvedColumnDef<TRow>;
+  columnId: string;
+  value: unknown;
+  draftValue: string;
+  editable: boolean;
+  setDraftValue: (draftValue: string) => void;
+  commit: (draftValue?: string, reason?: YoupGridCellEditCommitReason) => void;
+  cancel: () => void;
+};
 
 export type YoupGridRowEvent<TRow> = {
   row: TRow;
@@ -170,6 +194,8 @@ export type YoupGridOptions<TRow> = {
   serverFilteredRowCount?: number;
   rowHeight?: number;
   overscan?: number;
+  pinnedTopRows?: readonly TRow[];
+  pinnedBottomRows?: readonly TRow[];
   infiniteScroll?: boolean;
   infiniteScrollThreshold?: number;
   infiniteScrollLoading?: boolean;
@@ -184,6 +210,7 @@ export type YoupGridController<TRow> = {
   setSort: (columnId: string, direction: "asc" | "desc", multi?: boolean) => void;
   clearSort: (columnId: string) => void;
   setFilter: (columnId: string, value: unknown) => void;
+  setFilterRule: (filter: FilterRule) => void;
   clearFilter: (columnId: string) => void;
   setPage: (pageIndex: number) => void;
   setPageSize: (pageSize: number) => void;
@@ -224,13 +251,16 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showCsvExport?: boolean;
   showExcelExport?: boolean;
   showDensityControl?: boolean;
+  showSizeColumnsToFit?: boolean;
   showFilters?: boolean;
+  filterMode?: YoupGridFilterMode;
   showAggregationFooter?: boolean;
   showPagination?: boolean;
   showRowNumberColumn?: boolean;
   showRowSelectionColumn?: boolean;
   pinRowSelectionColumn?: boolean;
   showCellContextMenu?: boolean;
+  rowDragReorder?: boolean;
   detailRowHeight?: number;
   expandedDetailRowIds?: readonly GridRowId[];
   defaultExpandedDetailRowIds?: readonly GridRowId[];
@@ -248,6 +278,7 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   cellTooltip?: YoupGridCellTooltipOptions;
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderHeader?: (context: YoupGridHeaderContext<TRow>) => ReactNode;
+  renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
   renderRowDetail?: (context: YoupGridRowDetailContext<TRow>) => ReactNode;
   isRowDetailAvailable?: (context: YoupGridRowDetailContext<TRow>) => boolean;
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
@@ -259,6 +290,8 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;
   onDetailExpandedRowsChange?: (rowIds: readonly GridRowId[]) => void;
   onRowsEndReached?: (event: YoupGridRowsEndReachedEvent<TRow>) => void;
+  columnPresets?: readonly YoupGridColumnPreset[];
+  onColumnPresetApply?: (preset: YoupGridColumnPreset) => void;
   emptyContent?: ReactNode;
 };
 
@@ -279,4 +312,9 @@ export type YoupGridHeaderContext<TRow> = {
   column: ResolvedColumnDef<TRow>;
   sorted: "asc" | "desc" | undefined;
   toggleSort: () => void;
+};
+
+export type YoupGridAdvancedFilterChange = {
+  operator: FilterOperator;
+  value?: unknown;
 };

@@ -4,6 +4,8 @@ import type {
   ColumnEditorOption,
   ColumnEditorOptionValue,
   ColumnPin,
+  FilterOperator,
+  FilterRule,
   GridCellRange,
   GridRowId,
   GridRowModelType,
@@ -23,6 +25,10 @@ import {
   getInfiniteScrollTrigger,
   isCellInRange,
   parseClipboardText,
+  setColumnHidden as setCoreColumnHidden,
+  setColumnOrder as setCoreColumnOrder,
+  setColumnWidth as setCoreColumnWidth,
+  sizeColumnsToFit,
 } from "@youp-grid/core";
 import {
   computed,
@@ -51,6 +57,7 @@ import type {
   YoupGridCellValueChange,
   YoupGridCreateRowContext,
   YoupGridDensity,
+  YoupGridFilterMode,
   YoupGridHeaderSlotContext,
   YoupGridPaginationOptions,
   YoupGridRowDetailSlotContext,
@@ -175,6 +182,14 @@ export const YoupGrid = defineComponent({
       type: Number,
       default: undefined,
     },
+    pinnedTopRows: {
+      type: Array as PropType<readonly unknown[]>,
+      default: undefined,
+    },
+    pinnedBottomRows: {
+      type: Array as PropType<readonly unknown[]>,
+      default: undefined,
+    },
     infiniteScroll: {
       type: Boolean,
       default: false,
@@ -265,9 +280,17 @@ export const YoupGrid = defineComponent({
       type: Boolean,
       default: undefined,
     },
+    showSizeColumnsToFit: {
+      type: Boolean,
+      default: false,
+    },
     showFilters: {
       type: Boolean,
       default: undefined,
+    },
+    filterMode: {
+      type: String as PropType<YoupGridFilterMode>,
+      default: "text",
     },
     csvFileName: {
       type: String,
@@ -306,6 +329,10 @@ export const YoupGrid = defineComponent({
       default: false,
     },
     showCellContextMenu: {
+      type: Boolean,
+      default: false,
+    },
+    rowDragReorder: {
       type: Boolean,
       default: false,
     },
@@ -359,6 +386,14 @@ export const YoupGrid = defineComponent({
       type: Object as PropType<YoupGridCellTooltipOptions>,
       default: undefined,
     },
+    columnPresets: {
+      type: Array as PropType<readonly { id: string; label: string; columnIds: readonly string[] }[]>,
+      default: undefined,
+    },
+    onColumnPresetApply: {
+      type: Function as PropType<(preset: { id: string; label: string; columnIds: readonly string[] }) => void>,
+      default: undefined,
+    },
   },
   emits: {
     stateChange: (_change: YoupGridStateChange<unknown>) => true,
@@ -382,6 +417,7 @@ export const YoupGrid = defineComponent({
     const focusedCell = ref<FocusedCell>({ rowIndex: 0, columnIndex: 0 });
     const selectionRange = ref<GridCellRange>();
     const columnChooserOpen = ref(false);
+    const columnChooserSearch = ref("");
     const internalExpandedDetailRowIds = ref<GridRowId[]>([
       ...(props.defaultExpandedDetailRowIds ?? []),
     ]);
@@ -398,6 +434,8 @@ export const YoupGrid = defineComponent({
       getRowId: props.getRowId,
       treeData: props.treeData,
       getParentRowId: props.getParentRowId,
+      pinnedTopRows: props.pinnedTopRows,
+      pinnedBottomRows: props.pinnedBottomRows,
       rowModelType: props.rowModelType,
       serverRowCount: props.serverRowCount,
       serverFilteredRowCount: props.serverFilteredRowCount,
@@ -1389,9 +1427,26 @@ export const YoupGrid = defineComponent({
             showCsvExport: props.showCsvExport ?? true,
             showExcelExport: props.showExcelExport ?? true,
             showDensityControl: props.showDensityControl ?? true,
+            showSizeColumnsToFit: props.showSizeColumnsToFit,
             density: density.value,
             open: columnChooserOpen.value,
             columns: grid.rowModel.value.columns,
+            search: columnChooserSearch.value,
+            setSearch: (search) => {
+              columnChooserSearch.value = search;
+            },
+            presets: props.columnPresets,
+            applyPreset: (preset) => {
+              const visibleColumnIds = new Set(preset.columnIds);
+              let nextState = grid.state.value;
+
+              grid.rowModel.value.columns.forEach((column) => {
+                nextState = setCoreColumnHidden(nextState, column.id, !visibleColumnIds.has(column.id));
+              });
+              nextState = setCoreColumnOrder(nextState, preset.columnIds);
+              grid.setState(nextState);
+              props.onColumnPresetApply?.(preset);
+            },
             toggleOpen: () => {
               columnChooserOpen.value = !columnChooserOpen.value;
             },
@@ -1402,6 +1457,21 @@ export const YoupGrid = defineComponent({
             moveColumn,
             canResetColumnOrder,
             resetColumnOrder,
+            sizeColumnsToFit: () => {
+              const width = rootRef.value?.clientWidth ?? 0;
+              const columnStates = sizeColumnsToFit({
+                columns: visibleColumns.value,
+                width: Math.max(0, width - (props.showRowNumberColumn ? ROW_NUMBER_COLUMN_WIDTH : 0) - (props.showRowSelectionColumn ? ROW_SELECTION_COLUMN_WIDTH : 0)),
+              });
+              let nextState = grid.state.value;
+
+              columnStates.forEach((columnState) => {
+                if (columnState.width) {
+                  nextState = setCoreColumnWidth(nextState, columnState.columnId, columnState.width);
+                }
+              });
+              grid.setState(nextState);
+            },
             exportCsv,
             exportExcel,
           }),
@@ -1434,11 +1504,23 @@ export const YoupGrid = defineComponent({
                     sortOnHeaderClick: props.sortOnHeaderClick,
                     slots,
                     onToggleSort: () => grid.toggleSort(column.id),
-                    filterValue: getFilterValue(grid.state.value, column.id),
+                    filterRule: getFilterRule(grid.state.value, column.id),
+                    filterMode: props.filterMode,
                     showFilter: props.showFilters ?? true,
                     setFilter: (value) => {
                       if (value) {
                         grid.setFilter(column.id, value);
+                      } else {
+                        grid.clearFilter(column.id);
+                      }
+                    },
+                    setAdvancedFilter: (change) => {
+                      if (change.operator === "isEmpty" || change.operator === "isNotEmpty" || change.value !== undefined) {
+                        grid.setFilterRule({
+                          columnId: column.id,
+                          operator: change.operator,
+                          value: change.value,
+                        });
                       } else {
                         grid.clearFilter(column.id);
                       }
@@ -1744,9 +1826,14 @@ function renderColumnToolbar<TRow>(context: {
   showCsvExport: boolean;
   showExcelExport: boolean;
   showDensityControl: boolean;
+  showSizeColumnsToFit: boolean;
   density: YoupGridDensity;
   open: boolean;
   columns: readonly ResolvedColumnDef<TRow>[];
+  search: string;
+  setSearch: (search: string) => void;
+  presets?: readonly { id: string; label: string; columnIds: readonly string[] }[];
+  applyPreset: (preset: { id: string; label: string; columnIds: readonly string[] }) => void;
   toggleOpen: () => void;
   setDensity: (density: YoupGridDensity) => void;
   setColumnHidden: (columnId: string, hidden: boolean) => void;
@@ -1755,6 +1842,7 @@ function renderColumnToolbar<TRow>(context: {
   moveColumn: (columnId: string, direction: ColumnMoveDirection) => void;
   canResetColumnOrder: () => boolean;
   resetColumnOrder: () => void;
+  sizeColumnsToFit: () => void;
   exportCsv: () => void;
   exportExcel: () => void;
 }) {
@@ -1762,10 +1850,19 @@ function renderColumnToolbar<TRow>(context: {
     !context.showColumnChooser &&
     !context.showCsvExport &&
     !context.showExcelExport &&
-    !context.showDensityControl
+    !context.showDensityControl &&
+    !context.showSizeColumnsToFit
   ) {
     return undefined;
   }
+
+  const normalizedSearch = context.search.trim().toLocaleLowerCase();
+  const filteredColumns = normalizedSearch
+    ? context.columns.filter((column) =>
+        column.headerName.toLocaleLowerCase().includes(normalizedSearch) ||
+        column.id.toLocaleLowerCase().includes(normalizedSearch),
+      )
+    : context.columns;
 
   return h(
     "div",
@@ -1803,6 +1900,17 @@ function renderColumnToolbar<TRow>(context: {
               onClick: context.exportExcel,
             },
             "Export Excel",
+          )
+        : undefined,
+      context.showSizeColumnsToFit
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "youp-grid-vue__toolbar-button",
+              onClick: context.sizeColumnsToFit,
+            },
+            "Fit columns",
           )
         : undefined,
       context.showDensityControl
@@ -1844,7 +1952,35 @@ function renderColumnToolbar<TRow>(context: {
                 },
                 "Reset order",
               ),
-              ...context.columns.map((column) =>
+              context.presets && context.presets.length > 0
+                ? h(
+                    "div",
+                    { class: "youp-grid-vue__column-presets", role: "group", "aria-label": "Column presets" },
+                    context.presets.map((preset) =>
+                      h(
+                        "button",
+                        {
+                          key: preset.id,
+                          type: "button",
+                          class: "youp-grid-vue__column-panel-button",
+                          onClick: () => context.applyPreset(preset),
+                        },
+                        preset.label,
+                      ),
+                    ),
+                  )
+                : undefined,
+              h("input", {
+                class: "youp-grid-vue__column-search",
+                value: context.search,
+                placeholder: "Search columns",
+                "aria-label": "Search columns",
+                onInput: (event: Event) => {
+                  const target = event.currentTarget as HTMLInputElement | null;
+                  context.setSearch(target?.value ?? "");
+                },
+              }),
+              ...filteredColumns.map((column) =>
                 h(
                   "div",
                   { key: column.id, class: "youp-grid-vue__column-panel-row" },
@@ -2010,9 +2146,11 @@ function renderHeaderCell<TRow>(context: {
   sortOnHeaderClick: boolean;
   slots: Slots;
   onToggleSort: () => void;
-  filterValue: string;
+  filterRule?: FilterRule;
+  filterMode: YoupGridFilterMode;
   showFilter: boolean;
   setFilter: (value: string) => void;
+  setAdvancedFilter: (change: { operator: FilterOperator; value?: unknown }) => void;
   resizeColumn: (width: number) => void;
   dragged: boolean;
   dragOver: boolean;
@@ -2036,6 +2174,7 @@ function renderHeaderCell<TRow>(context: {
   const content = renderHeaderSlot(context.slots, slotContext, context.column.headerName);
   const sortable = context.sortOnHeaderClick && context.column.sortable !== false;
   const showFilter = context.showFilter && context.column.filterable !== false;
+  const filterValue = getFilterRuleValue(context.filterRule);
   const headerControl = sortable
     ? h(
         "button",
@@ -2085,17 +2224,13 @@ function renderHeaderCell<TRow>(context: {
     [
       headerControl,
       showFilter
-        ? h("input", {
-            class: "youp-grid-vue__filter-input",
-            value: context.filterValue,
-            placeholder: "Filter",
-            "aria-label": `Filter ${context.column.headerName}`,
-            onClick: (event: MouseEvent) => event.stopPropagation(),
-            onDblclick: (event: MouseEvent) => event.stopPropagation(),
-            onInput: (event: Event) => {
-              const target = event.currentTarget as HTMLInputElement | null;
-              context.setFilter(target?.value ?? "");
-            },
+        ? renderHeaderFilter({
+            column: context.column,
+            mode: context.filterMode,
+            filterRule: context.filterRule,
+            filterValue,
+            setFilter: context.setFilter,
+            setAdvancedFilter: context.setAdvancedFilter,
           })
         : undefined,
       h("span", {
@@ -2115,6 +2250,88 @@ function renderHeaderCell<TRow>(context: {
       }),
     ],
   );
+}
+
+function renderHeaderFilter<TRow>(context: {
+  column: ResolvedColumnDef<TRow>;
+  mode: YoupGridFilterMode;
+  filterRule?: FilterRule;
+  filterValue: string;
+  setFilter: (value: string) => void;
+  setAdvancedFilter: (change: { operator: FilterOperator; value?: unknown }) => void;
+}) {
+  if (context.mode !== "advanced") {
+    return h("input", {
+      class: "youp-grid-vue__filter-input",
+      value: context.filterValue,
+      placeholder: "Filter",
+      "aria-label": `Filter ${context.column.headerName}`,
+      onClick: (event: MouseEvent) => event.stopPropagation(),
+      onDblclick: (event: MouseEvent) => event.stopPropagation(),
+      onInput: (event: Event) => {
+        const target = event.currentTarget as HTMLInputElement | null;
+        context.setFilter(target?.value ?? "");
+      },
+    });
+  }
+
+  const operator = context.filterRule?.operator ?? "contains";
+  const requiresValue = operator !== "isEmpty" && operator !== "isNotEmpty";
+
+  return h("div", { class: "youp-grid-vue__advanced-filter", onClick: (event: MouseEvent) => event.stopPropagation() }, [
+    h(
+      "select",
+      {
+        class: "youp-grid-vue__filter-operator",
+        value: operator,
+        "aria-label": `Filter operator ${context.column.headerName}`,
+        onChange: (event: Event) => {
+          const target = event.currentTarget as HTMLSelectElement | null;
+          const nextOperator = (target?.value ?? "contains") as FilterOperator;
+
+          context.setAdvancedFilter({
+            operator: nextOperator,
+            value: nextOperator === "isEmpty" || nextOperator === "isNotEmpty"
+              ? undefined
+              : parseAdvancedFilterValue(context.filterValue, nextOperator),
+          });
+        },
+      },
+      [
+        renderFilterOperatorOption("contains", "Contains"),
+        renderFilterOperatorOption("equals", "="),
+        renderFilterOperatorOption("startsWith", "Starts"),
+        renderFilterOperatorOption("endsWith", "Ends"),
+        renderFilterOperatorOption("gt", ">"),
+        renderFilterOperatorOption("gte", ">="),
+        renderFilterOperatorOption("lt", "<"),
+        renderFilterOperatorOption("lte", "<="),
+        renderFilterOperatorOption("between", "Between"),
+        renderFilterOperatorOption("in", "In"),
+        renderFilterOperatorOption("isEmpty", "Empty"),
+        renderFilterOperatorOption("isNotEmpty", "Not empty"),
+      ],
+    ),
+    requiresValue
+      ? h("input", {
+          class: "youp-grid-vue__filter-input",
+          value: context.filterValue,
+          placeholder: operator === "between" ? "min..max" : operator === "in" ? "a,b,c" : "Filter",
+          "aria-label": `Filter ${context.column.headerName}`,
+          onInput: (event: Event) => {
+            const target = event.currentTarget as HTMLInputElement | null;
+            context.setAdvancedFilter({
+              operator,
+              value: parseAdvancedFilterValue(target?.value ?? "", operator),
+            });
+          },
+        })
+      : undefined,
+  ]);
+}
+
+function renderFilterOperatorOption(operator: FilterOperator, label: string) {
+  return h("option", { key: operator, value: operator }, label);
 }
 
 function renderDisplayRow<TRow>(context: {
@@ -2657,8 +2874,19 @@ function renderDataCell<TRow>(context: {
     meta: context.meta,
   };
   const slotContent = renderCellSlot(context.slots, slotContext);
+  const editorSlotContent = editing
+    ? renderEditorSlot(context.slots, {
+        ...slotContext,
+        draftValue: context.activeEdit?.draft ?? "",
+        setDraftValue: context.updateDraft,
+        commit: (draftValue = context.activeEdit?.draft ?? "", reason: YoupGridCellEditCommitReason = "blur") =>
+          context.commitCellEdit(context.rowNode, context.column, reason, draftValue),
+        cancel: context.cancelCellEdit,
+      })
+    : undefined;
   const content = editing
-    ? renderEditor({
+    ? editorSlotContent ??
+      renderEditor({
         rowNode: context.rowNode,
         column: context.column,
         draft: context.activeEdit?.draft ?? "",
@@ -3236,12 +3464,24 @@ function renderEditor<TRow>(context: {
 
   return h("input", {
     ...commonProps,
-    type: context.column.editor === "number" ? "number" : "text",
+    type: getInputEditorType(context.column.editor),
     onInput: (event: Event) => {
       const target = event.target as HTMLInputElement;
       context.updateDraft(target.value);
     },
   });
+}
+
+function getInputEditorType(editor: ResolvedColumnDef<unknown>["editor"]): string {
+  if (editor === "number" || editor === "date") {
+    return editor;
+  }
+
+  if (editor === "datetime") {
+    return "datetime-local";
+  }
+
+  return "text";
 }
 
 function renderTagsEditor<TRow>(context: {
@@ -3377,6 +3617,18 @@ function renderHeaderSlot<TRow>(
 
 function renderCellSlot<TRow>(slots: Slots, context: YoupGridCellSlotContext<TRow>) {
   return slots[`cell-${context.columnId}`]?.(context) ?? slots.cell?.(context);
+}
+
+function renderEditorSlot<TRow>(
+  slots: Slots,
+  context: YoupGridCellSlotContext<TRow> & {
+    draftValue: string;
+    setDraftValue: (draftValue: string) => void;
+    commit: (draftValue?: string, reason?: YoupGridCellEditCommitReason) => void;
+    cancel: () => void;
+  },
+) {
+  return slots[`editor-${context.columnId}`]?.(context) ?? slots.editor?.(context);
 }
 
 function formatCellValue<TRow>(
@@ -3625,13 +3877,40 @@ function applyClipboardInsertedRowValues<TRow>(context: {
   return { rows, insertedRows };
 }
 
-function getFilterValue(
-  state: { filters?: { columnId: string; value?: unknown }[] },
-  columnId: string,
-): string {
-  const value = state.filters?.find((filter) => filter.columnId === columnId)?.value;
+function getFilterRule(state: { filters?: FilterRule[] }, columnId: string): FilterRule | undefined {
+  return state.filters?.find((filter) => filter.columnId === columnId);
+}
+
+function getFilterRuleValue(filterRule: FilterRule | undefined): string {
+  const value = filterRule?.value;
+
+  if (Array.isArray(value)) {
+    return filterRule?.operator === "between" ? value.join("..") : value.join(",");
+  }
 
   return value == null ? "" : String(value);
+}
+
+function parseAdvancedFilterValue(value: string, operator: FilterOperator): unknown {
+  if (!value && operator !== "equals") {
+    return undefined;
+  }
+
+  if (operator === "between") {
+    return value.split("..").map((part) => coerceFilterValue(part.trim()));
+  }
+
+  if (operator === "in") {
+    return value.split(",").map((part) => coerceFilterValue(part.trim())).filter((part) => part !== "");
+  }
+
+  return coerceFilterValue(value);
+}
+
+function coerceFilterValue(value: string): string | number {
+  const numberValue = Number(value);
+
+  return value !== "" && Number.isFinite(numberValue) ? numberValue : value;
 }
 
 function canReorderColumn<TRow>(

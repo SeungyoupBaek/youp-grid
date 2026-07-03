@@ -102,6 +102,23 @@
   font-size: 12px;
 }
 
+.youp-grid-vue__column-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.youp-grid-vue__column-search {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--youp-grid-vue-text);
+  font: inherit;
+}
+
 .youp-grid-vue__column-toggle {
   display: inline-flex;
   min-width: 0;
@@ -621,6 +638,30 @@
   height: 26px;
   margin: 0 8px 8px;
   padding: 3px 6px;
+  border: 1px solid var(--youp-grid-vue-border);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.youp-grid-vue__advanced-filter {
+  display: grid;
+  grid-template-columns: minmax(74px, auto) minmax(70px, 1fr);
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+
+.youp-grid-vue__advanced-filter .youp-grid-vue__filter-input {
+  width: 100%;
+  margin: 0;
+}
+
+.youp-grid-vue__filter-operator {
+  min-width: 0;
+  height: 26px;
+  padding: 3px 4px;
   border: 1px solid var(--youp-grid-vue-border);
   border-radius: 4px;
   background: #fff;

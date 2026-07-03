@@ -16,11 +16,15 @@ import "@youp-grid/react/styles.css";
 - virtualized React grid UI
 - keyboard navigation and inline editing
 - built-in text, number, checkbox, and select editors
+- built-in date and datetime editors plus a custom `renderEditor` fallback
 - clipboard paste, fill handle, delete, undo, and redo write paths
 - cell edit commit callbacks with enter, tab, and blur reasons
 - cell placeholders, column alignment, validation metadata, and rich tooltips
 - column menus, resizing, auto-sizing, drag reorder, order reset, pinning, visibility, density, and row selection UI
+- advanced filter operators, column chooser search, column presets, and fit-to-width sizing
 - expandable master-detail rows through `renderRowDetail`
+- pinned top and bottom rows
+- controlled row drag reorder through `onRowsChange`
 - toolbar CSV and Excel export
 - optional row number column and cell context menu
 - controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
@@ -59,6 +63,9 @@ const columns: ColumnDef<SqlColumn>[] = [
   readOnly={!canEdit}
   showRowNumberColumn
   showCellContextMenu
+  filterMode="advanced"
+  showSizeColumnsToFit
+  columnPresets={[{ id: "ops", label: "Ops", columnIds: ["logicalName", "physicalName"] }]}
   cellTooltip={{ mode: "rich", autoOpenCellKey }}
   onCellEditCommit={({ reason }) => {
     // "enter", "tab", or "blur"

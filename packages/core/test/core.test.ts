@@ -22,16 +22,21 @@ import {
   getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
   getVirtualRange,
+  importGridDelimitedText,
   invertValueHistoryEntry,
   isRowGroupNode,
   isActiveRemoteRequest,
   isCellInRange,
   normalizeCellRange,
   parseClipboardText,
+  parseDelimitedText,
+  parseGridState,
   pushValueHistoryEntry,
   redoValueHistory,
+  reorderRows,
   clearSort,
   serializeGridRange,
+  serializeGridState,
   invalidateRemoteCache,
   setColumnHidden,
   setColumnOrder,
@@ -48,11 +53,14 @@ import {
   setRowSelected,
   setSort,
   setTreeExpandedRows,
+  sizeColumnsToFit,
   startRemoteRequest,
   toggleRowGroupExpanded,
   toggleTreeRowExpanded,
   toggleSort,
   undoValueHistory,
+  loadGridState,
+  saveGridState,
   type ColumnDef,
   type GridState,
 } from "../src/index.ts";
@@ -929,6 +937,88 @@ test("CSV and Excel export serialize visible rows and columns", () => {
       "",
     ].join("\n"),
   );
+});
+
+test("delimited import parses CSV and writes field-backed rows", () => {
+  const result = importGridDelimitedText<Person>({
+    text: "name,age,city,profile.tier\n\"Kim, A\",41,Seoul,gold\nHan,31,Incheon,silver",
+    columns: [
+      { field: "name" },
+      { field: "age", valueParser: (value) => Number(value) },
+      { field: "city" },
+      { field: "profile.tier" },
+    ],
+    createRow: ({ rowIndex }) => ({
+      id: `import-${rowIndex}`,
+      name: "",
+      age: 0,
+      city: "",
+      profile: { tier: "" },
+    }),
+  });
+
+  assert.deepEqual(result.headers, ["name", "age", "city", "profile.tier"]);
+  assert.deepEqual(result.rows, [
+    { id: "import-0", name: "Kim, A", age: 41, city: "Seoul", profile: { tier: "gold" } },
+    { id: "import-1", name: "Han", age: 31, city: "Incheon", profile: { tier: "silver" } },
+  ]);
+  assert.deepEqual(parseDelimitedText("a\tb\nc\td", "\t"), [["a", "b"], ["c", "d"]]);
+});
+
+test("state persistence round-trips grid state through storage", () => {
+  const state: GridState = {
+    columns: [{ columnId: "age", width: 120 }],
+    filters: [{ columnId: "name", operator: "contains", value: "kim" }],
+    selectedRowIds: ["a"],
+  };
+  const serialized = serializeGridState(state);
+
+  assert.deepEqual(parseGridState(serialized), createGridState(state));
+  assert.deepEqual(parseGridState("not-json", state), createGridState(state));
+
+  const storage = new Map<string, string>();
+  const storageLike = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+  };
+
+  saveGridState(storageLike, "grid", state);
+  assert.deepEqual(loadGridState(storageLike, "grid"), createGridState(state));
+});
+
+test("row model exposes pinned rows outside the visible row pipeline", () => {
+  const model = buildRowModel({
+    rows,
+    columns,
+    pinnedTopRows: [{ id: "top", name: "Top", age: 1, city: "Pinned", profile: { tier: "summary" } }],
+    pinnedBottomRows: [{ id: "bottom", name: "Bottom", age: 2, city: "Pinned", profile: { tier: "summary" } }],
+    getRowId: (row) => row.id,
+  });
+
+  assert.deepEqual(model.pinnedTopRows.map((row) => row.id), ["top"]);
+  assert.deepEqual(model.pinnedBottomRows.map((row) => row.id), ["bottom"]);
+  assert.equal(model.visibleRows.some((row) => row.id === "top"), false);
+});
+
+test("row reorder and size-to-fit helpers produce application-owned updates", () => {
+  assert.deepEqual(reorderRows({ rows: ["a", "b", "c"], sourceIndex: 0, targetIndex: 2 }), ["b", "c", "a"]);
+
+  const model = buildRowModel({
+    rows,
+    columns: [
+      { field: "name", minWidth: 80 },
+      { field: "age", maxWidth: 90 },
+      { field: "city" },
+    ],
+  });
+
+  assert.deepEqual(sizeColumnsToFit({ columns: model.visibleColumns, width: 300 }), [
+    { columnId: "name", width: 100 },
+    { columnId: "age", width: 90 },
+    { columnId: "city", width: 110 },
+  ]);
 });
 
 test("duplicate column ids fail fast", () => {

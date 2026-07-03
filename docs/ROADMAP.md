@@ -63,9 +63,12 @@ Status: in progress
 
 - undo/redo
 - fill handle
-- CSV and Excel export
+- CSV and Excel import/export
 - loading, empty, and error overlays
+- date and datetime editors
+- custom editor extension points
 - column menu
+- advanced filter UI
 - grouped headers
 - density control
 - custom cell renderer
@@ -91,6 +94,8 @@ Status: in progress
 - tree data
 - expandable rows
 - master-detail rows
+- pinned top and bottom rows
+- controlled row drag reorder
 
 Exit criteria:
 
@@ -104,8 +109,9 @@ Status: in progress
 - package exports for ESM
 - bundled CSS theme
 - Playwright interaction smoke tests
+- adapter parity check script
 - example gallery
-- visual regression tests
+- visual smoke tests
 - accessibility tests
 - performance benchmarks
 - docs site
