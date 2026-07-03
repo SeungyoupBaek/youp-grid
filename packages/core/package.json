@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/core",
-  "version": "0.2.17",
+  "version": "0.3.0",
   "description": "Framework-agnostic data grid core for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
