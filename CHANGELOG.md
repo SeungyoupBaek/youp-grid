@@ -6,6 +6,11 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-06
+
+- Improve the React demo expanded row detail layout across desktop and narrow viewports.
+- Add demo tag color controls that update tag chips in cells, editors, and expanded row details.
+
 ## [0.3.2] - 2026-07-06
 
 - Add a React selection summary bar for multi-cell ranges.
