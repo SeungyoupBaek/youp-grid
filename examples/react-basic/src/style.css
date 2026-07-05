@@ -224,6 +224,66 @@ body {
   background: #eff6ff;
 }
 
+.tag-color-panel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 1180px;
+  margin: 0 auto 10px;
+  padding: 8px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.tag-color-panel__item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+}
+
+.tag-color-panel__label {
+  overflow: hidden;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-color-panel__swatches {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tag-color-panel__swatch {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  cursor: pointer;
+  background: var(--tag-color-swatch);
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.tag-color-panel__swatch[aria-pressed="true"] {
+  border-color: #0f172a;
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 0 2px color-mix(in srgb, var(--tag-color-swatch) 24%, transparent);
+}
+
+.tag-color-panel__swatch:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .demo-shell > .youp-grid {
   max-width: 1180px;
   margin: 0 auto;
@@ -247,7 +307,7 @@ body {
 
 .trade-detail {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2.2fr);
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2.8fr);
   min-height: 100%;
   gap: 12px;
   width: 100%;
@@ -260,8 +320,8 @@ body {
   display: grid;
   min-width: 0;
   align-content: center;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: 5px;
+  padding: 10px 12px;
   border: 1px solid #d8dee8;
   border-radius: 8px;
   background: #fff;
@@ -286,7 +346,7 @@ body {
 
 .trade-detail__metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
   margin: 0;
@@ -297,14 +357,14 @@ body {
   min-width: 0;
   align-content: center;
   gap: 4px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #d8dee8;
   border-radius: 8px;
   background: #fff;
 }
 
 .trade-detail__metric--wide {
-  grid-column: span 2;
+  grid-column: auto;
 }
 
 .trade-detail__metric dt {
@@ -326,19 +386,21 @@ body {
 
 .trade-detail strong {
   color: #0f172a;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .trade-detail__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  overflow: visible;
 }
 
-.trade-detail__tags span {
+.trade-detail__tag {
   display: inline-flex;
   min-height: 20px;
   align-items: center;
+  gap: 5px;
   padding: 2px 7px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
@@ -346,6 +408,15 @@ body {
   color: #334155;
   font-size: 12px;
   font-weight: 800;
+}
+
+.trade-detail__tag-color {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--trade-detail-tag-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--trade-detail-tag-color) 16%, transparent);
 }
 
 .trade-symbol {
@@ -437,12 +508,16 @@ body {
     margin-left: 0;
   }
 
+  .tag-color-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trade-detail {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(130px, 0.8fr) minmax(0, 2fr);
   }
 
   .trade-detail__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
@@ -463,8 +538,12 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .trade-detail__metrics {
+  .tag-color-panel {
     grid-template-columns: 1fr;
+  }
+
+  .trade-detail__metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .trade-detail__metric--wide {

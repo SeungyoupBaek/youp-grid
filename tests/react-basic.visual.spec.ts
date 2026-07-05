@@ -92,3 +92,69 @@ test("react basic demo formats numeric totals and selected ranges", async ({ pag
   await expect(selectionSummary).toContainText("Rows 2");
   await expect(selectionSummary).toContainText(`Sum ${selectedQuantitySum.toLocaleString("en-US")}`);
 });
+
+test("react basic demo shows expanded row details without clipping", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("grid")).toBeVisible();
+  await page.getByRole("button", { name: "Expand detail row" }).first().click();
+
+  const detail = page.locator(".trade-detail").first();
+  await expect(detail).toBeVisible();
+  await expect(detail.locator(".trade-detail__tag-color").first()).toBeVisible();
+
+  const clippedElements = await page.locator(".youp-grid__row--detail").first().evaluate((row) => {
+    const rowRect = row.getBoundingClientRect();
+
+    return Array.from(row.querySelectorAll<HTMLElement>(".trade-detail, .trade-detail *"))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+
+        return rect.top < rowRect.top - 0.5 || rect.bottom > rowRect.bottom + 0.5;
+      })
+      .map((element) => element.className);
+  });
+
+  expect(clippedElements).toEqual([]);
+});
+
+test("react basic demo applies tag color controls to cells and details", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("grid")).toBeVisible();
+  const priorityCellColor = page
+    .locator('[data-youp-row-index="-1"][data-youp-column-id="tags"] .youp-grid__tag-color')
+    .first();
+
+  await expect(priorityCellColor).toBeVisible();
+  await page.getByRole("button", { name: "Priority #7c3aed" }).click();
+  await expect.poll(async () => priorityCellColor.getAttribute("style")).toContain("#7c3aed");
+
+  await page.getByRole("button", { name: "Expand detail row" }).first().click();
+  const detailTag = page.locator(".trade-detail__tag").filter({ hasText: "Priority" }).first();
+  await expect(detailTag.locator(".trade-detail__tag-color")).toBeVisible();
+  await expect.poll(async () => detailTag.getAttribute("style")).toContain("#7c3aed");
+});
+
+test("react basic demo keeps expanded row details inside a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 820 });
+  await page.goto("/");
+
+  await expect(page.getByRole("grid")).toBeVisible();
+  await page.getByRole("button", { name: "Expand detail row" }).first().click();
+  await expect(page.locator(".trade-detail").first()).toBeVisible();
+
+  const clippedElements = await page.locator(".youp-grid__row--detail").first().evaluate((row) => {
+    const rowRect = row.getBoundingClientRect();
+
+    return Array.from(row.querySelectorAll<HTMLElement>(".trade-detail, .trade-detail *"))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+
+        return rect.top < rowRect.top - 0.5 || rect.bottom > rowRect.bottom + 0.5;
+      })
+      .map((element) => element.className);
+  });
+
+  expect(clippedElements).toEqual([]);
+});

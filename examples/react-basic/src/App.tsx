@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   importGridDelimitedText,
   loadGridState,
@@ -59,6 +59,10 @@ const tagOptions = [
   { value: "desk", label: "Desk", color: "#64748b" },
   { value: "hedged", label: "Hedged", color: "#059669" },
 ];
+const tagColorChoices = ["#dc2626", "#d97706", "#2563eb", "#64748b", "#059669", "#7c3aed"] as const;
+const initialTagColors = Object.fromEntries(
+  tagOptions.map((option) => [option.value, option.color]),
+) as Record<string, string>;
 
 function parseTagValues(value: unknown): string[] {
   return String(value)
@@ -76,6 +80,7 @@ export function App() {
   const [cursorMode, setCursorMode] = useState(false);
   const [infiniteMode, setInfiniteMode] = useState(false);
   const [infiniteRowLimit, setInfiniteRowLimit] = useState(300);
+  const [tagColors, setTagColors] = useState<Record<string, string>>(initialTagColors);
   const [rowEvent, setRowEvent] = useState("Idle");
   const [state, setState] = useState<GridState>({
     columns: [
@@ -89,6 +94,14 @@ export function App() {
     rowGrouping: { columnIds: ["desk"] },
     pagination: { pageIndex: 0, pageSize: 100 },
   });
+  const coloredTagOptions = useMemo(() => {
+    return tagOptions.map((option) => ({
+      ...option,
+      color: tagColors[option.value] ?? option.color,
+    }));
+  }, [tagColors]);
+  const getResolvedTagOption = (tag: string) =>
+    coloredTagOptions.find((option) => option.value === tag || option.label === tag);
   const columns = useMemo<ColumnDef<Trade>[]>(
     () => [
       {
@@ -159,12 +172,12 @@ export function App() {
         minWidth: 150,
         editable: true,
         editor: "tags",
-        options: tagOptions,
+        options: coloredTagOptions,
         valueParser: parseTagValues,
         placeholder: "Add tag",
       },
     ],
-    [],
+    [coloredTagOptions],
   );
   const cursorPagination = useMemo(() => {
     const pageSize = state.cursorPagination?.pageSize ?? state.pagination?.pageSize ?? 100;
@@ -412,6 +425,31 @@ export function App() {
             </button>
           </div>
         </div>
+        <div className="tag-color-panel" aria-label="Tag color controls">
+          {coloredTagOptions.map((tag) => (
+            <div className="tag-color-panel__item" key={tag.value}>
+              <span className="tag-color-panel__label">{tag.label}</span>
+              <div className="tag-color-panel__swatches">
+                {tagColorChoices.map((color) => (
+                  <button
+                    type="button"
+                    className="tag-color-panel__swatch"
+                    key={color}
+                    aria-label={`${tag.label} ${color}`}
+                    aria-pressed={tag.color === color}
+                    onClick={() => {
+                      setTagColors((current) => ({
+                        ...current,
+                        [String(tag.value)]: color,
+                      }));
+                    }}
+                    style={{ "--tag-color-swatch": color } as CSSProperties}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
         <YoupGrid
           rows={gridRows}
           columns={columns}
@@ -479,7 +517,7 @@ export function App() {
           ]}
           showPagination={!infiniteMode}
           showRowSelectionColumn
-          detailRowHeight={132}
+          detailRowHeight={152}
           renderRowDetail={({ row }) => (
             <div className="trade-detail">
               <section className="trade-detail__summary" aria-label={`${row.symbol} order summary`}>
@@ -510,9 +548,21 @@ export function App() {
                 <div className="trade-detail__metric trade-detail__metric--wide">
                   <dt>Tags</dt>
                   <dd className="trade-detail__tags">
-                    {row.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
+                    {row.tags.map((tag) => {
+                      const option = getResolvedTagOption(tag);
+                      const color = option?.color ?? "#94a3b8";
+
+                      return (
+                        <span
+                          className="trade-detail__tag"
+                          key={tag}
+                          style={{ "--trade-detail-tag-color": color } as CSSProperties}
+                        >
+                          <span className="trade-detail__tag-color" aria-hidden="true" />
+                          {option?.label ?? tag}
+                        </span>
+                      );
+                    })}
                   </dd>
                 </div>
               </dl>
