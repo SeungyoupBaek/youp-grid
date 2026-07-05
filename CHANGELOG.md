@@ -6,9 +6,12 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-06
+
 - Add a React selection summary bar for multi-cell ranges.
 - Format React aggregation footer and demo numeric cells with thousands separators.
 - Improve the React demo expanded row detail layout.
+- Preserve tag option colors after the React tags editor blurs without changes.
 
 ## [0.3.1] - 2026-07-03
 
