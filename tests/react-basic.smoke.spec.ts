@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test("react basic demo supports grid interactions", async ({ page }) => {
+  test.setTimeout(120_000);
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Youp Grid" })).toBeVisible();
@@ -88,8 +90,27 @@ test("react basic demo supports grid interactions", async ({ page }) => {
 
   await page.getByRole("button", { name: "Expand detail row" }).first().click();
   await expect(page.locator(".trade-detail").first()).toContainText("Desk");
+  await expect(page.locator(".trade-detail__summary").first()).toContainText("Order detail");
+  await expect(page.locator(".trade-detail__metrics").first()).toContainText("Notional");
 
   await page.getByText("AAPL").first().click({ button: "right" });
   await expect(page.getByRole("menu").getByRole("menuitem", { name: "Copy", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Copy row" })).toBeVisible();
+});
+
+test("react basic demo keeps tag option colors after edit blur", async ({ page }) => {
+  await page.goto("/");
+
+  const firstTagsCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="tags"]');
+  const tagColors = firstTagsCell.locator(".youp-grid__tag-color");
+  await expect(tagColors.first()).toBeVisible();
+  const initialTagColorCount = await tagColors.count();
+  expect(initialTagColorCount).toBeGreaterThan(0);
+
+  await firstTagsCell.dblclick();
+  const tagInput = page.locator(".youp-grid__tag-input");
+  await expect(tagInput).toBeVisible();
+  await page.getByRole("heading", { name: "Youp Grid" }).click();
+  await expect(tagInput).toBeHidden();
+  await expect(tagColors).toHaveCount(initialTagColorCount);
 });

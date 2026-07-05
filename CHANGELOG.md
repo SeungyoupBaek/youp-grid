@@ -6,7 +6,9 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
-- No unreleased changes.
+- Add a React selection summary bar for multi-cell ranges.
+- Format React aggregation footer and demo numeric cells with thousands separators.
+- Improve the React demo expanded row detail layout.
 
 ## [0.3.1] - 2026-07-03
 

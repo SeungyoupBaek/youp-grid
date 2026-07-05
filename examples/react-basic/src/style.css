@@ -246,17 +246,106 @@ body {
 }
 
 .trade-detail {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2.2fr);
   min-height: 100%;
-  align-items: center;
-  gap: 16px;
+  gap: 12px;
+  width: 100%;
   color: #334155;
   font-size: 13px;
+  white-space: normal;
+}
+
+.trade-detail__summary {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+}
+
+.trade-detail__eyebrow {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.trade-detail__title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trade-detail__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.trade-detail__metric {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.trade-detail__metric--wide {
+  grid-column: span 2;
+}
+
+.trade-detail__metric dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.trade-detail__metric dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
 }
 
 .trade-detail strong {
   color: #0f172a;
-  font-size: 15px;
+  font-size: 18px;
+}
+
+.trade-detail__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.trade-detail__tags span {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .trade-symbol {
@@ -347,6 +436,14 @@ body {
     justify-content: flex-start;
     margin-left: 0;
   }
+
+  .trade-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-detail__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -364,5 +461,13 @@ body {
 
   .demo-summary {
     grid-template-columns: 1fr;
+  }
+
+  .trade-detail__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-detail__metric--wide {
+    grid-column: auto;
   }
 }

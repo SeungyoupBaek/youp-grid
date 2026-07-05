@@ -60,6 +60,14 @@ const tagOptions = [
   { value: "hedged", label: "Hedged", color: "#059669" },
 ];
 
+function parseTagValues(value: unknown): string[] {
+  return String(value)
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => tagOptions.find((option) => option.value === tag || option.label === tag)?.value ?? tag);
+}
+
 export function App() {
   const [rows, setRows] = useState(initialRows);
   const [loading, setLoading] = useState(false);
@@ -116,6 +124,7 @@ export function App() {
         minWidth: 110,
         editable: true,
         editor: "number",
+        valueFormatter: (value) => formatInteger(Number(value)),
         valueParser: (value) => Number(value),
       },
       {
@@ -125,7 +134,7 @@ export function App() {
         minWidth: 100,
         editable: true,
         editor: "number",
-        valueFormatter: (value) => `$${Number(value).toFixed(2)}`,
+        valueFormatter: (value) => formatCurrency(Number(value)),
         valueParser: (value) => Number(value),
       },
       {
@@ -151,7 +160,7 @@ export function App() {
         editable: true,
         editor: "tags",
         options: tagOptions,
-        valueParser: (value) => String(value).split(",").map((tag) => tag.trim()).filter(Boolean),
+        valueParser: parseTagValues,
         placeholder: "Add tag",
       },
     ],
@@ -470,15 +479,43 @@ export function App() {
           ]}
           showPagination={!infiniteMode}
           showRowSelectionColumn
-          detailRowHeight={88}
+          detailRowHeight={132}
           renderRowDetail={({ row }) => (
             <div className="trade-detail">
-              <strong>{row.symbol}</strong>
-              <span>Desk {row.desk}</span>
-              <span>{row.quantity.toLocaleString()} shares</span>
-              <span>{row.status}</span>
-              <span>{row.settlementDate}</span>
-              <span>{row.tags.join(", ")}</span>
+              <section className="trade-detail__summary" aria-label={`${row.symbol} order summary`}>
+                <span className="trade-detail__eyebrow">Order detail</span>
+                <div className="trade-detail__title">
+                  <strong>{row.symbol}</strong>
+                  <span className={`trade-status trade-status--${row.status.toLowerCase()}`}>{row.status}</span>
+                </div>
+                <span>{row.strategy}</span>
+              </section>
+              <dl className="trade-detail__metrics">
+                <div className="trade-detail__metric">
+                  <dt>Desk</dt>
+                  <dd>{row.desk}</dd>
+                </div>
+                <div className="trade-detail__metric">
+                  <dt>Quantity</dt>
+                  <dd>{formatInteger(row.quantity)} shares</dd>
+                </div>
+                <div className="trade-detail__metric">
+                  <dt>Notional</dt>
+                  <dd>{formatCurrency(row.quantity * row.price)}</dd>
+                </div>
+                <div className="trade-detail__metric">
+                  <dt>Settlement</dt>
+                  <dd>{row.settlementDate}</dd>
+                </div>
+                <div className="trade-detail__metric trade-detail__metric--wide">
+                  <dt>Tags</dt>
+                  <dd className="trade-detail__tags">
+                    {row.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </dd>
+                </div>
+              </dl>
             </div>
           )}
           renderEditor={({ columnId, draftValue, setDraftValue, commit, cancel }) => {
@@ -516,6 +553,7 @@ export function App() {
           "CSV import and export",
           "Pinned top and bottom rows",
           "Row drag reorder",
+          "Selection summary with totals",
           "Column presets, search, and fit",
           "Custom editor extension point",
           "React, Vue, and Vanilla adapters",
@@ -542,4 +580,17 @@ function formatCurrencyCompact(value: number): string {
     style: "currency",
     currency: "USD",
   }).format(value);
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    style: "currency",
+    currency: "USD",
+  }).format(value);
+}
+
+function formatInteger(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }

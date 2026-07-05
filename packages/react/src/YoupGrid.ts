@@ -89,6 +89,11 @@ const SELECTION_COLUMN_WIDTH = 44;
 const AUTOSIZE_CELL_EXTRA_WIDTH = 8;
 const AUTOSIZE_CELL_BORDER_THRESHOLD = 6;
 const CONTEXT_MENU_VIEWPORT_PADDING = 8;
+const INTEGER_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const DECIMAL_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 
@@ -304,6 +309,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     rowIndex: focusedRowIndex,
     columnIndex: focusedColumnIndex,
   };
+  const selectionSummary = useMemo(() =>
+    getSelectionSummary({
+      selectionRange,
+      rows: cellRows,
+      pinnedTopRows: rowModel.pinnedTopRows,
+      pinnedBottomRows: rowModel.pinnedBottomRows,
+      columns: visibleColumns,
+    }), [cellRows, rowModel.pinnedBottomRows, rowModel.pinnedTopRows, selectionRange, visibleColumns]);
   const gridStyle = {
     ...props.style,
   };
@@ -1955,6 +1968,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       }),
     ),
     cellContextMenuPortal,
+    renderSelectionSummary(selectionSummary),
     renderPagination({
       enabled: props.showPagination ?? true,
       cursorPagination: controller.state.cursorPagination,
@@ -1967,6 +1981,114 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       setPage: controller.setPage,
       setPageSize: controller.setPageSize,
     }),
+  );
+}
+
+type SelectionSummary = {
+  cellCount: number;
+  rowCount: number;
+  numericCount: number;
+  sum: number;
+};
+
+function getSelectionSummary<TRow>(context: {
+  selectionRange?: GridCellRange;
+  rows: readonly RowNode<TRow>[];
+  pinnedTopRows: readonly RowNode<TRow>[];
+  pinnedBottomRows: readonly RowNode<TRow>[];
+  columns: readonly ResolvedColumnDef<TRow>[];
+}): SelectionSummary | undefined {
+  if (!context.selectionRange) {
+    return undefined;
+  }
+
+  const range = normalizeCellRange(context.selectionRange);
+  const selectedRows = new Set<number>();
+  let cellCount = 0;
+  let numericCount = 0;
+  let sum = 0;
+
+  for (let rowIndex = range.startRowIndex; rowIndex <= range.endRowIndex; rowIndex += 1) {
+    const row = getSummaryRowAtIndex(context, rowIndex);
+
+    if (!row) {
+      continue;
+    }
+
+    let rowHasSelectedCell = false;
+
+    for (let columnIndex = range.startColumnIndex; columnIndex <= range.endColumnIndex; columnIndex += 1) {
+      const column = context.columns[columnIndex];
+
+      if (!column) {
+        continue;
+      }
+
+      cellCount += 1;
+      rowHasSelectedCell = true;
+
+      const value = column.accessor(row.original);
+
+      if (typeof value === "number" && Number.isFinite(value)) {
+        numericCount += 1;
+        sum += value;
+      }
+    }
+
+    if (rowHasSelectedCell) {
+      selectedRows.add(rowIndex);
+    }
+  }
+
+  if (cellCount <= 1) {
+    return undefined;
+  }
+
+  return {
+    cellCount,
+    rowCount: selectedRows.size,
+    numericCount,
+    sum,
+  };
+}
+
+function getSummaryRowAtIndex<TRow>(context: {
+  rows: readonly RowNode<TRow>[];
+  pinnedTopRows: readonly RowNode<TRow>[];
+  pinnedBottomRows: readonly RowNode<TRow>[];
+}, rowIndex: number): RowNode<TRow> | undefined {
+  if (rowIndex < 0) {
+    return context.pinnedTopRows[-rowIndex - 1];
+  }
+
+  if (rowIndex >= context.rows.length) {
+    return context.pinnedBottomRows[rowIndex - context.rows.length];
+  }
+
+  return context.rows[rowIndex];
+}
+
+function renderSelectionSummary(summary: SelectionSummary | undefined) {
+  if (!summary) {
+    return undefined;
+  }
+
+  const items = [
+    createElement("span", { key: "cells" }, `Cells ${formatInteger(summary.cellCount)}`),
+    createElement("span", { key: "rows" }, `Rows ${formatInteger(summary.rowCount)}`),
+  ];
+
+  if (summary.numericCount > 0) {
+    items.unshift(
+      createElement("span", { key: "sum" }, `Sum ${formatNumericSummaryValue(summary.sum)}`),
+      createElement("span", { key: "avg" }, `Avg ${formatNumericSummaryValue(summary.sum / summary.numericCount)}`),
+    );
+  }
+
+  return createElement(
+    "div",
+    { className: "youp-grid__selection-summary", role: "status", "aria-live": "polite" },
+    items,
   );
 }
 
@@ -2094,11 +2216,17 @@ function formatAggregationValue(value: number | undefined): string {
     return "-";
   }
 
-  if (Number.isInteger(value)) {
-    return String(value);
-  }
+  return formatNumericSummaryValue(value);
+}
 
-  return value.toFixed(2);
+function formatNumericSummaryValue(value: number): string {
+  return Number.isInteger(value)
+    ? formatInteger(value)
+    : DECIMAL_NUMBER_FORMATTER.format(value);
+}
+
+function formatInteger(value: number): string {
+  return INTEGER_NUMBER_FORMATTER.format(value);
 }
 
 function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>, rightPinnedOffset = 0) {
@@ -6110,7 +6238,7 @@ function getEditorDraftValue<TRow>(column: ResolvedColumnDef<TRow>, value: unkno
   }
 
   if (column.editor === "tags") {
-    return serializeTagEditorDraft(getTagDisplayItems(column, value).map((tag) => tag.label), "");
+    return serializeTagEditorDraft(getTagDisplayItems(column, value).map((tag) => tag.inputValue), "");
   }
 
   return String(value ?? "");
@@ -6214,6 +6342,14 @@ function findEditorOptionByInput(
     .find((option) => option.inputValue === input || option.label === input);
 }
 
+function findEditorOptionByDisplayInput(
+  options: readonly ColumnEditorOption[] | undefined,
+  input: string,
+): NormalizedEditorOption | undefined {
+  return normalizeEditorOptions(options)
+    .find((option) => option.inputValue === input || option.label === input);
+}
+
 function parseTagEditorDraft(draft: string): { tags: string[]; input: string } {
   if (!draft.includes(",")) {
     return { tags: [], input: draft };
@@ -6262,12 +6398,17 @@ function getTagDisplayItems<TRow>(
 }
 
 function getTagDisplayItem<TRow>(column: ResolvedColumnDef<TRow>, value: unknown): NormalizedEditorOption {
-  return findEditorOptionByValue(column.options, value) ?? {
-    value: String(value ?? ""),
-    label: String(value ?? ""),
-    inputValue: String(value ?? ""),
-    disabled: false,
-  };
+  const inputValue = String(value ?? "");
+
+  return (
+    findEditorOptionByValue(column.options, value) ??
+    findEditorOptionByDisplayInput(column.options, inputValue) ?? {
+      value: inputValue,
+      label: inputValue,
+      inputValue,
+      disabled: false,
+    }
+  );
 }
 
 function getTagInputValues(value: unknown): unknown[] {

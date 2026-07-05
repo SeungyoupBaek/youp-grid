@@ -1022,6 +1022,22 @@
   background: #f8fafc;
 }
 
+.youp-grid__selection-summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--youp-grid-border);
+  color: var(--youp-grid-text);
+  font-weight: 800;
+  background: #f8fafc;
+}
+
+.youp-grid__selection-summary span {
+  white-space: nowrap;
+}
+
 .youp-grid__cell--group {
   display: flex;
   align-items: center;
