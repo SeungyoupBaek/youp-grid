@@ -4237,6 +4237,84 @@ function renderCellTooltip(meta: YoupGridCellMeta | undefined, tooltipId: string
   );
 }
 
+type GridButtonIconName = "columns" | "csv" | "excel" | "fit" | "next" | "previous";
+
+function renderGridButtonContent(icon: GridButtonIconName, label: string) {
+  return createElement(
+    Fragment,
+    undefined,
+    renderGridButtonIcon(icon),
+    createElement("span", { className: "youp-grid__button-label" }, label),
+  );
+}
+
+function renderGridButtonIcon(icon: GridButtonIconName) {
+  const iconProps = {
+    className: "youp-grid__button-icon",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: 2,
+    "aria-hidden": true,
+    focusable: "false",
+  };
+
+  if (icon === "columns") {
+    return createElement(
+      "svg",
+      iconProps,
+      createElement("path", { d: "M4 5h16" }),
+      createElement("path", { d: "M4 12h16" }),
+      createElement("path", { d: "M4 19h16" }),
+      createElement("path", { d: "M8 5v14" }),
+      createElement("path", { d: "M16 5v14" }),
+    );
+  }
+
+  if (icon === "csv") {
+    return createElement(
+      "svg",
+      iconProps,
+      createElement("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }),
+      createElement("path", { d: "M14 2v6h6" }),
+      createElement("path", { d: "M8 15h8" }),
+      createElement("path", { d: "m13 12 3 3-3 3" }),
+    );
+  }
+
+  if (icon === "excel") {
+    return createElement(
+      "svg",
+      iconProps,
+      createElement("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }),
+      createElement("path", { d: "M14 2v6h6" }),
+      createElement("path", { d: "M8 13h8" }),
+      createElement("path", { d: "M8 17h8" }),
+      createElement("path", { d: "M12 13v4" }),
+    );
+  }
+
+  if (icon === "fit") {
+    return createElement(
+      "svg",
+      iconProps,
+      createElement("path", { d: "M4 8V4h4" }),
+      createElement("path", { d: "M20 8V4h-4" }),
+      createElement("path", { d: "M4 16v4h4" }),
+      createElement("path", { d: "M20 16v4h-4" }),
+      createElement("path", { d: "M9 12h6" }),
+    );
+  }
+
+  if (icon === "previous") {
+    return createElement("svg", iconProps, createElement("path", { d: "m15 18-6-6 6-6" }));
+  }
+
+  return createElement("svg", iconProps, createElement("path", { d: "m9 18 6-6-6-6" }));
+}
+
 function renderColumnToolbar<TRow>(context: {
   showColumnChooser: boolean;
   showCsvExport: boolean;
@@ -4294,7 +4372,7 @@ function renderColumnToolbar<TRow>(context: {
             "aria-expanded": context.open,
             onClick: context.toggleOpen,
           },
-          "Columns",
+          renderGridButtonContent("columns", "Columns"),
         )
       : undefined,
     context.showCsvExport
@@ -4305,7 +4383,7 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.exportCsv,
           },
-          "Export CSV",
+          renderGridButtonContent("csv", "Export CSV"),
         )
       : undefined,
     context.showExcelExport
@@ -4316,7 +4394,7 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.exportExcel,
           },
-          "Export Excel",
+          renderGridButtonContent("excel", "Export Excel"),
         )
       : undefined,
     context.showSizeColumnsToFit
@@ -4327,7 +4405,7 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.sizeColumnsToFit,
           },
-          "Fit columns",
+          renderGridButtonContent("fit", "Fit columns"),
         )
       : undefined,
     context.showDensityControl
@@ -4841,7 +4919,7 @@ function renderPagination(context: {
         disabled: context.pagination.pageIndex === 0,
         onClick: () => context.setPage(context.pagination!.pageIndex - 1),
       },
-      "Previous",
+      renderGridButtonContent("previous", "Previous"),
     ),
     createElement(
       "span",
@@ -4855,7 +4933,7 @@ function renderPagination(context: {
         disabled: currentPage >= context.pageCount,
         onClick: () => context.setPage(context.pagination!.pageIndex + 1),
       },
-      "Next",
+      renderGridButtonContent("next", "Next"),
     ),
     createElement(
       "label",
@@ -4894,7 +4972,7 @@ function renderCursorPagination(context: {
         disabled: !context.cursorPagination.hasPreviousPage,
         onClick: () => context.setCursorPage(context.cursorPagination.previousCursor),
       },
-      "Previous",
+      renderGridButtonContent("previous", "Previous"),
     ),
     createElement(
       "span",
@@ -4908,7 +4986,7 @@ function renderCursorPagination(context: {
         disabled: !context.cursorPagination.hasNextPage,
         onClick: () => context.setCursorPage(context.cursorPagination.nextCursor),
       },
-      "Next",
+      renderGridButtonContent("next", "Next"),
     ),
     createElement(
       "label",

@@ -29,6 +29,19 @@ type TagOption = {
   color: string;
 };
 
+type DemoButtonIconName =
+  | "alert"
+  | "cursor"
+  | "file-import"
+  | "infinity"
+  | "loader"
+  | "package"
+  | "play"
+  | "release"
+  | "save"
+  | "server"
+  | "upload";
+
 const initialRows: Trade[] = Array.from({ length: 10000 }, (_, index) => ({
   id: `trade-${index + 1}`,
   desk: ["Equity", "Rates", "Credit", "FX"][index % 4],
@@ -131,6 +144,86 @@ function createTagOptions(rows: readonly Trade[], colors: Record<string, string>
   });
 
   return Array.from(options.values());
+}
+
+function DemoButtonIcon({ name }: { name: DemoButtonIconName }) {
+  return (
+    <svg
+      className="demo-button-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {name === "alert" ? (
+        <>
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+          <path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" />
+        </>
+      ) : name === "cursor" ? (
+        <>
+          <path d="m4 4 7 16 2-7 7-2Z" />
+          <path d="m13 13 5 5" />
+        </>
+      ) : name === "file-import" ? (
+        <>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+          <path d="M14 2v6h6" />
+          <path d="M12 18v-6" />
+          <path d="m9 15 3 3 3-3" />
+        </>
+      ) : name === "infinity" ? (
+        <path d="M6 16c-2.2 0-4-1.8-4-4s1.8-4 4-4c4 0 8 8 12 8 2.2 0 4-1.8 4-4s-1.8-4-4-4c-4 0-8 8-12 8Z" />
+      ) : name === "loader" ? (
+        <>
+          <path d="M12 2v4" />
+          <path d="M12 18v4" />
+          <path d="m4.9 4.9 2.8 2.8" />
+          <path d="m16.3 16.3 2.8 2.8" />
+          <path d="M2 12h4" />
+          <path d="M18 12h4" />
+        </>
+      ) : name === "package" ? (
+        <>
+          <path d="m3 7 9 5 9-5" />
+          <path d="m3 7 9-5 9 5v10l-9 5-9-5Z" />
+          <path d="M12 12v10" />
+        </>
+      ) : name === "play" ? (
+        <path d="m8 5 11 7-11 7Z" />
+      ) : name === "release" ? (
+        <>
+          <path d="M20 13V7a2 2 0 0 0-2-2h-6L9 2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h7" />
+          <path d="m17 22 4-4-4-4" />
+          <path d="M21 18h-8" />
+        </>
+      ) : name === "save" ? (
+        <>
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+          <path d="M17 21v-8H7v8" />
+          <path d="M7 3v5h8" />
+        </>
+      ) : name === "server" ? (
+        <>
+          <rect width="18" height="8" x="3" y="3" rx="2" />
+          <rect width="18" height="8" x="3" y="13" rx="2" />
+          <path d="M7 7h.01" />
+          <path d="M7 17h.01" />
+        </>
+      ) : (
+        <>
+          <path d="M12 3v12" />
+          <path d="m8 7 4-4 4 4" />
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </>
+      )}
+    </svg>
+  );
 }
 
 export function App() {
@@ -353,6 +446,7 @@ export function App() {
         </div>
         <div className="site-header__actions" aria-label="Package links">
           <a className="site-header__button site-header__button--primary" href="#demo">
+            <DemoButtonIcon name="play" />
             Try demo
           </a>
           <a
@@ -361,6 +455,7 @@ export function App() {
             rel="noreferrer"
             target="_blank"
           >
+            <DemoButtonIcon name="package" />
             npm React
           </a>
           <a
@@ -369,6 +464,7 @@ export function App() {
             rel="noreferrer"
             target="_blank"
           >
+            <DemoButtonIcon name="release" />
             Releases
           </a>
         </div>
@@ -415,6 +511,7 @@ export function App() {
               aria-pressed={loading}
               onClick={() => setLoading((current) => !current)}
             >
+              <DemoButtonIcon name="loader" />
               Loading
             </button>
             <button
@@ -422,6 +519,7 @@ export function App() {
               aria-pressed={error}
               onClick={() => setError((current) => !current)}
             >
+              <DemoButtonIcon name="alert" />
               Error
             </button>
             <button
@@ -433,6 +531,7 @@ export function App() {
                 setServerMode((current) => !current);
               }}
             >
+              <DemoButtonIcon name="server" />
               Server rows
             </button>
             <button
@@ -444,6 +543,7 @@ export function App() {
                 setCursorMode((current) => !current);
               }}
             >
+              <DemoButtonIcon name="cursor" />
               Cursor rows
             </button>
             <button
@@ -456,6 +556,7 @@ export function App() {
                 setInfiniteMode((current) => !current);
               }}
             >
+              <DemoButtonIcon name="infinity" />
               Infinite rows
             </button>
             <button
@@ -465,6 +566,7 @@ export function App() {
                 setRowEvent("Saved state");
               }}
             >
+              <DemoButtonIcon name="save" />
               Save state
             </button>
             <button
@@ -474,9 +576,11 @@ export function App() {
                 setRowEvent("Loaded state");
               }}
             >
+              <DemoButtonIcon name="upload" />
               Load state
             </button>
             <button type="button" onClick={importSampleCsv}>
+              <DemoButtonIcon name="file-import" />
               Import CSV
             </button>
           </div>

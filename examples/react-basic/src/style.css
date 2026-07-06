@@ -67,6 +67,7 @@ body {
   min-height: 34px;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 6px 13px;
   border: 1px solid #c8d2df;
   border-radius: 6px;
@@ -80,6 +81,12 @@ body {
     border-color 120ms ease,
     box-shadow 120ms ease,
     transform 120ms ease;
+}
+
+.demo-button-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
 .site-header__button:hover {
@@ -197,7 +204,11 @@ body {
 }
 
 .demo-actions button {
+  display: inline-flex;
   min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 5px 11px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
