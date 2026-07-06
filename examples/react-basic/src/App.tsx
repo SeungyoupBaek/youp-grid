@@ -23,6 +23,12 @@ type Trade = {
   tags: string[];
 };
 
+type TagOption = {
+  value: string;
+  label: string;
+  color: string;
+};
+
 const initialRows: Trade[] = Array.from({ length: 10000 }, (_, index) => ({
   id: `trade-${index + 1}`,
   desk: ["Equity", "Rates", "Credit", "FX"][index % 4],
@@ -52,7 +58,7 @@ const statusOptions = [
   { value: "Filled", label: "Filled", color: "#16a34a", description: "Completed order" },
   { value: "Rejected", label: "Rejected", color: "#dc2626", description: "Rejected by venue" },
 ];
-const tagOptions = [
+const tagOptions: TagOption[] = [
   { value: "priority", label: "Priority", color: "#dc2626" },
   { value: "review", label: "Review", color: "#d97706" },
   { value: "auto", label: "Auto", color: "#2563eb" },
@@ -60,16 +66,71 @@ const tagOptions = [
   { value: "hedged", label: "Hedged", color: "#059669" },
 ];
 const tagColorChoices = ["#dc2626", "#d97706", "#2563eb", "#64748b", "#059669", "#7c3aed"] as const;
+const customTagColor = "#64748b";
 const initialTagColors = Object.fromEntries(
   tagOptions.map((option) => [option.value, option.color]),
 ) as Record<string, string>;
 
-function parseTagValues(value: unknown): string[] {
+function findTagOption(options: readonly TagOption[], tag: string) {
+  const normalizedTag = tag.toLowerCase();
+
+  return options.find((option) =>
+    String(option.value).toLowerCase() === normalizedTag ||
+    option.label.toLowerCase() === normalizedTag,
+  );
+}
+
+function createCustomTagLabel(value: string) {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function parseTagValues(value: unknown, options: readonly TagOption[] = tagOptions): string[] {
   return String(value)
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean)
-    .map((tag) => tagOptions.find((option) => option.value === tag || option.label === tag)?.value ?? tag);
+    .map((tag) => String(findTagOption(options, tag)?.value ?? tag));
+}
+
+function createTagOptions(rows: readonly Trade[], colors: Record<string, string>) {
+  const options = new Map<string, TagOption>();
+
+  tagOptions.forEach((option) => {
+    options.set(option.value, {
+      ...option,
+      color: colors[option.value] ?? option.color,
+    });
+  });
+
+  rows.forEach((row) => {
+    row.tags.forEach((tag) => {
+      const value = String(tag ?? "").trim();
+
+      if (value.length === 0) {
+        return;
+      }
+
+      const option = findTagOption(tagOptions, value);
+
+      if (option) {
+        return;
+      }
+
+      if (!options.has(value)) {
+        options.set(value, {
+          value,
+          label: createCustomTagLabel(value),
+          color: colors[value] ?? customTagColor,
+        });
+      }
+    });
+  });
+
+  return Array.from(options.values());
 }
 
 export function App() {
@@ -94,14 +155,9 @@ export function App() {
     rowGrouping: { columnIds: ["desk"] },
     pagination: { pageIndex: 0, pageSize: 100 },
   });
-  const coloredTagOptions = useMemo(() => {
-    return tagOptions.map((option) => ({
-      ...option,
-      color: tagColors[option.value] ?? option.color,
-    }));
-  }, [tagColors]);
+  const coloredTagOptions = useMemo(() => createTagOptions(rows, tagColors), [rows, tagColors]);
   const getResolvedTagOption = (tag: string) =>
-    coloredTagOptions.find((option) => option.value === tag || option.label === tag);
+    findTagOption(coloredTagOptions, tag);
   const columns = useMemo<ColumnDef<Trade>[]>(
     () => [
       {
@@ -173,7 +229,7 @@ export function App() {
         editable: true,
         editor: "tags",
         options: coloredTagOptions,
-        valueParser: parseTagValues,
+        valueParser: (value) => parseTagValues(value, coloredTagOptions),
         placeholder: "Add tag",
       },
     ],

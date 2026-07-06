@@ -115,3 +115,25 @@ test("react basic demo keeps tag option colors after edit blur", async ({ page }
   await expect(tagInput).toBeHidden();
   await expect(tagColors).toHaveCount(initialTagColorCount);
 });
+
+test("react basic demo adds custom tags to the color controls", async ({ page }) => {
+  await page.goto("/");
+
+  const firstTagsCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="tags"]');
+
+  await firstTagsCell.dblclick();
+  const tagInput = page.locator(".youp-grid__tag-input");
+  await expect(tagInput).toBeVisible();
+  await tagInput.fill("hello");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await expect(firstTagsCell.locator(".youp-grid__tag-list")).toHaveAttribute("title", /Hello/);
+
+  await expect(page.getByRole("button", { name: "Hello #7c3aed" })).toBeVisible();
+  await page.getByRole("button", { name: "Hello #7c3aed" }).click();
+  await page.getByRole("button", { name: "Expand detail row" }).first().click();
+
+  const customDetailTag = page.locator(".trade-detail__tag").filter({ hasText: "Hello" }).first();
+  await expect(customDetailTag).toBeVisible();
+  await expect.poll(async () => customDetailTag.getAttribute("style")).toContain("#7c3aed");
+});
