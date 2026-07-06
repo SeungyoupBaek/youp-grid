@@ -79,6 +79,7 @@ import { useYoupGrid } from "./useYoupGrid.ts";
 const VALUE_HISTORY_LIMIT = 100;
 const DEFAULT_DENSITY: YoupGridDensity = "standard";
 const DEFAULT_DETAIL_ROW_HEIGHT = 96;
+const MAX_VISIBLE_TAG_CHIPS = 2;
 const DENSITY_ROW_HEIGHTS: Record<YoupGridDensity, number> = {
   compact: 30,
   standard: 38,
@@ -3741,11 +3742,7 @@ function renderDefaultCellContent<TRow>(context: {
     const tags = getTagDisplayItems(context.cell.column, context.cell.value);
 
     if (tags.length > 0) {
-      return createElement(
-        "span",
-        { className: "youp-grid__tag-list" },
-        tags.map((tag, index) => renderTagChip(tag, `${tag.inputValue}-${index}`)),
-      );
+      return renderTagList(tags);
     }
   }
 
@@ -3791,6 +3788,37 @@ function renderOptionBadge(option: NormalizedEditorOption) {
         })
       : undefined,
     createElement("span", { className: "youp-grid__option-label" }, option.label),
+  );
+}
+
+function renderTagList(tags: readonly NormalizedEditorOption[]) {
+  const visibleTags = tags.slice(0, MAX_VISIBLE_TAG_CHIPS);
+  const hiddenCount = tags.length - visibleTags.length;
+  const chips: ReactNode[] = visibleTags.map((tag, index) =>
+    renderTagChip(tag, `${tag.inputValue}-${index}`),
+  );
+
+  if (hiddenCount > 0) {
+    chips.push(
+      createElement(
+        "span",
+        {
+          key: "overflow",
+          className: "youp-grid__tag youp-grid__tag--overflow",
+          "aria-label": `${hiddenCount} more tags`,
+        },
+        `+${hiddenCount}`,
+      ),
+    );
+  }
+
+  return createElement(
+    "span",
+    {
+      className: "youp-grid__tag-list",
+      title: tags.map((tag) => tag.label).join(", "),
+    },
+    chips,
   );
 }
 

@@ -136,6 +136,37 @@ test("react basic demo applies tag color controls to cells and details", async (
   await expect.poll(async () => detailTag.getAttribute("style")).toContain("#7c3aed");
 });
 
+test("react basic demo summarizes overflowing tag chips", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("grid")).toBeVisible();
+  const firstTagsCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="tags"]');
+
+  await firstTagsCell.dblclick();
+  const tagInput = page.locator(".youp-grid__tag-input");
+  await expect(tagInput).toBeVisible();
+  await tagInput.fill("hedged");
+  await page.keyboard.press("Enter");
+  await page.getByRole("heading", { name: "Youp Grid" }).click();
+  await expect(tagInput).toBeHidden();
+  await expect(firstTagsCell.locator(".youp-grid__tag--overflow")).toHaveText("+1");
+  await expect(firstTagsCell.locator(".youp-grid__tag-list")).toHaveAttribute("title", /Hedged/);
+
+  const clippedTags = await firstTagsCell.evaluate((cell) => {
+    const cellRect = cell.getBoundingClientRect();
+
+    return Array.from(cell.querySelectorAll<HTMLElement>(".youp-grid__tag"))
+      .filter((tag) => {
+        const tagRect = tag.getBoundingClientRect();
+
+        return tagRect.left < cellRect.left - 0.5 || tagRect.right > cellRect.right + 0.5;
+      })
+      .map((tag) => tag.textContent?.trim() ?? "");
+  });
+
+  expect(clippedTags).toEqual([]);
+});
+
 test("react basic demo keeps expanded row details inside a narrow viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 820 });
   await page.goto("/");

@@ -758,8 +758,10 @@
 
 .youp-grid__tag-list {
   display: inline-flex;
+  max-width: 100%;
   min-width: 0;
   align-items: center;
+  flex: 1 1 auto;
   gap: 4px;
   overflow: hidden;
 }
@@ -782,8 +784,15 @@
 }
 
 .youp-grid__tag {
+  flex: 0 1 auto;
   min-height: 22px;
   padding: 2px 7px;
+}
+
+.youp-grid__tag--overflow {
+  flex: 0 0 auto;
+  color: #475569;
+  background: #eef2f7;
 }
 
 .youp-grid__option-badge {

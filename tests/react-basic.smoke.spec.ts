@@ -58,7 +58,8 @@ test("react basic demo supports grid interactions", async ({ page }) => {
   await tagInput.fill("hedged");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
-  await expect(firstTagsCell).toContainText("Hedged");
+  await expect(firstTagsCell.locator(".youp-grid__tag--overflow")).toHaveText("+1");
+  await expect(firstTagsCell.locator(".youp-grid__tag-list")).toHaveAttribute("title", /Hedged/);
 
   const firstStatusCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="status"]');
   await firstStatusCell.dblclick();
