@@ -1,6 +1,6 @@
 {
   "name": "youp-grid",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "Reusable TypeScript data grid core and UI adapters.",
   "license": "MIT",
