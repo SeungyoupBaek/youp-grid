@@ -21,6 +21,7 @@ This repository starts with a reusable engine, React and Vue UI adapters, and a 
 - fixed-size virtualization range calculation
 - serializable grid state helpers
 - reusable React editing, selection, tooltip, and row operation UI
+- reusable React CSV/TSV import callbacks and CSV/Excel export toolbar actions
 - reusable Vue 3 component and composable for grid editing, state, and row-model integration
 - reusable Vanilla DOM renderer for framework-free screens
 

@@ -30,8 +30,14 @@ export { exportGridCsv } from "./csv.ts";
 export type { CsvCellFormatter, ExportGridCsvOptions } from "./csv.ts";
 export { exportGridExcel } from "./excel.ts";
 export type { ExcelCellFormatter, ExportGridExcelOptions } from "./excel.ts";
-export { importGridDelimitedText, parseDelimitedText } from "./import.ts";
-export type { ImportGridDelimitedTextOptions, ImportGridDelimitedTextResult } from "./import.ts";
+export { createHeaderColumnMappings, importGridDelimitedText, parseDelimitedText } from "./import.ts";
+export type {
+  ImportGridColumnMapping,
+  ImportGridDelimitedTextIssue,
+  ImportGridDelimitedTextOptions,
+  ImportGridDelimitedTextResult,
+  ImportGridDelimitedTextRowResult,
+} from "./import.ts";
 export { applyFilters, defaultFilterPredicate } from "./filtering.ts";
 export { getInfiniteScrollTrigger } from "./infinite-scroll.ts";
 export { applyPagination } from "./pagination.ts";

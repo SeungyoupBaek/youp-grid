@@ -8,6 +8,9 @@ import type {
   GridRowId,
   GridRowModelType,
   GridState,
+  ImportGridColumnMapping,
+  ImportGridDelimitedTextIssue,
+  ImportGridDelimitedTextRowResult,
   RemoteCacheState,
   ResolvedColumnDef,
   RowModel,
@@ -51,6 +54,7 @@ export type YoupGridCellsValueChange<TRow> = {
 };
 
 export type YoupGridRowsChangeSource = "context-menu" | "clipboard" | "row-drag";
+export type YoupGridImportDelimiter = "auto" | "," | "\t" | ";";
 
 export type YoupGridRowInsertPosition = "above" | "below";
 
@@ -69,6 +73,26 @@ export type YoupGridCreateRowContext<TRow> = {
   sourceRowId?: GridRowId;
   sourceRowIndex?: number;
   sourceVisibleRowIndex?: number;
+};
+
+export type YoupGridCreateImportRowContext = {
+  rowIndex: number;
+  sourceRowIndex: number;
+  values: readonly string[];
+  headers: readonly string[];
+  fileName?: string;
+};
+
+export type YoupGridImportRows<TRow> = {
+  file: File;
+  text: string;
+  delimiter: "," | "\t" | ";";
+  headers: readonly string[];
+  rows: readonly TRow[];
+  sourceRows: readonly string[][];
+  rowResults: readonly ImportGridDelimitedTextRowResult<TRow>[];
+  issues: readonly ImportGridDelimitedTextIssue[];
+  columnMappings: readonly ImportGridColumnMapping[];
 };
 
 export type YoupGridRowInsertChange<TRow> = {
@@ -250,6 +274,7 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showColumnMenu?: boolean;
   showCsvExport?: boolean;
   showExcelExport?: boolean;
+  showImport?: boolean;
   showDensityControl?: boolean;
   showSizeColumnsToFit?: boolean;
   showFilters?: boolean;
@@ -266,6 +291,9 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   defaultExpandedDetailRowIds?: readonly GridRowId[];
   csvFileName?: string;
   excelFileName?: string;
+  importAccept?: string;
+  importDelimiter?: YoupGridImportDelimiter;
+  importIncludeHeaders?: boolean;
   density?: YoupGridDensity;
   defaultDensity?: YoupGridDensity;
   onDensityChange?: (density: YoupGridDensity) => void;
@@ -285,6 +313,8 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   onCellEditCommit?: (commit: YoupGridCellEditCommit<TRow>) => void;
   onCellsValueChange?: (change: YoupGridCellsValueChange<TRow>) => void;
   createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
+  createImportRow?: (context: YoupGridCreateImportRowContext) => TRow;
+  onImportRows?: (event: YoupGridImportRows<TRow>) => void;
   onRowsChange?: (change: YoupGridRowsChange<TRow>) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
   onRowDoubleClick?: (event: YoupGridRowEvent<TRow>) => void;

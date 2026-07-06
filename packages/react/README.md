@@ -25,7 +25,7 @@ import "@youp-grid/react/styles.css";
 - expandable master-detail rows through `renderRowDetail`
 - pinned top and bottom rows
 - controlled row drag reorder through `onRowsChange`
-- toolbar CSV and Excel export
+- toolbar CSV and Excel export plus CSV/TSV import callbacks
 - optional row number column and cell context menu
 - controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
 - loading, empty, error, validation, pending, warning, and read-only states
@@ -81,6 +81,21 @@ const columns: ColumnDef<SqlColumn>[] = [
     nullable: true,
   })}
   onRowsChange={({ rows }) => setRows(rows)}
+  showImport
+  createImportRow={() => ({
+    id: crypto.randomUUID(),
+    logicalName: "",
+    physicalName: "",
+    length: "",
+    nullable: true,
+  })}
+  onImportRows={({ rows, issues }) => {
+    if (issues.length > 0) {
+      // Show validation feedback before saving.
+      return;
+    }
+    setRows((current) => [...current, ...rows]);
+  }}
 />;
 ```
 

@@ -19,7 +19,9 @@ import { buildRowModel, type ColumnDef } from "@youp-grid/core";
 - tree data and row grouping helpers
 - pinned row model output
 - state persistence, row reorder, size-to-fit, and remote cache helpers
-- clipboard, fill handle, history, CSV/Excel import/export, and aggregation utilities
+- clipboard, fill handle, history, CSV/TSV import, CSV/Excel export, and aggregation utilities
+
+Delimited import returns parsed rows, source rows, headers, column mappings, and parser issues so UI adapters can render an import preview before applications persist data.
 
 UI adapters should reuse this package instead of duplicating data semantics.
 

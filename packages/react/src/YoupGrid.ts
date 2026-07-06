@@ -11,8 +11,11 @@ import {
   getClipboardPasteRowCount,
   isCellInRange,
   isRowGroupNode,
+  createHeaderColumnMappings,
+  importGridDelimitedText,
   normalizeCellRange,
   parseClipboardText,
+  parseDelimitedText,
   pushValueHistoryEntry,
   redoValueHistory,
   reorderRows,
@@ -113,6 +116,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const headerRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const cellContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
   const skipNextBlurCommitRef = useRef(false);
   const valueHistoryRef = useRef<GridValueHistoryState>(createValueHistoryState());
@@ -1361,6 +1365,56 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     });
   };
 
+  const importGridFile = async (file: File) => {
+    if (!props.onImportRows) {
+      return;
+    }
+
+    const text = await file.text();
+    const delimiter = resolveImportDelimiter(props.importDelimiter ?? "auto", file.name, text);
+    const includeHeaders = props.importIncludeHeaders ?? true;
+    const parsedHeaders = includeHeaders ? parseDelimitedText(text, delimiter)[0] ?? [] : [];
+    const columnMappings = createHeaderColumnMappings(visibleColumns, parsedHeaders);
+    const result = importGridDelimitedText({
+      text,
+      delimiter,
+      includeHeaders,
+      columns: visibleColumns,
+      columnMappings,
+      createRow: ({ rowIndex, values }) =>
+        props.createImportRow
+          ? props.createImportRow({
+              rowIndex,
+              sourceRowIndex: rowIndex,
+              values,
+              headers: parsedHeaders,
+              fileName: file.name,
+            })
+          : ({} as TRow),
+    });
+
+    props.onImportRows({
+      file,
+      text,
+      delimiter,
+      columnMappings,
+      headers: result.headers,
+      rows: result.rows,
+      sourceRows: result.sourceRows,
+      rowResults: result.rowResults,
+      issues: result.issues,
+    });
+  };
+
+  const handleImportFileChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) {
+      return;
+    }
+    void importGridFile(file);
+  };
+
   return createElement(
     "div",
     {
@@ -1380,6 +1434,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       showCsvExport: props.showCsvExport ?? true,
       showDensityControl: props.showDensityControl ?? true,
       showSizeColumnsToFit: props.showSizeColumnsToFit ?? false,
+      showImport: props.showImport ?? Boolean(props.onImportRows),
+      importDisabled: !gridEditable || !props.onImportRows,
       density,
       open: columnChooserOpen,
       columns: rowModel.columns,
@@ -1441,6 +1497,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           }),
         });
       },
+      openImportFilePicker: () => importFileInputRef.current?.click(),
+    }),
+    createElement("input", {
+      ref: importFileInputRef,
+      className: "youp-grid__file-input",
+      type: "file",
+      accept: props.importAccept ?? ".csv,.tsv,text/csv,text/tab-separated-values,text/plain",
+      onChange: handleImportFileChange,
     }),
     renderDisabledReason({
       enabled: !gridEditable,
@@ -4237,7 +4301,7 @@ function renderCellTooltip(meta: YoupGridCellMeta | undefined, tooltipId: string
   );
 }
 
-type GridButtonIconName = "columns" | "csv" | "excel" | "fit" | "next" | "previous";
+type GridButtonIconName = "columns" | "csv" | "excel" | "fit" | "import" | "next" | "previous";
 
 function renderGridButtonContent(icon: GridButtonIconName, label: string) {
   return createElement(
@@ -4308,6 +4372,17 @@ function renderGridButtonIcon(icon: GridButtonIconName) {
     );
   }
 
+  if (icon === "import") {
+    return createElement(
+      "svg",
+      iconProps,
+      createElement("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" }),
+      createElement("path", { d: "M14 2v6h6" }),
+      createElement("path", { d: "M12 18v-6" }),
+      createElement("path", { d: "m9 15 3 3 3-3" }),
+    );
+  }
+
   if (icon === "previous") {
     return createElement("svg", iconProps, createElement("path", { d: "m15 18-6-6 6-6" }));
   }
@@ -4319,6 +4394,8 @@ function renderColumnToolbar<TRow>(context: {
   showColumnChooser: boolean;
   showCsvExport: boolean;
   showExcelExport: boolean;
+  showImport: boolean;
+  importDisabled: boolean;
   showDensityControl: boolean;
   showSizeColumnsToFit: boolean;
   density: YoupGridDensity;
@@ -4339,11 +4416,13 @@ function renderColumnToolbar<TRow>(context: {
   sizeColumnsToFit: () => void;
   exportCsv: () => void;
   exportExcel: () => void;
+  openImportFilePicker: () => void;
 }) {
   if (
     !context.showColumnChooser &&
     !context.showCsvExport &&
     !context.showExcelExport &&
+    !context.showImport &&
     !context.showDensityControl &&
     !context.showSizeColumnsToFit
   ) {
@@ -4395,6 +4474,18 @@ function renderColumnToolbar<TRow>(context: {
             onClick: context.exportExcel,
           },
           renderGridButtonContent("excel", "Export Excel"),
+        )
+      : undefined,
+    context.showImport
+      ? createElement(
+          "button",
+          {
+            className: "youp-grid__toolbar-button",
+            type: "button",
+            disabled: context.importDisabled,
+            onClick: context.openImportFilePicker,
+          },
+          renderGridButtonContent("import", "Import"),
         )
       : undefined,
     context.showSizeColumnsToFit
@@ -6640,4 +6731,31 @@ function normalizeHeight(height: YoupGridProps<unknown>["height"]): number | und
   }
 
   return undefined;
+}
+
+function resolveImportDelimiter(
+  delimiter: YoupGridProps<unknown>["importDelimiter"],
+  fileName: string,
+  text: string,
+): "," | "\t" | ";" {
+  if (delimiter && delimiter !== "auto") {
+    return delimiter;
+  }
+
+  if (fileName.toLocaleLowerCase().endsWith(".tsv")) {
+    return "\t";
+  }
+
+  const sample = text.split(/\r?\n/, 1)[0] ?? "";
+  const candidates: readonly ("," | "\t" | ";")[] = [",", "\t", ";"];
+  return candidates.reduce((selected, candidate) => {
+    return countOccurrences(sample, candidate) > countOccurrences(sample, selected) ? candidate : selected;
+  }, ",");
+}
+
+function countOccurrences(value: string, needle: string) {
+  if (needle.length === 0) {
+    return 0;
+  }
+  return value.split(needle).length - 1;
 }

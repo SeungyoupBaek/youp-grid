@@ -10,6 +10,7 @@ import {
   clearFilter,
   clearSelection,
   createGridState,
+  createHeaderColumnMappings,
   createRemoteCacheKey,
   createValueHistoryState,
   exportGridCsv,
@@ -962,7 +963,60 @@ test("delimited import parses CSV and writes field-backed rows", () => {
     { id: "import-0", name: "Kim, A", age: 41, city: "Seoul", profile: { tier: "gold" } },
     { id: "import-1", name: "Han", age: 31, city: "Incheon", profile: { tier: "silver" } },
   ]);
+  assert.deepEqual(result.sourceRows, [
+    ["Kim, A", "41", "Seoul", "gold"],
+    ["Han", "31", "Incheon", "silver"],
+  ]);
+  assert.deepEqual(result.issues, []);
   assert.deepEqual(parseDelimitedText("a\tb\nc\td", "\t"), [["a", "b"], ["c", "d"]]);
+});
+
+test("delimited import supports header mappings and captures parser issues", () => {
+  const columns = [
+    { field: "name", headerName: "Name" },
+    {
+      field: "age",
+      headerName: "Age",
+      valueParser: (value: string) => {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+          throw new Error("Age must be a number");
+        }
+        return number;
+      },
+    },
+  ];
+  const mappings = createHeaderColumnMappings(columns, ["Age", "Name"]);
+  const result = importGridDelimitedText<Person>({
+    text: "Age,Name\n41,Kim\nbad,Han",
+    columns,
+    columnMappings: mappings,
+    createRow: ({ rowIndex }) => ({
+      id: `mapped-${rowIndex}`,
+      name: "",
+      age: 0,
+      city: "",
+      profile: { tier: "" },
+    }),
+  });
+
+  assert.deepEqual(mappings, [
+    { columnId: "name", sourceIndex: 1, sourceHeader: "Name" },
+    { columnId: "age", sourceIndex: 0, sourceHeader: "Age" },
+  ]);
+  assert.deepEqual(result.rows, [
+    { id: "mapped-0", name: "Kim", age: 41, city: "", profile: { tier: "" } },
+    { id: "mapped-1", name: "Han", age: 0, city: "", profile: { tier: "" } },
+  ]);
+  assert.deepEqual(result.issues, [
+    {
+      rowIndex: 1,
+      columnId: "age",
+      columnIndex: 0,
+      value: "bad",
+      message: "Age must be a number",
+    },
+  ]);
 });
 
 test("state persistence round-trips grid state through storage", () => {
