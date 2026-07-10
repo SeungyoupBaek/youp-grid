@@ -50,6 +50,7 @@ import { Fragment, createElement, useEffect, useLayoutEffect, useMemo, useRef, u
 import type {
   ChangeEvent as ReactChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
+  CompositionEvent as ReactCompositionEvent,
   CSSProperties,
   DragEvent as ReactDragEvent,
   FocusEvent as ReactFocusEvent,
@@ -1952,8 +1953,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                   },
                   applyCellValue,
                   startEditing: startEditingCell,
-                  updateEditingDraft: (draftValue) => {
-                    setEditingCell((current) => current ? { ...current, draftValue } : current);
+                  updateEditingDraft: (draftValue, options) => {
+                    setEditingCell((current) => updateEditingDraft(current, draftValue, options));
                   },
                   cancelEditing: cancelEditingCell,
                   commitEditing: commitEditingValue,
@@ -3209,8 +3210,8 @@ function renderDisplayRow<TRow>(context: {
     autoSizeColumn: context.autoSizeColumn,
     applyCellValue: context.applyCellValue,
     startEditing: context.startEditingCell,
-    updateEditingDraft: (draftValue) => {
-      context.setEditingCell((current) => current ? { ...current, draftValue } : current);
+    updateEditingDraft: (draftValue, options) => {
+      context.setEditingCell((current) => updateEditingDraft(current, draftValue, options));
     },
     cancelEditing: context.cancelEditingCell,
     commitEditing: context.commitEditingValue,
@@ -3282,7 +3283,7 @@ function renderRow<TRow>(context: {
   autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
-  updateEditingDraft: (draftValue: string) => void;
+  updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
   cancelEditing: () => void;
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onRowClick?: (event: YoupGridRowEvent<TRow>) => void;
@@ -3572,7 +3573,7 @@ function renderCell<TRow>(context: {
   autoSizeColumn: (event: ReactMouseEvent<HTMLElement>, column: ResolvedColumnDef<TRow>) => void;
   applyCellValue: (cell: CellRenderState<TRow>, value: unknown) => void;
   startEditing: (cell: EditingCell) => void;
-  updateEditingDraft: (draftValue: string) => void;
+  updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
   cancelEditing: () => void;
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onKeyDown: (
@@ -4001,7 +4002,7 @@ function renderDetailCellContent(context: {
 function renderCellEditor<TRow>(context: {
   cell: CellRenderState<TRow>;
   editingCell?: EditingCell;
-  updateEditingDraft: (draftValue: string) => void;
+  updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   cancelEditing: () => void;
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
@@ -4100,7 +4101,23 @@ function renderCellEditor<TRow>(context: {
         onClick: stopEditorMouseEvent,
         onDoubleClick: stopEditorMouseEvent,
         onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
-          context.updateEditingDraft(event.currentTarget.value);
+          context.updateEditingDraft(event.currentTarget.value, {
+            preserveInitialPrintableKeyDraft: shouldPreserveInitialPrintableKeyDraft(
+              context.editingCell,
+              event.nativeEvent,
+            ),
+          });
+        },
+        onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+          clearInitialPrintableKeyDraftForComposition(context, event, "");
+        },
+        onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+          const nextDraftValue = stripInitialPrintableKeyDraft(
+            context.editingCell,
+            event.currentTarget.value,
+          );
+          event.currentTarget.value = nextDraftValue;
+          context.updateEditingDraft(nextDraftValue);
         },
         onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
           context.commitEditing(
@@ -4142,7 +4159,23 @@ function renderCellEditor<TRow>(context: {
     onClick: stopEditorMouseEvent,
     onDoubleClick: stopEditorMouseEvent,
     onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
-      context.updateEditingDraft(event.currentTarget.value);
+      context.updateEditingDraft(event.currentTarget.value, {
+        preserveInitialPrintableKeyDraft: shouldPreserveInitialPrintableKeyDraft(
+          context.editingCell,
+          event.nativeEvent,
+        ),
+      });
+    },
+    onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      clearInitialPrintableKeyDraftForComposition(context, event, "");
+    },
+    onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      const nextDraftValue = stripInitialPrintableKeyDraft(
+        context.editingCell,
+        event.currentTarget.value,
+      );
+      event.currentTarget.value = nextDraftValue;
+      context.updateEditingDraft(nextDraftValue);
     },
     onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
       context.commitEditing(
@@ -4172,7 +4205,7 @@ function getInputEditorType(editor: ResolvedColumnDef<unknown>["editor"]): strin
 function renderTagsEditor<TRow>(context: {
   cell: CellRenderState<TRow>;
   editingCell?: EditingCell;
-  updateEditingDraft: (draftValue: string) => void;
+  updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   onKeyDown: (
     event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
@@ -4242,7 +4275,27 @@ function renderTagsEditor<TRow>(context: {
       onClick: stopEditorMouseEvent,
       onDoubleClick: stopEditorMouseEvent,
       onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
-        context.updateEditingDraft(serializeTagEditorDraft(parts.tags, event.currentTarget.value));
+        context.updateEditingDraft(serializeTagEditorDraft(parts.tags, event.currentTarget.value), {
+          preserveInitialPrintableKeyDraft: shouldPreserveInitialPrintableKeyDraft(
+            context.editingCell,
+            event.nativeEvent,
+          ),
+        });
+      },
+      onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+        clearInitialPrintableKeyDraftForComposition(
+          context,
+          event,
+          serializeTagEditorDraft(parts.tags, ""),
+        );
+      },
+      onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+        const nextInputValue = stripInitialPrintableKeyDraft(
+          context.editingCell,
+          event.currentTarget.value,
+        );
+        event.currentTarget.value = nextInputValue;
+        context.updateEditingDraft(serializeTagEditorDraft(parts.tags, nextInputValue));
       },
       onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
         commitDraft(serializeTagEditorDraftWithInput(parts.tags, event.currentTarget.value), "blur");
@@ -4271,6 +4324,51 @@ function renderTagsEditor<TRow>(context: {
 
 function stopEditorMouseEvent(event: ReactMouseEvent<HTMLElement>) {
   event.stopPropagation();
+}
+
+function clearInitialPrintableKeyDraftForComposition(
+  context: {
+    editingCell?: EditingCell;
+    updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
+  },
+  event: ReactCompositionEvent<HTMLInputElement>,
+  nextDraftValue: string,
+) {
+  const initialDraft = context.editingCell?.initialPrintableKeyDraft;
+  if (
+    !context.editingCell?.startedWithPrintableKey ||
+    initialDraft === undefined ||
+    event.currentTarget.value !== initialDraft
+  ) {
+    return;
+  }
+
+  event.currentTarget.value = "";
+  context.updateEditingDraft(nextDraftValue);
+}
+
+function stripInitialPrintableKeyDraft(editingCell: EditingCell | undefined, value: string): string {
+  const initialDraft = editingCell?.initialPrintableKeyDraft;
+  if (!editingCell?.startedWithPrintableKey || initialDraft === undefined || !value.startsWith(initialDraft)) {
+    return value;
+  }
+
+  return value.slice(initialDraft.length);
+}
+
+function shouldPreserveInitialPrintableKeyDraft(
+  editingCell: EditingCell | undefined,
+  event: Event,
+): boolean {
+  return Boolean(
+    editingCell?.startedWithPrintableKey &&
+    editingCell.initialPrintableKeyDraft !== undefined &&
+    isNativeCompositionEvent(event),
+  );
+}
+
+function isNativeCompositionEvent(event: Event): boolean {
+  return Boolean((event as InputEvent).isComposing);
 }
 
 function renderCellStatus(meta: YoupGridCellMeta | undefined, tooltipMode: YoupGridCellTooltipMode) {
@@ -5329,6 +5427,11 @@ type EditingCell = FocusedCell & {
   rowId: GridRowId;
   columnId: string;
   draftValue: string;
+  startedWithPrintableKey?: boolean;
+  initialPrintableKeyDraft?: string;
+};
+type UpdateEditingDraftOptions = {
+  preserveInitialPrintableKeyDraft?: boolean;
 };
 
 type CellRenderState<TRow> = {
@@ -5484,7 +5587,9 @@ function handleCellKeyDown<TRow>(context: {
     if (context.cell.editable && context.cell.column.editor !== "checkbox") {
       if (canUseKeyAsInitialDraft(context.event)) {
         context.event.preventDefault();
-        context.startEditing(createEditingCell(context.cell, context.event.key));
+        context.startEditing(
+          createEditingCell(context.cell, context.event.key, { startedWithPrintableKey: true }),
+        );
       } else {
         context.startEditing(createEditingCell(context.cell, ""));
       }
@@ -5690,13 +5795,42 @@ function focusCellAfterRender(context: {
   });
 }
 
-function createEditingCell<TRow>(cell: CellRenderState<TRow>, value: unknown): EditingCell {
+function updateEditingDraft(
+  current: EditingCell | undefined,
+  draftValue: string,
+  options?: UpdateEditingDraftOptions,
+): EditingCell | undefined {
+  if (!current) {
+    return current;
+  }
+
+  if (options?.preserveInitialPrintableKeyDraft) {
+    return { ...current, draftValue };
+  }
+
+  return {
+    ...current,
+    draftValue,
+    startedWithPrintableKey: undefined,
+    initialPrintableKeyDraft: undefined,
+  };
+}
+
+function createEditingCell<TRow>(
+  cell: CellRenderState<TRow>,
+  value: unknown,
+  options?: { startedWithPrintableKey?: boolean },
+): EditingCell {
+  const draftValue = getEditorDraftValue(cell.column, value);
+
   return {
     rowId: cell.row.id,
     rowIndex: cell.rowIndex,
     columnId: cell.column.id,
     columnIndex: cell.columnIndex,
-    draftValue: getEditorDraftValue(cell.column, value),
+    draftValue,
+    startedWithPrintableKey: options?.startedWithPrintableKey,
+    initialPrintableKeyDraft: options?.startedWithPrintableKey ? draftValue : undefined,
   };
 }
 
