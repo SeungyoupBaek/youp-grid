@@ -144,16 +144,22 @@ test("react basic demo keeps direct cell editing active through Korean IME compo
   await expect(firstSymbolCell).toContainText("한");
 });
 
-test("react basic demo starts an empty editor when composition begins in a selected cell", async ({ page }) => {
+test("react basic demo forwards cell-owned Korean composition into the editor", async ({ page }) => {
   await page.goto("/");
 
   const firstSymbolCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="symbol"]');
   await firstSymbolCell.click();
   await firstSymbolCell.evaluate((node) => {
     node.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    node.dispatchEvent(new CompositionEvent("compositionupdate", { bubbles: true, data: "ㅎ" }));
+    node.dispatchEvent(new CompositionEvent("compositionupdate", { bubbles: true, data: "하" }));
+    node.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "한" }));
   });
 
-  await expect(page.locator(".youp-grid__cell-editor")).toHaveValue("");
+  const editor = page.locator(".youp-grid__cell-editor");
+  await expect(editor).toHaveValue("한");
+  await page.keyboard.press("Enter");
+  await expect(firstSymbolCell).toContainText("한");
 });
 
 test("react basic demo keeps tag option colors after edit blur", async ({ page }) => {

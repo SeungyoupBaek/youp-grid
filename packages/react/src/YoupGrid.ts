@@ -3701,9 +3701,24 @@ function renderCell<TRow>(context: {
         }
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => context.onKeyDown(event, cellState),
-      onCompositionStart: () => {
-        if (!context.editing && editable && column.editor !== "checkbox") {
+      onCompositionStart: (event: ReactCompositionEvent<HTMLDivElement>) => {
+        if (
+          event.target === event.currentTarget &&
+          !context.editing &&
+          editable &&
+          column.editor !== "checkbox"
+        ) {
           context.startEditing(createEditingCell(cellState, ""));
+        }
+      },
+      onCompositionUpdate: (event: ReactCompositionEvent<HTMLDivElement>) => {
+        if (event.target === event.currentTarget && editable && column.editor !== "checkbox") {
+          context.updateEditingDraft(event.data);
+        }
+      },
+      onCompositionEnd: (event: ReactCompositionEvent<HTMLDivElement>) => {
+        if (event.target === event.currentTarget && editable && column.editor !== "checkbox") {
+          context.updateEditingDraft(event.data);
         }
       },
       onContextMenu: context.openContextMenu

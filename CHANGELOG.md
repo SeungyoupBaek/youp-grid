@@ -6,6 +6,10 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-13
+
+- Forward cell-owned Korean IME composition updates into the React editor so continuous input remains composed.
+
 ## [0.4.2] - 2026-07-13
 
 - Fix React cell editing so Korean IME composition begins and commits without splitting consonants and vowels.
