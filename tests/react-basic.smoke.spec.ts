@@ -162,7 +162,7 @@ test("react basic demo forwards cell-owned Korean composition into the editor", 
   await expect(firstSymbolCell).toContainText("한");
 });
 
-test("react basic demo keeps the selected-cell IME target mounted until composition ends", async ({ page }) => {
+test("react basic demo preserves the IME target across consecutive Korean syllables", async ({ page }) => {
   await page.goto("/");
 
   const firstSymbolCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="symbol"]');
@@ -172,47 +172,94 @@ test("react basic demo keeps the selected-cell IME target mounted until composit
   await expect(inputProxy).toBeFocused();
   await inputProxy.evaluate((node) => {
     const input = node as HTMLInputElement;
+    (window as typeof window & { __youpImeTarget?: HTMLInputElement }).__youpImeTarget = input;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (!setValue) {
       throw new Error("Input value setter is unavailable");
     }
 
     input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent("keydown", {
-      bubbles: true,
-      isComposing: true,
-      key: "Unidentified",
-      keyCode: 229,
-    }));
-    setValue.call(input, "ㅎ");
+    setValue.call(input, "ㅂ");
     input.dispatchEvent(new InputEvent("input", {
       bubbles: true,
-      data: "ㅎ",
+      data: "ㅂ",
       inputType: "insertCompositionText",
       isComposing: true,
     }));
-    setValue.call(input, "한");
+    setValue.call(input, "백");
     input.dispatchEvent(new InputEvent("input", {
       bubbles: true,
-      data: "한",
+      data: "백",
       inputType: "insertCompositionText",
       isComposing: true,
     }));
-  });
-
-  await expect(inputProxy).toBeFocused();
-  await expect(inputProxy).toHaveClass(/youp-grid__ime-input-proxy--composing/);
-  await expect.poll(() => inputProxy.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
-  await expect(firstSymbolCell.locator(".youp-grid__cell-editor")).toHaveCount(0);
-
-  await inputProxy.evaluate((node) => {
-    node.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "한" }));
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "백" }));
   });
 
   const editor = firstSymbolCell.locator(".youp-grid__cell-editor");
-  await expect(editor).toHaveValue("한");
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue("백");
+  expect(await editor.evaluate((node) => (
+    node === (window as typeof window & { __youpImeTarget?: HTMLInputElement }).__youpImeTarget
+  ))).toBe(true);
+
+  await editor.evaluate((node) => {
+    const input = node as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setValue) {
+      throw new Error("Input value setter is unavailable");
+    }
+
+    input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    setValue.call(input, "백ㅅ");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "ㅅ",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    setValue.call(input, "백승");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "승",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "승" }));
+  });
+  await expect(editor).toHaveValue("백승");
+
+  await editor.evaluate((node) => {
+    const input = node as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setValue) {
+      throw new Error("Input value setter is unavailable");
+    }
+
+    input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    setValue.call(input, "백승ㅇ");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "ㅇ",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    setValue.call(input, "백승엽");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "엽",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "엽" }));
+  });
+  await expect(editor).toHaveValue("백승엽");
+  expect(await editor.evaluate((node) => (
+    node === (window as typeof window & { __youpImeTarget?: HTMLInputElement }).__youpImeTarget
+  ))).toBe(true);
+
   await page.keyboard.press("Enter");
-  await expect(firstSymbolCell).toContainText("한");
+  await expect(firstSymbolCell).toContainText("백승엽");
 });
 
 test("react basic demo keeps tag option colors after edit blur", async ({ page }) => {

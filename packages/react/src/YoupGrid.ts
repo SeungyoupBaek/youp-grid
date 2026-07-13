@@ -3649,10 +3649,15 @@ function renderCell<TRow>(context: {
         toggleExpanded: context.toggleDetailRowExpanded,
       })
     : treeContent;
-  const imeInputProxy = context.focused && !context.editing && editable && supportsImeInputProxy(column)
-    ? renderImeInputProxy({
+  const persistentImeEditor = (context.focused || context.editing) && editable && supportsImeInputProxy(column)
+    ? renderPersistentImeEditor({
         cell: cellState,
+        editing: context.editing,
+        editingCell: context.editingCell,
         startEditing: context.startEditing,
+        updateEditingDraft: context.updateEditingDraft,
+        commitEditing: context.commitEditing,
+        onKeyDown: context.onKeyDown,
       })
     : undefined;
 
@@ -3761,17 +3766,23 @@ function renderCell<TRow>(context: {
         context.closeCellTooltip(cellKey);
       },
     },
-    context.editing
-      ? renderCellEditor({
-          cell: cellState,
-          editingCell: context.editingCell,
-          updateEditingDraft: context.updateEditingDraft,
-          commitEditing: context.commitEditing,
-          onKeyDown: context.onKeyDown,
-          cancelEditing: context.cancelEditing,
-          renderEditor: context.renderEditor,
-        })
-      : createElement(Fragment, undefined, renderedContent, imeInputProxy),
+    createElement(
+      Fragment,
+      undefined,
+      context.editing ? undefined : renderedContent,
+      context.editing
+        ? renderCellEditor({
+            cell: cellState,
+            editingCell: context.editingCell,
+            updateEditingDraft: context.updateEditingDraft,
+            commitEditing: context.commitEditing,
+            onKeyDown: context.onKeyDown,
+            cancelEditing: context.cancelEditing,
+            renderEditor: context.renderEditor,
+            imeEditor: persistentImeEditor,
+          })
+        : persistentImeEditor,
+    ),
     renderCellStatus(context.meta, context.cellTooltipMode),
     renderCellTooltip(context.meta, tooltipId),
     !context.editing && context.showFillHandle
@@ -4036,6 +4047,7 @@ function renderCellEditor<TRow>(context: {
   commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
   cancelEditing: () => void;
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
+  imeEditor?: ReactNode;
   onKeyDown: (
     event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     cell: CellRenderState<TRow>,
@@ -4063,6 +4075,10 @@ function renderCellEditor<TRow>(context: {
     if (customEditor !== undefined && customEditor !== null) {
       return customEditor;
     }
+  }
+
+  if (context.imeEditor !== undefined) {
+    return context.imeEditor;
   }
 
   if (context.cell.column.editor === "select") {
@@ -4238,41 +4254,101 @@ function supportsImeInputProxy<TRow>(column: ResolvedColumnDef<TRow>): boolean {
   return column.editor === undefined || column.editor === "text" || column.editor === "combobox";
 }
 
-function renderImeInputProxy<TRow>(context: {
+function renderPersistentImeEditor<TRow>(context: {
   cell: CellRenderState<TRow>;
+  editing: boolean;
+  editingCell?: EditingCell;
   startEditing: (cell: EditingCell) => void;
+  updateEditingDraft: (draftValue: string, options?: UpdateEditingDraftOptions) => void;
+  commitEditing: (cell: EditingCell, reason?: YoupGridCellEditCommitReason) => void;
+  onKeyDown: (
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    cell: CellRenderState<TRow>,
+  ) => void;
 }) {
-  const startEditingWithInput = (input: HTMLInputElement, fallbackValue = "") => {
-    const draftValue = input.value || fallbackValue;
-    if (draftValue.length > 0) {
-      context.startEditing(createEditingCell(context.cell, draftValue));
-    }
-  };
-
-  return createElement("input", {
-    key: "__ime-input-proxy",
-    className: "youp-grid__ime-input-proxy",
+  const combobox = context.cell.column.editor === "combobox";
+  const listId = combobox
+    ? `youp-grid-combobox-${getCellKey(context.cell.row.id, context.cell.column.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`
+    : undefined;
+  const input = createElement("input", {
+    key: "__ime-input",
+    className: context.editing
+      ? [
+          "youp-grid__cell-editor",
+          combobox ? "youp-grid__cell-editor--combobox" : "",
+        ].filter(Boolean).join(" ")
+      : "youp-grid__ime-input-proxy",
     type: "text",
+    list: context.editing ? listId : undefined,
+    value: context.editing ? context.editingCell?.draftValue ?? "" : "",
+    placeholder: context.editing ? context.cell.column.placeholder : undefined,
     tabIndex: -1,
+    autoFocus: context.editing,
     autoComplete: "off",
     spellCheck: false,
+    disabled: !context.cell.editable,
     "aria-label": `Edit ${context.cell.column.headerName}`,
     "data-youp-ime-input-proxy": "",
+    onMouseDown: context.editing ? stopEditorMouseEvent : undefined,
+    onClick: context.editing ? stopEditorMouseEvent : undefined,
+    onDoubleClick: context.editing ? stopEditorMouseEvent : undefined,
+    onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
+      if (!context.editing) {
+        context.startEditing(createEditingCell(context.cell, event.currentTarget.value));
+        return;
+      }
+
+      context.updateEditingDraft(event.currentTarget.value, {
+        preserveInitialPrintableKeyDraft: shouldPreserveInitialPrintableKeyDraft(
+          context.editingCell,
+          event.nativeEvent,
+        ),
+      });
+    },
     onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      beginEditorComposition(event.currentTarget);
+      if (context.editing) {
+        clearInitialPrintableKeyDraftForComposition(context, event, "");
+        return;
+      }
+
       event.currentTarget.value = "";
       event.currentTarget.classList.add("youp-grid__ime-input-proxy--composing");
-      beginEditorComposition(event.currentTarget);
+      context.startEditing(createEditingCell(context.cell, ""));
     },
     onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
       endEditorComposition(event.currentTarget);
-      startEditingWithInput(event.currentTarget, event.data);
+      const nextDraftValue = stripInitialPrintableKeyDraft(
+        context.editingCell,
+        event.currentTarget.value || event.data,
+      );
+      event.currentTarget.value = nextDraftValue;
+      if (context.editing) {
+        context.updateEditingDraft(nextDraftValue);
+      } else if (nextDraftValue.length > 0) {
+        context.startEditing(createEditingCell(context.cell, nextDraftValue));
+      }
     },
     onInput: (event: ReactFormEvent<HTMLInputElement>) => {
-      if (!isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
-        startEditingWithInput(event.currentTarget);
+      if (
+        !context.editing &&
+        !isEditorCompositionActive(event.currentTarget, event.nativeEvent) &&
+        event.currentTarget.value.length > 0
+      ) {
+        context.startEditing(createEditingCell(context.cell, event.currentTarget.value));
       }
     },
     onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (context.editing) {
+        event.stopPropagation();
+        if (isCompositionEditingKey(event) || isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
+          return;
+        }
+
+        context.onKeyDown(event, context.cell);
+        return;
+      }
+
       if (
         isCompositionEditingKey(event) ||
         isEditorCompositionActive(event.currentTarget, event.nativeEvent) ||
@@ -4283,10 +4359,39 @@ function renderImeInputProxy<TRow>(context: {
     },
     onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
       endEditorComposition(event.currentTarget);
-      event.currentTarget.classList.remove("youp-grid__ime-input-proxy--composing");
-      event.currentTarget.value = "";
+      if (context.editing) {
+        context.commitEditing(
+          createEditingCell(context.cell, event.currentTarget.value),
+          "blur",
+        );
+      } else {
+        event.currentTarget.classList.remove("youp-grid__ime-input-proxy--composing");
+        event.currentTarget.value = "";
+      }
     },
   });
+
+  if (!combobox || !listId) {
+    return input;
+  }
+
+  const options = normalizeEditorOptions(context.cell.column.options);
+  return createElement(
+    Fragment,
+    { key: "__ime-editor" },
+    input,
+    createElement(
+      "datalist",
+      { id: listId, key: "__ime-options" },
+      options
+        .filter((option) => !option.disabled)
+        .map((option) => createElement(
+          "option",
+          { key: option.inputValue, value: option.label },
+          option.description,
+        )),
+    ),
+  );
 }
 
 function getInputEditorType(editor: ResolvedColumnDef<unknown>["editor"]): string {
