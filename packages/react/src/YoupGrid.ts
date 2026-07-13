@@ -54,6 +54,7 @@ import type {
   CSSProperties,
   DragEvent as ReactDragEvent,
   FocusEvent as ReactFocusEvent,
+  FormEvent as ReactFormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
@@ -3648,6 +3649,12 @@ function renderCell<TRow>(context: {
         toggleExpanded: context.toggleDetailRowExpanded,
       })
     : treeContent;
+  const imeInputProxy = context.focused && !context.editing && editable && supportsImeInputProxy(column)
+    ? renderImeInputProxy({
+        cell: cellState,
+        startEditing: context.startEditing,
+      })
+    : undefined;
 
   return createElement(
     "div",
@@ -3680,11 +3687,13 @@ function renderCell<TRow>(context: {
       "data-youp-column-id": column.id,
       style: getCellStyle(context.layout),
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
-        event.currentTarget.focus({ preventScroll: true });
+        const cellElement = event.currentTarget;
         context.setFocusedCell(
           { rowIndex: context.rowIndex, columnIndex: context.columnIndex },
           event.shiftKey,
         );
+        focusGridCellTarget(cellElement);
+        requestAnimationFrame(() => focusImeInputProxy(cellElement));
       },
       onDoubleClick: (event: ReactMouseEvent<HTMLDivElement>) => {
         if (isCellRightBorderDoubleClick(event)) {
@@ -3762,7 +3771,7 @@ function renderCell<TRow>(context: {
           cancelEditing: context.cancelEditing,
           renderEditor: context.renderEditor,
         })
-      : renderedContent,
+      : createElement(Fragment, undefined, renderedContent, imeInputProxy),
     renderCellStatus(context.meta, context.cellTooltipMode),
     renderCellTooltip(context.meta, tooltipId),
     !context.editing && context.showFillHandle
@@ -4221,6 +4230,61 @@ function renderCellEditor<TRow>(context: {
       }
 
       context.onKeyDown(event, context.cell);
+    },
+  });
+}
+
+function supportsImeInputProxy<TRow>(column: ResolvedColumnDef<TRow>): boolean {
+  return column.editor === undefined || column.editor === "text" || column.editor === "combobox";
+}
+
+function renderImeInputProxy<TRow>(context: {
+  cell: CellRenderState<TRow>;
+  startEditing: (cell: EditingCell) => void;
+}) {
+  const startEditingWithInput = (input: HTMLInputElement, fallbackValue = "") => {
+    const draftValue = input.value || fallbackValue;
+    if (draftValue.length > 0) {
+      context.startEditing(createEditingCell(context.cell, draftValue));
+    }
+  };
+
+  return createElement("input", {
+    key: "__ime-input-proxy",
+    className: "youp-grid__ime-input-proxy",
+    type: "text",
+    tabIndex: -1,
+    autoComplete: "off",
+    spellCheck: false,
+    "aria-label": `Edit ${context.cell.column.headerName}`,
+    "data-youp-ime-input-proxy": "",
+    onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      event.currentTarget.value = "";
+      event.currentTarget.classList.add("youp-grid__ime-input-proxy--composing");
+      beginEditorComposition(event.currentTarget);
+    },
+    onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      endEditorComposition(event.currentTarget);
+      startEditingWithInput(event.currentTarget, event.data);
+    },
+    onInput: (event: ReactFormEvent<HTMLInputElement>) => {
+      if (!isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
+        startEditingWithInput(event.currentTarget);
+      }
+    },
+    onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (
+        isCompositionEditingKey(event) ||
+        isEditorCompositionActive(event.currentTarget, event.nativeEvent) ||
+        (event.key.length === 1 && !isAsciiPrintableKey(event.key))
+      ) {
+        event.stopPropagation();
+      }
+    },
+    onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+      endEditorComposition(event.currentTarget);
+      event.currentTarget.classList.remove("youp-grid__ime-input-proxy--composing");
+      event.currentTarget.value = "";
     },
   });
 }
@@ -5822,9 +5886,21 @@ function focusCell(bodyElement: HTMLDivElement | null, cell: FocusedCell): HTMLE
     `[data-youp-row-index="${cell.rowIndex}"][data-youp-column-index="${cell.columnIndex}"]`,
   );
 
-  cellElement?.focus({ preventScroll: true });
+  if (cellElement) {
+    focusGridCellTarget(cellElement);
+  }
 
   return cellElement ?? undefined;
+}
+
+function focusGridCellTarget(cellElement: HTMLElement): void {
+  const inputProxy = cellElement.querySelector<HTMLInputElement>("[data-youp-ime-input-proxy]");
+  (inputProxy ?? cellElement).focus({ preventScroll: true });
+}
+
+function focusImeInputProxy(cellElement: HTMLElement): void {
+  cellElement.querySelector<HTMLInputElement>("[data-youp-ime-input-proxy]")
+    ?.focus({ preventScroll: true });
 }
 
 function focusCellAfterRender(context: {

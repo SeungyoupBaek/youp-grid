@@ -162,6 +162,59 @@ test("react basic demo forwards cell-owned Korean composition into the editor", 
   await expect(firstSymbolCell).toContainText("한");
 });
 
+test("react basic demo keeps the selected-cell IME target mounted until composition ends", async ({ page }) => {
+  await page.goto("/");
+
+  const firstSymbolCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="symbol"]');
+  await firstSymbolCell.click();
+
+  const inputProxy = firstSymbolCell.locator(".youp-grid__ime-input-proxy");
+  await expect(inputProxy).toBeFocused();
+  await inputProxy.evaluate((node) => {
+    const input = node as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setValue) {
+      throw new Error("Input value setter is unavailable");
+    }
+
+    input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      isComposing: true,
+      key: "Unidentified",
+      keyCode: 229,
+    }));
+    setValue.call(input, "ㅎ");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "ㅎ",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    setValue.call(input, "한");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "한",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+  });
+
+  await expect(inputProxy).toBeFocused();
+  await expect(inputProxy).toHaveClass(/youp-grid__ime-input-proxy--composing/);
+  await expect.poll(() => inputProxy.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+  await expect(firstSymbolCell.locator(".youp-grid__cell-editor")).toHaveCount(0);
+
+  await inputProxy.evaluate((node) => {
+    node.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "한" }));
+  });
+
+  const editor = firstSymbolCell.locator(".youp-grid__cell-editor");
+  await expect(editor).toHaveValue("한");
+  await page.keyboard.press("Enter");
+  await expect(firstSymbolCell).toContainText("한");
+});
+
 test("react basic demo keeps tag option colors after edit blur", async ({ page }) => {
   await page.goto("/");
 

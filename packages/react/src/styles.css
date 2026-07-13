@@ -488,6 +488,27 @@
   box-shadow: inset 0 0 0 2px #2563eb;
 }
 
+.youp-grid__ime-input-proxy {
+  position: absolute;
+  inset: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.youp-grid__ime-input-proxy--composing {
+  z-index: 1;
+  padding: var(--youp-grid-editor-block-padding) var(--youp-grid-cell-inline-padding);
+  color: var(--youp-grid-text);
+  font: inherit;
+  background: #fff;
+  opacity: 1;
+  outline: none;
+}
+
 .youp-grid__cell--range-selected {
   background: #dbeafe;
 }
