@@ -101,6 +101,7 @@ const DECIMAL_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
 });
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
+const composingEditorInputs = new WeakSet<HTMLInputElement>();
 
 export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const controller = useYoupGrid(props);
@@ -3700,6 +3701,11 @@ function renderCell<TRow>(context: {
         }
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => context.onKeyDown(event, cellState),
+      onCompositionStart: () => {
+        if (!context.editing && editable && column.editor !== "checkbox") {
+          context.startEditing(createEditingCell(cellState, ""));
+        }
+      },
       onContextMenu: context.openContextMenu
         ? (event: ReactMouseEvent<HTMLDivElement>) => context.openContextMenu?.(event, cellState)
         : undefined,
@@ -4109,9 +4115,11 @@ function renderCellEditor<TRow>(context: {
           });
         },
         onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+          beginEditorComposition(event.currentTarget);
           clearInitialPrintableKeyDraftForComposition(context, event, "");
         },
         onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+          endEditorComposition(event.currentTarget);
           const nextDraftValue = stripInitialPrintableKeyDraft(
             context.editingCell,
             event.currentTarget.value,
@@ -4120,6 +4128,7 @@ function renderCellEditor<TRow>(context: {
           context.updateEditingDraft(nextDraftValue);
         },
         onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+          endEditorComposition(event.currentTarget);
           context.commitEditing(
             createEditingCell(context.cell, event.currentTarget.value),
             "blur",
@@ -4127,6 +4136,10 @@ function renderCellEditor<TRow>(context: {
         },
         onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
           event.stopPropagation();
+          if (isCompositionEditingKey(event) || isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
+            return;
+          }
+
           context.onKeyDown(event, context.cell);
         },
       }),
@@ -4167,9 +4180,11 @@ function renderCellEditor<TRow>(context: {
       });
     },
     onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      beginEditorComposition(event.currentTarget);
       clearInitialPrintableKeyDraftForComposition(context, event, "");
     },
     onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+      endEditorComposition(event.currentTarget);
       const nextDraftValue = stripInitialPrintableKeyDraft(
         context.editingCell,
         event.currentTarget.value,
@@ -4178,6 +4193,7 @@ function renderCellEditor<TRow>(context: {
       context.updateEditingDraft(nextDraftValue);
     },
     onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+      endEditorComposition(event.currentTarget);
       context.commitEditing(
         createEditingCell(context.cell, event.currentTarget.value),
         "blur",
@@ -4185,6 +4201,10 @@ function renderCellEditor<TRow>(context: {
     },
     onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
       event.stopPropagation();
+      if (isCompositionEditingKey(event) || isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
+        return;
+      }
+
       context.onKeyDown(event, context.cell);
     },
   });
@@ -4283,6 +4303,7 @@ function renderTagsEditor<TRow>(context: {
         });
       },
       onCompositionStart: (event: ReactCompositionEvent<HTMLInputElement>) => {
+        beginEditorComposition(event.currentTarget);
         clearInitialPrintableKeyDraftForComposition(
           context,
           event,
@@ -4290,6 +4311,7 @@ function renderTagsEditor<TRow>(context: {
         );
       },
       onCompositionEnd: (event: ReactCompositionEvent<HTMLInputElement>) => {
+        endEditorComposition(event.currentTarget);
         const nextInputValue = stripInitialPrintableKeyDraft(
           context.editingCell,
           event.currentTarget.value,
@@ -4298,10 +4320,15 @@ function renderTagsEditor<TRow>(context: {
         context.updateEditingDraft(serializeTagEditorDraft(parts.tags, nextInputValue));
       },
       onBlur: (event: ReactFocusEvent<HTMLInputElement>) => {
+        endEditorComposition(event.currentTarget);
         commitDraft(serializeTagEditorDraftWithInput(parts.tags, event.currentTarget.value), "blur");
       },
       onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
         event.stopPropagation();
+        if (isCompositionEditingKey(event) || isEditorCompositionActive(event.currentTarget, event.nativeEvent)) {
+          return;
+        }
+
         const inputValue = event.currentTarget.value;
 
         if ((event.key === "Enter" || event.key === ",") && inputValue.trim().length > 0) {
@@ -4356,6 +4383,14 @@ function stripInitialPrintableKeyDraft(editingCell: EditingCell | undefined, val
   return value.slice(initialDraft.length);
 }
 
+function beginEditorComposition(input: HTMLInputElement): void {
+  composingEditorInputs.add(input);
+}
+
+function endEditorComposition(input: HTMLInputElement): void {
+  composingEditorInputs.delete(input);
+}
+
 function shouldPreserveInitialPrintableKeyDraft(
   editingCell: EditingCell | undefined,
   event: Event,
@@ -4365,6 +4400,10 @@ function shouldPreserveInitialPrintableKeyDraft(
     editingCell.initialPrintableKeyDraft !== undefined &&
     isNativeCompositionEvent(event),
   );
+}
+
+function isEditorCompositionActive(input: HTMLInputElement, event: Event): boolean {
+  return composingEditorInputs.has(input) || isNativeCompositionEvent(event);
 }
 
 function isNativeCompositionEvent(event: Event): boolean {

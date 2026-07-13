@@ -99,6 +99,63 @@ test("react basic demo supports grid interactions", async ({ page }) => {
   await expect(page.getByRole("menuitem", { name: "Copy row" })).toBeVisible();
 });
 
+test("react basic demo keeps direct cell editing active through Korean IME composition", async ({ page }) => {
+  await page.goto("/");
+
+  const firstSymbolCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="symbol"]');
+  await firstSymbolCell.click();
+  await page.keyboard.press("a");
+
+  const editor = page.locator(".youp-grid__cell-editor");
+  await expect(editor).toHaveValue("a");
+
+  await editor.evaluate((node) => {
+    const input = node as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setValue) {
+      throw new Error("Input value setter is unavailable");
+    }
+
+    input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    setValue.call(input, "한");
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: "한",
+      inputType: "insertCompositionText",
+      isComposing: true,
+    }));
+    input.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      code: "Enter",
+      isComposing: true,
+      key: "Enter",
+    }));
+  });
+
+  await expect(editor).toBeVisible();
+
+  await editor.evaluate((node) => {
+    const input = node as HTMLInputElement;
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "한" }));
+  });
+  await expect(editor).toHaveValue("한");
+
+  await page.keyboard.press("Enter");
+  await expect(firstSymbolCell).toContainText("한");
+});
+
+test("react basic demo starts an empty editor when composition begins in a selected cell", async ({ page }) => {
+  await page.goto("/");
+
+  const firstSymbolCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="symbol"]');
+  await firstSymbolCell.click();
+  await firstSymbolCell.evaluate((node) => {
+    node.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  });
+
+  await expect(page.locator(".youp-grid__cell-editor")).toHaveValue("");
+});
+
 test("react basic demo keeps tag option colors after edit blur", async ({ page }) => {
   await page.goto("/");
 
