@@ -1,0 +1,46 @@
+{
+  "name": "@youp-grid/charts-echarts",
+  "version": "0.6.0",
+  "description": "Apache ECharts adapter for Youp Grid chart datasets.",
+  "license": "MIT",
+  "author": "SeungyoupBaek",
+  "type": "module",
+  "keywords": [
+    "data-grid",
+    "chart",
+    "echarts",
+    "typescript"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
+    "directory": "packages/charts-echarts"
+  },
+  "bugs": {
+    "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
+  },
+  "homepage": "https://seungyoupbaek.github.io/youp-grid/",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@youp-grid/core": "0.6.0",
+    "echarts": "^6.1.0"
+  }
+}

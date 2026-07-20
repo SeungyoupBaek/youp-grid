@@ -6,6 +6,13 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-20
+
+- Add pivot tables with multiple aggregations, totals, date buckets, collapse, drilldown, and server-side pivot contracts.
+- Add an ECharts adapter and React chart panel for bar, line, area, pie, and scatter charts with export support.
+- Add a formula engine package and integrate computed values with filtering, sorting, grouping, aggregation, clipboard, CSV, and Excel flows.
+- Add pivot and formula APIs across the React, Vue, and Vanilla adapters.
+
 ## [0.5.0] - 2026-07-20
 
 - Add synchronous and asynchronous cell validation with save status and rollback events.

@@ -1,0 +1,46 @@
+{
+  "name": "@youp-grid/formula",
+  "version": "0.6.0",
+  "description": "Spreadsheet formula engine adapter for Youp Grid.",
+  "license": "MIT",
+  "author": "SeungyoupBaek",
+  "type": "module",
+  "keywords": [
+    "data-grid",
+    "formula",
+    "spreadsheet",
+    "typescript"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
+    "directory": "packages/formula"
+  },
+  "bugs": {
+    "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
+  },
+  "homepage": "https://seungyoupbaek.github.io/youp-grid/",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@youp-grid/core": "0.6.0",
+    "fast-formula-parser": "1.0.19"
+  }
+}

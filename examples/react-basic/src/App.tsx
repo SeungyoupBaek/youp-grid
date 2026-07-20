@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   importGridDelimitedText,
   loadGridState,
@@ -6,7 +6,8 @@ import {
   type ColumnDef,
   type GridState,
 } from "@youp-grid/core";
-import { YoupGrid } from "@youp-grid/react";
+import { YoupGrid, type YoupGridChartRenderer } from "@youp-grid/react";
+import { createFormulaEngine } from "@youp-grid/formula";
 import "@youp-grid/react/styles.css";
 import rootPackage from "../../../package.json";
 import "./style.css";
@@ -21,6 +22,7 @@ type Trade = {
   status: "Open" | "Filled" | "Rejected";
   settlementDate: string;
   tags: string[];
+  notional?: number;
 };
 
 type TagOption = {
@@ -32,10 +34,12 @@ type TagOption = {
 type DemoButtonIconName =
   | "alert"
   | "cursor"
+  | "chart"
   | "file-import"
   | "infinity"
   | "loader"
   | "package"
+  | "pivot"
   | "play"
   | "release"
   | "save"
@@ -80,6 +84,7 @@ const tagOptions: TagOption[] = [
 ];
 const tagColorChoices = ["#dc2626", "#d97706", "#2563eb", "#64748b", "#059669", "#7c3aed"] as const;
 const customTagColor = "#64748b";
+const formulaEngine = createFormulaEngine();
 const initialTagColors = Object.fromEntries(
   tagOptions.map((option) => [option.value, option.color]),
 ) as Record<string, string>;
@@ -170,6 +175,13 @@ function DemoButtonIcon({ name }: { name: DemoButtonIconName }) {
           <path d="m4 4 7 16 2-7 7-2Z" />
           <path d="m13 13 5 5" />
         </>
+      ) : name === "chart" ? (
+        <>
+          <path d="M4 19V9" />
+          <path d="M10 19V5" />
+          <path d="M16 19v-7" />
+          <path d="M22 19H2" />
+        </>
       ) : name === "file-import" ? (
         <>
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
@@ -193,6 +205,11 @@ function DemoButtonIcon({ name }: { name: DemoButtonIconName }) {
           <path d="m3 7 9 5 9-5" />
           <path d="m3 7 9-5 9 5v10l-9 5-9-5Z" />
           <path d="M12 12v10" />
+        </>
+      ) : name === "pivot" ? (
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18M9 3v18" />
         </>
       ) : name === "play" ? (
         <path d="m8 5 11 7-11 7Z" />
@@ -234,8 +251,21 @@ export function App() {
   const [cursorMode, setCursorMode] = useState(false);
   const [infiniteMode, setInfiniteMode] = useState(false);
   const [infiniteRowLimit, setInfiniteRowLimit] = useState(300);
+  const [showPivotPanel, setShowPivotPanel] = useState(false);
+  const [showChartPanel, setShowChartPanel] = useState(false);
+  const [chartRenderer, setChartRenderer] = useState<YoupGridChartRenderer>();
   const [tagColors, setTagColors] = useState<Record<string, string>>(initialTagColors);
   const [rowEvent, setRowEvent] = useState("Idle");
+  useEffect(() => {
+    if (!showChartPanel || chartRenderer) return;
+    let active = true;
+    void import("@youp-grid/charts-echarts").then(({ createEChartsRenderer }) => {
+      if (active) setChartRenderer(() => createEChartsRenderer({ renderer: "canvas" }));
+    });
+    return () => {
+      active = false;
+    };
+  }, [chartRenderer, showChartPanel]);
   const [state, setState] = useState<GridState>({
     columns: [
       { columnId: "status", pinned: "right" },
@@ -324,6 +354,14 @@ export function App() {
         options: coloredTagOptions,
         valueParser: (value) => parseTagValues(value, coloredTagOptions),
         placeholder: "Add tag",
+      },
+      {
+        field: "notional",
+        headerName: "Notional",
+        width: 150,
+        editable: true,
+        formula: "=[quantity]*[price]",
+        valueFormatter: (value) => formatCurrency(Number(value)),
       },
     ],
     [coloredTagOptions],
@@ -590,6 +628,22 @@ export function App() {
               <DemoButtonIcon name="file-import" />
               Import CSV
             </button>
+            <button
+              type="button"
+              aria-pressed={showPivotPanel}
+              onClick={() => setShowPivotPanel((current) => !current)}
+            >
+              <DemoButtonIcon name="pivot" />
+              Pivot
+            </button>
+            <button
+              type="button"
+              aria-pressed={showChartPanel}
+              onClick={() => setShowChartPanel((current) => !current)}
+            >
+              <DemoButtonIcon name="chart" />
+              Chart
+            </button>
           </div>
         </div>
         <div className="tag-color-panel" aria-label="Tag color controls">
@@ -628,6 +682,20 @@ export function App() {
           serverRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
           serverFilteredRowCount={serverMode || cursorMode || infiniteMode ? rows.length : undefined}
           onStateChange={({ state: nextState }) => setState(nextState)}
+          formulaEngine={formulaEngine}
+          showPivotPanel={showPivotPanel}
+          showChartPanel={showChartPanel}
+          chartRenderer={chartRenderer}
+          defaultChartSpec={{
+            type: "bar",
+            source: "selection",
+            categoryColumnId: "symbol",
+            series: [{ columnId: "quantity", label: "Quantity" }],
+            showLegend: true,
+          }}
+          onPivotDrilldown={({ rows: drilldownRows }) => {
+            setRowEvent(`Pivot drilldown ${drilldownRows.length.toLocaleString()} rows`);
+          }}
           onCellValueChange={({ rowId, column, value }) => {
             if (!column.field) {
               return;
@@ -771,6 +839,9 @@ export function App() {
           "Pinned top and bottom rows",
           "Row drag reorder",
           "Selection summary with totals",
+          "Pivot builder and drilldown",
+          "Selection and pivot charts",
+          "Formula engine and computed columns",
           "Async validation and save rollback",
           "Variable row and column virtualization",
           "Imperative Grid API and locale text",

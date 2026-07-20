@@ -1,17 +1,31 @@
 import {
   buildRowModel,
+  buildGridChartDataset,
+  clearFormulaCell,
   createGridState,
   exportGridCsv,
   exportGridExcel,
   isCellInRange,
+  getRowNodeValue,
+  getPivotDisplayRows,
+  setFormulaCell,
+  setPivot,
+  togglePivotRowExpanded,
   setRowSelected,
   type ColumnDef,
+  type FormulaCell,
+  type FormulaEngine,
+  type GridChartDataset,
+  type GridChartSpec,
   type GridCellRange,
   type GridRowId,
+  type GridRowModelType,
   type GridState,
   type ResolvedColumnDef,
   type RowModel,
   type RowNode,
+  type PivotState,
+  type PivotModel,
 } from "@youp-grid/core";
 
 export type YoupVanillaGridLocaleText = {
@@ -29,6 +43,11 @@ export type YoupVanillaGridOptions<TRow> = {
   getRowId?: (row: TRow, index: number) => GridRowId;
   pinnedTopRows?: readonly TRow[];
   pinnedBottomRows?: readonly TRow[];
+  rowModelType?: GridRowModelType;
+  serverRowCount?: number;
+  serverFilteredRowCount?: number;
+  serverPivotModel?: PivotModel;
+  formulaEngine?: FormulaEngine;
   className?: string;
   emptyText?: string;
   loading?: boolean;
@@ -60,6 +79,10 @@ export type YoupVanillaGrid<TRow> = {
   selectRange: (range: GridCellRange | undefined) => void;
   exportCsv: () => string;
   exportExcel: () => string;
+  setPivot: (pivot: PivotState | undefined) => void;
+  setFormulaCell: (cell: FormulaCell) => void;
+  clearFormulaCell: (rowId: GridRowId, columnId: string) => void;
+  getChartDataset: (spec: GridChartSpec) => GridChartDataset;
   destroy: () => void;
 };
 
@@ -87,6 +110,7 @@ export function createYoupGrid<TRow>(
       rowModel,
       selectionRange,
       (rowId, selected) => commitState(setRowSelected(currentState, rowId, selected)),
+      (rowId) => commitState(togglePivotRowExpanded(currentState, rowId)),
     ));
   };
   const commitState = (state: GridState) => {
@@ -139,6 +163,16 @@ export function createYoupGrid<TRow>(
     },
     exportCsv: () => exportGridCsv({ rows: rowModel.visibleRows, columns: rowModel.visibleColumns }),
     exportExcel: () => exportGridExcel({ rows: rowModel.visibleRows, columns: rowModel.visibleColumns }),
+    setPivot: (pivot) => commitState(setPivot(currentState, pivot)),
+    setFormulaCell: (cell) => commitState(setFormulaCell(currentState, cell)),
+    clearFormulaCell: (rowId, columnId) => commitState(clearFormulaCell(currentState, rowId, columnId)),
+    getChartDataset: (spec) => buildGridChartDataset({
+      rows: rowModel.filteredRows,
+      columns: rowModel.visibleColumns,
+      selectionRange,
+      pivot: rowModel.pivot,
+      spec,
+    }),
     destroy: () => {
       root.classList.remove("youp-grid-vanilla");
       root.removeAttribute("role");
@@ -155,6 +189,11 @@ function buildModel<TRow>(options: YoupVanillaGridOptions<TRow>, state: GridStat
     getRowId: options.getRowId,
     pinnedTopRows: options.pinnedTopRows,
     pinnedBottomRows: options.pinnedBottomRows,
+    rowModelType: options.rowModelType,
+    serverRowCount: options.serverRowCount,
+    serverFilteredRowCount: options.serverFilteredRowCount,
+    serverPivotModel: options.serverPivotModel,
+    formulaEngine: options.formulaEngine,
   });
 }
 
@@ -164,6 +203,7 @@ function renderGrid<TRow>(
   rowModel: RowModel<TRow>,
   selectionRange?: GridCellRange,
   onSelectRow?: (rowId: GridRowId, selected: boolean) => void,
+  onTogglePivotRow?: (rowId: string) => void,
 ): HTMLElement {
   const fragment = document.createElement("div");
   const columns = rowModel.visibleColumns;
@@ -171,6 +211,10 @@ function renderGrid<TRow>(
   const numberFormatter = new Intl.NumberFormat(options.locale ?? "en-US");
 
   fragment.className = options.className ?? "";
+  if (state.pivot?.enabled && rowModel.pivot) {
+    fragment.append(renderPivotModel(rowModel.pivot, onTogglePivotRow));
+    return fragment;
+  }
   fragment.append(renderHeader(columns, options.showRowSelectionColumn ?? false));
   rowModel.pinnedTopRows.forEach((row, index) => {
     fragment.append(renderRow(row, -index - 1, columns, "top", options, state, localeText, numberFormatter, undefined, onSelectRow));
@@ -264,7 +308,7 @@ function renderRow<TRow>(
 
   columns.forEach((column, columnIndex) => {
     const cell = document.createElement("div");
-    const value = column.accessor(rowNode.original);
+    const value = getRowNodeValue(rowNode, column);
     cell.className = [
       "youp-grid-vanilla__cell",
       column.wrapText ? "youp-grid-vanilla__cell--wrap-text" : "",
@@ -287,6 +331,51 @@ function renderRow<TRow>(
   });
 
   return row;
+}
+
+function renderPivotModel(
+  model: NonNullable<RowModel<unknown>["pivot"]>,
+  onToggleRow?: (rowId: string) => void,
+): HTMLElement {
+  const container = document.createElement("div");
+  const table = document.createElement("table");
+  const header = table.createTHead().insertRow();
+  container.className = "youp-grid-vanilla__pivot-view";
+  container.setAttribute("role", "region");
+  container.setAttribute("aria-label", "Pivot results");
+  header.append(document.createElement("th"));
+  header.cells[0]!.textContent = "Group";
+  model.columns.forEach((column) => {
+    const cell = document.createElement("th");
+    cell.textContent = column.headerName;
+    header.append(cell);
+  });
+  const body = table.createTBody();
+  const rows = getPivotDisplayRows(model);
+  rows.forEach((pivotRow) => {
+    const row = body.insertRow();
+    row.className = pivotRow.isGrandTotal
+      ? "youp-grid-vanilla__pivot-grand-total"
+      : pivotRow.isSubtotal ? "youp-grid-vanilla__pivot-subtotal" : "";
+    const label = document.createElement("th");
+    label.style.paddingLeft = `${12 + pivotRow.depth * 18}px`;
+    if (pivotRow.isSubtotal) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = pivotRow.expanded ? "-" : "+";
+      toggle.setAttribute("aria-expanded", String(pivotRow.expanded));
+      toggle.addEventListener("click", () => onToggleRow?.(pivotRow.id));
+      label.append(toggle);
+    }
+    label.append(document.createTextNode(`${pivotRow.label} (${pivotRow.rowCount.toLocaleString()})`));
+    row.append(label);
+    model.columns.forEach((column) => {
+      const cell = row.insertCell();
+      cell.textContent = pivotRow.values[column.id]?.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? "";
+    });
+  });
+  container.append(table);
+  return container;
 }
 
 function renderSelectionPlaceholder(): HTMLElement {

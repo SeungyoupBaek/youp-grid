@@ -1,4 +1,5 @@
 import type { ResolvedColumnDef, RowNode } from "./types.ts";
+import { getRowNodeValue } from "./formula.ts";
 
 export type ExcelCellFormatter<TRow> = (context: {
   row: RowNode<TRow>;
@@ -26,7 +27,7 @@ export function exportGridExcel<TRow>(options: ExportGridExcelOptions<TRow>): st
 
   for (const row of options.rows) {
     rows.push(renderExcelRow(options.columns.map((column) => {
-      const value = column.accessor(row.original);
+      const value = getRowNodeValue(row, column);
       const formattedValue = options.formatCell
         ? options.formatCell({ row, column, value })
         : formatExcelValue(column, row.original, value);

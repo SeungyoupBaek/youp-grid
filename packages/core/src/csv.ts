@@ -1,4 +1,5 @@
 import type { ResolvedColumnDef, RowNode } from "./types.ts";
+import { getRowNodeValue } from "./formula.ts";
 
 export type CsvCellFormatter<TRow> = (context: {
   row: RowNode<TRow>;
@@ -28,7 +29,7 @@ export function exportGridCsv<TRow>(options: ExportGridCsvOptions<TRow>): string
     lines.push(
       options.columns
         .map((column) => {
-          const value = column.accessor(row.original);
+          const value = getRowNodeValue(row, column);
           const formattedValue = options.formatCell
             ? options.formatCell({ row, column, value })
             : formatCsvValue(column, row.original, value);

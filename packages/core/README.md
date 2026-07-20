@@ -2,6 +2,8 @@
 
 Framework-agnostic data grid core for Youp Grid.
 
+Includes serializable state and models for pivot tables, chart datasets, and pluggable formula engines. Optional integrations live in `@youp-grid/formula` and `@youp-grid/charts-echarts`, so the core has no parser or chart runtime dependency.
+
 ```sh
 npm install @youp-grid/core
 ```

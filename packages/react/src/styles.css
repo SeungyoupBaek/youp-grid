@@ -1446,3 +1446,261 @@
   margin-left: auto;
   color: var(--youp-grid-muted);
 }
+.youp-grid__pivot-panel {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(180px, 1fr));
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-bottom: 1px solid var(--youp-grid-border, #d7dee8);
+  background: #f8fafc;
+  color: #172033;
+  font-size: 12px;
+}
+
+.youp-grid__pivot-enabled,
+.youp-grid__pivot-options label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.youp-grid__pivot-section {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.youp-grid__pivot-rule,
+.youp-grid__pivot-add,
+.youp-grid__pivot-move {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.youp-grid__pivot-rule > span:first-child {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.youp-grid__pivot-panel select,
+.youp-grid__pivot-panel button,
+.youp-grid__chart-toolbar select {
+  min-height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.youp-grid__pivot-panel button {
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.youp-grid__pivot-panel button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.youp-grid__pivot-add select {
+  min-width: 0;
+  flex: 1;
+}
+
+.youp-grid__pivot-options {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.youp-grid__pivot-options label {
+  gap: 6px;
+}
+
+.youp-grid__pivot-view {
+  overflow: auto;
+  border-bottom: 1px solid #d7dee8;
+  background: #fff;
+}
+
+.youp-grid__pivot-view table {
+  width: max-content;
+  min-width: 100%;
+  border-spacing: 0;
+  border-collapse: separate;
+  font-size: 12px;
+}
+
+.youp-grid__pivot-view th,
+.youp-grid__pivot-view td {
+  min-width: 112px;
+  padding: 8px 10px;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.youp-grid__pivot-view thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #f1f5f9;
+  color: #334155;
+  text-align: left;
+}
+
+.youp-grid__pivot-view tbody th {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  min-width: 180px;
+  background: #fff;
+  text-align: left;
+}
+
+.youp-grid__pivot-subtotal th,
+.youp-grid__pivot-subtotal td {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.youp-grid__pivot-grand-total th,
+.youp-grid__pivot-grand-total td {
+  background: #e8eef8;
+  font-weight: 700;
+}
+
+.youp-grid__pivot-toggle {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.youp-grid__pivot-row-count {
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.youp-grid__pivot-warning,
+.youp-grid__chart-warning {
+  padding: 6px 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.youp-grid__chart-panel {
+  border-bottom: 1px solid #d7dee8;
+  background: #fff;
+}
+
+.youp-grid__chart-toolbar {
+  display: flex;
+  min-height: 38px;
+  padding: 5px 8px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.youp-grid__chart-toolbar {
+  gap: 8px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.youp-grid__chart-toolbar strong {
+  margin-right: auto;
+}
+
+.youp-grid__chart-series {
+  display: flex;
+  overflow-x: auto;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.youp-grid__chart-series label {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.youp-grid__chart-series-item {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding-right: 8px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.youp-grid__chart-series-item select {
+  min-width: 62px;
+  height: 26px;
+}
+
+.youp-grid__chart-option {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.youp-grid__chart-option input[type="number"] {
+  width: 76px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
+.youp-grid__chart-export {
+  min-height: 28px;
+}
+
+.youp-grid__chart-toolbar select {
+  padding: 0 8px;
+}
+
+.youp-grid__chart-canvas,
+.youp-grid__chart-empty {
+  width: 100%;
+  min-height: 180px;
+}
+
+.youp-grid__chart-empty {
+  display: grid;
+  place-items: center;
+  color: #64748b;
+}
+
+@media (max-width: 760px) {
+  .youp-grid__pivot-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .youp-grid__pivot-options {
+    grid-column: auto;
+  }
+}

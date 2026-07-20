@@ -6,6 +6,7 @@ import type {
   ColumnPin,
   FilterOperator,
   FilterRule,
+  FormulaEngine,
   GridCellRange,
   GridRowId,
   GridRowModelType,
@@ -15,12 +16,17 @@ import type {
   RowGroupNode,
   RowNode,
   SortDirection,
+  PivotModel,
 } from "@youp-grid/core";
 import {
   createRemoteCacheKey,
   createGridState,
   exportGridCsv,
   exportGridExcel,
+  getFormulaCell,
+  getFormulaCellResult,
+  getPivotDisplayRows,
+  getRowNodeValue,
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
@@ -257,6 +263,14 @@ export const YoupGrid = defineComponent({
       type: Number,
       default: undefined,
     },
+    serverPivotModel: {
+      type: Object as PropType<PivotModel>,
+      default: undefined,
+    },
+    formulaEngine: {
+      type: Object as PropType<FormulaEngine>,
+      default: undefined,
+    },
     emptyText: {
       type: String,
       default: undefined,
@@ -453,6 +467,7 @@ export const YoupGrid = defineComponent({
     rowsEndReached: (_event: YoupGridRowsEndReachedEvent<unknown>) => true,
     detailExpandedRowsChange: (_rowIds: readonly GridRowId[]) => true,
     densityChange: (_density: YoupGridDensity) => true,
+    formulaChange: (_cell: { rowId: GridRowId; columnId: string; formula: string } | undefined) => true,
   },
   setup(props, { emit, expose, slots }) {
     const rootRef = ref<HTMLElement | null>(null);
@@ -488,6 +503,8 @@ export const YoupGrid = defineComponent({
       rowModelType: props.rowModelType,
       serverRowCount: props.serverRowCount,
       serverFilteredRowCount: props.serverFilteredRowCount,
+      serverPivotModel: props.serverPivotModel,
+      formulaEngine: props.formulaEngine,
       onStateChange: (change) => emit("stateChange", change),
     }));
 
@@ -733,8 +750,10 @@ export const YoupGrid = defineComponent({
       column: ResolvedColumnDef<unknown>,
     ) => {
       const cellKey = getCellKey(rowNode.id, column.id);
+      const formulaResult = getFormulaCellResult(grid.rowModel.value.formula, rowNode.id, column.id);
 
       return internalCellMeta.value[cellKey] ??
+      (formulaResult?.error ? { status: "error" as const, message: formulaResult.error.message } : undefined) ??
       props.getCellMeta?.(getCellEditContext(rowNode, column)) ??
       props.cellMeta?.[cellKey];
     };
@@ -852,7 +871,8 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      const value = column.accessor(rowNode.original);
+      const formula = getFormulaCell(grid.state.value.formula, rowNode.id, column.id);
+      const value = getRowNodeValue(rowNode, column);
       internalCellMeta.value = {
         ...internalCellMeta.value,
         [getCellKey(rowNode.id, column.id)]: undefined,
@@ -860,7 +880,7 @@ export const YoupGrid = defineComponent({
       activeEdit.value = {
         rowId: rowNode.id,
         columnId: column.id,
-        draft: getEditorDraftValue(column, value),
+        draft: formula?.formula ?? getEditorDraftValue(column, value),
       };
     };
     const updateDraft = (draft: string) => {
@@ -900,6 +920,19 @@ export const YoupGrid = defineComponent({
       }
 
       const cellKey = getCellKey(rowNode.id, column.id);
+      const existingFormula = getFormulaCell(grid.state.value.formula, rowNode.id, column.id);
+      const formula = draft.trim();
+      if (formula.startsWith("=")) {
+        const nextCell = { rowId: rowNode.id, columnId: column.id, formula };
+        grid.setFormulaCell(nextCell);
+        emit("formulaChange", nextCell);
+        cancelCellEdit();
+        return;
+      }
+      if (existingFormula) {
+        grid.clearFormulaCell(rowNode.id, column.id);
+        emit("formulaChange", undefined);
+      }
       let value: unknown;
 
       try {
@@ -938,7 +971,7 @@ export const YoupGrid = defineComponent({
         }
       }
 
-      const previousValue = column.accessor(rowNode.original);
+      const previousValue = getRowNodeValue(rowNode, column);
       const change = createCellValueChange(rowNode, column, value, previousValue);
 
       emit("cellEditCommit", {
@@ -997,7 +1030,7 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      const previousValue = column.accessor(rowNode.original);
+      const previousValue = getRowNodeValue(rowNode, column);
       const change = createCellValueChange(rowNode, column, checked, previousValue);
 
       emit("cellEditCommit", {
@@ -1040,7 +1073,7 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      const previousValue = column.accessor(rowNode.original);
+      const previousValue = getRowNodeValue(rowNode, column);
 
       if (Object.is(value, previousValue)) {
         return;
@@ -1107,7 +1140,7 @@ export const YoupGrid = defineComponent({
           continue;
         }
 
-        const previousValue = column.accessor(targetRowNode.original);
+        const previousValue = getRowNodeValue(targetRowNode, column);
         const value = parseEditorValue(column, cell.value, targetRowNode.original);
 
         if (insertedRowIds.has(targetRowNode.id) && isSameRowIdValue(previousValue, targetRowNode.id)) {
@@ -1264,7 +1297,7 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      const value = menu.column.accessor(menu.rowNode.original);
+      const value = getRowNodeValue(menu.rowNode, menu.column);
       void writeClipboardText(formatCellValue(menu.column, value, menu.rowNode.original))
         .catch(() => undefined);
     };
@@ -1687,7 +1720,9 @@ export const YoupGrid = defineComponent({
             exportCsv,
             exportExcel,
           }),
-          h("div", { class: "youp-grid-vue__viewport" }, [
+          h("div", { class: "youp-grid-vue__viewport" }, grid.state.value.pivot?.enabled && rowModel.pivot
+            ? [renderPivotView(rowModel.pivot, grid.togglePivotRowExpanded)]
+            : [
             h(
               "div",
               {
@@ -2036,6 +2071,40 @@ function renderPaginationFooter(context: PaginationRenderContext) {
       ]),
     ],
   );
+}
+
+function renderPivotView(model: PivotModel, toggleRow: (rowId: string) => void) {
+  const rows = getPivotDisplayRows(model);
+  return h("div", { class: "youp-grid-vue__pivot-view", role: "region", "aria-label": "Pivot results" }, [
+    ...model.warnings.map((warning) => h("div", { class: "youp-grid-vue__pivot-warning", key: warning }, warning)),
+    h("table", undefined, [
+      h("thead", undefined, [h("tr", undefined, [
+        h("th", { scope: "col" }, "Group"),
+        ...model.columns.map((column) => h("th", { key: column.id, scope: "col" }, column.headerName)),
+      ])]),
+      h("tbody", undefined, rows.map((row) => h("tr", {
+        key: row.id,
+        class: row.isGrandTotal
+          ? "youp-grid-vue__pivot-grand-total"
+          : row.isSubtotal ? "youp-grid-vue__pivot-subtotal" : undefined,
+      }, [
+        h("th", { scope: "row", style: { paddingLeft: `${12 + row.depth * 18}px` } }, [
+          row.isSubtotal
+            ? h("button", {
+                type: "button",
+                class: "youp-grid-vue__pivot-toggle",
+                "aria-expanded": row.expanded,
+                onClick: () => toggleRow(row.id),
+              }, row.expanded ? "-" : "+")
+            : undefined,
+          row.label,
+          h("span", { class: "youp-grid-vue__pivot-row-count" }, row.rowCount.toLocaleString()),
+        ]),
+        ...model.columns.map((column) => h("td", { key: column.id },
+          row.values[column.id]?.toLocaleString(undefined, { maximumFractionDigits: 4 }) ?? "")),
+      ]))),
+    ]),
+  ]);
 }
 
 function getPaginationRowRange(
@@ -3083,7 +3152,7 @@ function renderDataCell<TRow>(context: {
     columnIndex: number,
   ) => void;
 }) {
-  const value = context.column.accessor(context.rowNode.original);
+  const value = getRowNodeValue(context.rowNode, context.column);
   const formattedValue = formatCellValue(context.column, value, context.rowNode.original);
   const align = getColumnAlign(context.column);
   const editing =
@@ -3914,7 +3983,7 @@ function getCellEditContext<TRow>(
     rowNode,
     column,
     columnId: column.id,
-    value: column.accessor(rowNode.original),
+    value: getRowNodeValue(rowNode, column),
   };
 }
 

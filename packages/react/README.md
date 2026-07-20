@@ -6,6 +6,12 @@ React adapter for Youp Grid.
 npm install @youp-grid/core @youp-grid/react
 ```
 
+Formula and ECharts integration are optional packages:
+
+```sh
+npm install @youp-grid/formula @youp-grid/charts-echarts echarts
+```
+
 ```ts
 import { YoupGrid } from "@youp-grid/react";
 import "@youp-grid/react/styles.css";
@@ -32,6 +38,9 @@ import "@youp-grid/react/styles.css";
 - synchronous/asynchronous column validation and `onCellValueSave` rollback events
 - `apiRef` methods for focus, editing, scrolling, range selection, export, and state reset
 - opt-in center-column virtualization, variable row heights, wrapped cells, and locale text
+- pivot builder, hierarchical pivot results, totals, collapse, and source-row drilldown
+- chart panel driven by selection, filtered rows, or pivot results, with aggregation, stacking, dual-axis, legend, data-limit, and PNG controls
+- formula editing and computed-column rendering through an optional `FormulaEngine`
 
 The adapter emits changes through callbacks. Applications keep ownership of row data.
 Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row. TSV paste also uses `createRow` and `onRowsChange` to append missing rows when pasted data runs past the last visible row.
@@ -40,6 +49,8 @@ Row insert and row paste require `createRow`; row paste keeps the newly created 
 
 ```tsx
 import type { ColumnDef } from "@youp-grid/core";
+import { createFormulaEngine } from "@youp-grid/formula";
+import { createEChartsRenderer } from "@youp-grid/charts-echarts";
 import { YoupGrid } from "@youp-grid/react";
 import "@youp-grid/react/styles.css";
 
@@ -64,9 +75,16 @@ const columns: ColumnDef<SqlColumn>[] = [
   { field: "nullable", headerName: "Nullable", editable: true, editor: "checkbox", align: "center" },
 ];
 
+const formulaEngine = createFormulaEngine();
+const chartRenderer = createEChartsRenderer();
+
 <YoupGrid
   rows={rows}
   columns={columns}
+  formulaEngine={formulaEngine}
+  showPivotPanel
+  showChartPanel
+  chartRenderer={chartRenderer}
   getRowId={(row) => row.id}
   editable={canEdit}
   readOnly={!canEdit}

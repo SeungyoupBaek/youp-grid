@@ -1,9 +1,17 @@
 import {
+  buildGridChartDataset,
+  clearFormulaCell as clearCoreFormulaCell,
   createRemoteCacheKey,
   createGridState,
   createValueHistoryState,
   exportGridCsv,
   exportGridExcel,
+  getFormulaCell,
+  getFormulaCellResult,
+  getPivotDrilldownRows,
+  getRowNodeValue,
+  setFormulaCell as setCoreFormulaCell,
+  shiftFormulaReferences,
   getFillHandleCells,
   getFillHandleTargetRange,
   getInfiniteScrollTrigger,
@@ -38,6 +46,9 @@ import {
   type FilterOperator,
   type FilterRule,
   type GridCellRange,
+  type GridChartSpec,
+  type FormulaCell,
+  type FormulaState,
   type GridValueHistoryEntry,
   type GridValueHistoryState,
   type GridRowId,
@@ -86,6 +97,9 @@ import type {
   YoupGridRowInsertPosition,
 } from "./types.ts";
 import { useYoupGrid } from "./useYoupGrid.ts";
+import { YoupChartPanel } from "./YoupChartPanel.ts";
+import { YoupPivotPanel } from "./YoupPivotPanel.ts";
+import { YoupPivotView } from "./YoupPivotView.ts";
 
 const VALUE_HISTORY_LIMIT = 100;
 const DEFAULT_DENSITY: YoupGridDensity = "standard";
@@ -189,6 +203,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [draggedRowId, setDraggedRowId] = useState<GridRowId | undefined>();
   const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
   const [internalCellMeta, setInternalCellMeta] = useState<Record<string, YoupGridCellMeta | undefined>>({});
+  const [internalChartSpec, setInternalChartSpec] = useState<GridChartSpec>(() => props.defaultChartSpec ?? {
+    type: "bar",
+    source: "selection",
+    series: [],
+    showLegend: true,
+  });
   const showRowNumberColumn = props.showRowNumberColumn ?? false;
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
   const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
@@ -216,6 +236,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     () => ({ ...rowModel, visibleRows: cellRows }),
     [cellRows, rowModel],
   );
+  const chartSpec = props.chartSpec ?? internalChartSpec;
+  const chartDataset = useMemo(() => buildGridChartDataset({
+    rows: rowModel.filteredRows,
+    columns: rowModel.visibleColumns,
+    selectionRange,
+    pivot: rowModel.pivot,
+    spec: chartSpec,
+  }), [chartSpec, rowModel.filteredRows, rowModel.pivot, rowModel.visibleColumns, selectionRange]);
   const displayRowHeights = useMemo(() => displayRows.map((row, displayIndex) => {
     if (isRowGroupNode(row) || !props.getRowHeight) {
       return rowHeight;
@@ -439,7 +467,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       rowIndex,
       column,
       columnId: column.id,
-      value: column.accessor(row.original),
+      value: getRowNodeValue(row, column),
     };
   };
   const canEditGridCell = (
@@ -460,8 +488,10 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   ) => {
     const cellKey = getCellKey(row.id, column.id);
 
+    const formulaResult = getFormulaCellResult(rowModel.formula, row.id, column.id);
     return (
       internalCellMeta[cellKey] ??
+      (formulaResult?.error ? { status: "error", message: formulaResult.error.message } : undefined) ??
       props.getCellMeta?.(getCellEditContext(row, rowIndex, column)) ??
       props.cellMeta?.[cellKey]
     );
@@ -762,7 +792,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const startEditingCell = (cell: EditingCell) => {
     skipNextBlurCommitRef.current = false;
     setInternalCellMeta((current) => ({ ...current, [getCellKey(cell.rowId, cell.columnId)]: undefined }));
-    setEditingCell(cell);
+    const formula = getFormulaCell(controller.state.formula, cell.rowId, cell.columnId);
+    setEditingCell(formula ? { ...cell, draftValue: formula.formula } : cell);
   };
   const cancelEditingCell = () => {
     skipNextBlurCommitRef.current = true;
@@ -807,6 +838,22 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         source: source as YoupGridCellsValueChangeSource,
       });
     }
+  };
+  const applyFormulaChanges = (
+    updates: readonly FormulaCell[],
+    clears: readonly { rowId: GridRowId; columnId: string }[],
+  ) => {
+    if (updates.length === 0 && clears.length === 0) return;
+    let nextState = controller.state;
+    clears.forEach(({ rowId, columnId }) => {
+      nextState = clearCoreFormulaCell(nextState, rowId, columnId);
+      props.onFormulaChange?.(undefined);
+    });
+    updates.forEach((cell) => {
+      nextState = setCoreFormulaCell(nextState, cell);
+      props.onFormulaChange?.(cell);
+    });
+    controller.setState(nextState);
   };
   const applyCellValue = (cell: CellRenderState<TRow>, value: unknown) => {
     const change = createGridCellValueChange(cell, value);
@@ -875,6 +922,19 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     }
 
     const cellKey = getCellKey(cell.rowId, cell.columnId);
+    const existingFormula = getFormulaCell(controller.state.formula, cell.rowId, cell.columnId);
+    const formula = cell.draftValue.trim();
+    if (formula.startsWith("=")) {
+      const nextCell = { rowId: cell.rowId, columnId: cell.columnId, formula };
+      controller.setFormulaCell(nextCell);
+      props.onFormulaChange?.(nextCell);
+      setEditingCell(undefined);
+      return;
+    }
+    if (existingFormula) {
+      controller.clearFormulaCell(cell.rowId, cell.columnId);
+      props.onFormulaChange?.(undefined);
+    }
     let change: PendingCellValueChange<TRow> | undefined;
 
     try {
@@ -1455,6 +1515,11 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       changes: PendingCellValueChange<TRow>[],
       source: YoupGridCellValueChangeSource,
     ) => void;
+    formulaState?: FormulaState;
+    applyFormulaChanges: (
+      updates: readonly FormulaCell[],
+      clears: readonly { rowId: GridRowId; columnId: string }[],
+    ) => void;
   }) => {
     startFillHandleDrag({
       event: context.event,
@@ -1470,6 +1535,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           columns: context.visibleColumns,
           canEditCell: context.canEditGridCell,
           applyCellValueChanges: context.applyCellValueChanges,
+          formulaState: context.formulaState,
+          applyFormulaChanges: context.applyFormulaChanges,
         });
 
         const nextSelectionRange = getFillSelectionRange(context.sourceRange, targetRange);
@@ -1679,9 +1746,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         rowIndex: resolvedCell.rowIndex,
         column,
         columnIndex: resolvedCell.columnIndex,
-        value: column.accessor(row.original),
+        value: getRowNodeValue(row, column),
         editable: true,
-      }, column.accessor(row.original)));
+      }, getRowNodeValue(row, column)));
       ensureApiRowVisible(bodyRef.current, resolvedCell.rowIndex, cellRows, displayRows, displayRowHeights);
       return true;
     },
@@ -1784,6 +1851,45 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       },
       openImportFilePicker: () => importFileInputRef.current?.click(),
     }),
+    props.showPivotPanel
+      ? createElement(YoupPivotPanel<TRow>, {
+          columns: rowModel.columns,
+          value: controller.state.pivot,
+          onChange: controller.setPivot,
+        })
+      : undefined,
+    props.showChartPanel
+      ? createElement(YoupChartPanel, {
+          dataset: chartDataset,
+          spec: chartSpec,
+          renderer: props.chartRenderer,
+          columns: rowModel.visibleColumns.map((column) => ({ id: column.id, label: column.headerName })),
+          onSpecChange: (nextSpec) => {
+            if (!props.chartSpec) setInternalChartSpec(nextSpec);
+            props.onChartSpecChange?.(nextSpec);
+          },
+        })
+      : undefined,
+    controller.state.pivot?.enabled && rowModel.pivot
+      ? createElement(YoupPivotView, {
+          model: rowModel.pivot,
+          height: viewportHeight,
+          onToggleRow: controller.togglePivotRowExpanded,
+          onDrilldown: props.onPivotDrilldown
+            ? (pivotRow, pivotColumn) => props.onPivotDrilldown?.({
+                pivotRow,
+                pivotColumn,
+                rows: getPivotDrilldownRows({
+                  rows: rowModel.filteredRows,
+                  columns: rowModel.columns,
+                  state: controller.state.pivot!,
+                  pivotRow,
+                  pivotColumn,
+                }),
+              })
+            : undefined,
+        })
+      : undefined,
     createElement("input", {
       ref: importFileInputRef,
       className: "youp-grid__file-input",
@@ -1799,6 +1905,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       "div",
       {
         className: "youp-grid__viewport",
+        style: controller.state.pivot?.enabled ? { display: "none" } : undefined,
         role: "grid",
         "aria-rowcount": displayRows.length,
         "aria-colcount": rowModel.visibleColumns.length + (showRowNumberColumn ? 1 : 0) + (showRowSelectionColumn ? 1 : 0),
@@ -2082,6 +2189,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                                 setFocusedColumnIndex,
                                 canEditGridCell,
                                 applyCellValueChanges,
+                                formulaState: controller.state.formula,
+                                applyFormulaChanges,
                               });
                             },
                             autoSizeColumn: (event, column) => {
@@ -2226,6 +2335,8 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                           columns: visibleColumns,
                           canEditCell: canEditGridCell,
                           applyCellValueChanges,
+                          formulaState: controller.state.formula,
+                          applyFormulaChanges,
                         });
 
                         const nextSelectionRange = getFillSelectionRange(sourceRange, targetRange);
@@ -2394,7 +2505,7 @@ function getSelectionSummary<TRow>(context: {
       cellCount += 1;
       rowHasSelectedCell = true;
 
-      const value = column.accessor(row.original);
+      const value = getRowNodeValue(row, column);
 
       if (typeof value === "number" && Number.isFinite(value)) {
         numericCount += 1;
@@ -3923,7 +4034,7 @@ function renderCell<TRow>(context: {
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
   const column = context.layout.column;
-  const value = column.accessor(context.row.original);
+  const value = getRowNodeValue(context.row, column);
   const editable = context.editable;
   const cellAlign = getColumnAlign(column);
   const cellKey = getCellKey(context.row.id, column.id);
@@ -6665,7 +6776,7 @@ function commitEditingCell<TRow>(context: {
     return undefined;
   }
 
-  const previousValue = column.accessor(row.original);
+  const previousValue = getRowNodeValue(row, column);
   const value = parseDraftValue(column, row.original, context.cell.draftValue);
 
   return {
@@ -6826,7 +6937,7 @@ function applyGridClipboardText<TRow>(context: {
       continue;
     }
 
-    const previousValue = column.accessor(row.original);
+    const previousValue = getRowNodeValue(row, column);
     const value = parseDraftValue(column, row.original, cell.value);
 
     if (insertedRowIds.has(row.id) && isSameRowIdValue(previousValue, row.id)) {
@@ -7037,7 +7148,7 @@ function deleteGridCellValues<TRow>(context: {
         continue;
       }
 
-      const previousValue = column.accessor(row.original);
+      const previousValue = getRowNodeValue(row, column);
       const value = getEmptyCellValue(column, row.original);
 
       if (Object.is(value, previousValue)) {
@@ -7114,8 +7225,15 @@ function applyFillHandleValues<TRow>(context: {
     source: YoupGridCellValueChangeSource,
   ) => void;
   canEditCell: (row: RowNode<TRow>, rowIndex: number, column: ResolvedColumnDef<TRow>) => boolean;
+  formulaState?: FormulaState;
+  applyFormulaChanges?: (
+    updates: readonly FormulaCell[],
+    clears: readonly { rowId: GridRowId; columnId: string }[],
+  ) => void;
 }) {
   const changes: PendingCellValueChange<TRow>[] = [];
+  const formulaUpdates: FormulaCell[] = [];
+  const formulaClears: { rowId: GridRowId; columnId: string }[] = [];
 
   for (const cell of getFillHandleCells({
     sourceRange: context.sourceRange,
@@ -7124,17 +7242,38 @@ function applyFillHandleValues<TRow>(context: {
       const row = context.rows[rowIndex];
       const column = context.columns[columnIndex];
 
-      return row && column ? column.accessor(row.original) : undefined;
+      return row && column ? getRowNodeValue(row, column) : undefined;
     },
   })) {
     const row = context.rows[cell.rowIndex];
     const column = context.columns[cell.columnIndex];
+    const sourceRow = context.rows[cell.sourceRowIndex];
+    const sourceColumn = context.columns[cell.sourceColumnIndex];
 
     if (!row || !column || !context.canEditCell(row, cell.rowIndex, column)) {
       continue;
     }
 
-    const previousValue = column.accessor(row.original);
+    const sourceFormula = sourceRow && sourceColumn
+      ? getFormulaCell(context.formulaState, sourceRow.id, sourceColumn.id)?.formula ?? sourceColumn.formula
+      : undefined;
+    if (sourceFormula) {
+      formulaUpdates.push({
+        rowId: row.id,
+        columnId: column.id,
+        formula: shiftFormulaReferences(
+          sourceFormula,
+          cell.rowIndex - cell.sourceRowIndex,
+          cell.columnIndex - cell.sourceColumnIndex,
+        ),
+      });
+      continue;
+    }
+    if (getFormulaCell(context.formulaState, row.id, column.id)) {
+      formulaClears.push({ rowId: row.id, columnId: column.id });
+    }
+
+    const previousValue = getRowNodeValue(row, column);
 
     if (Object.is(cell.value, previousValue)) {
       continue;
@@ -7151,6 +7290,7 @@ function applyFillHandleValues<TRow>(context: {
     });
   }
 
+  context.applyFormulaChanges?.(formulaUpdates, formulaClears);
   context.applyCellValueChanges(changes, "fill");
 }
 
@@ -7246,7 +7386,7 @@ function getHistoryEntryValueChanges<TRow>(context: {
     }
 
     const value = context.source === "undo" ? historyChange.previousValue : historyChange.value;
-    const previousValue = column.accessor(row.original);
+    const previousValue = getRowNodeValue(row, column);
 
     if (Object.is(value, previousValue)) {
       continue;

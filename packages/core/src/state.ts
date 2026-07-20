@@ -4,10 +4,13 @@ import type {
   FilterRule,
   GridRowId,
   GridState,
+  FormulaCell,
+  FormulaScalar,
   PaginationState,
   RemoteCacheState,
   RemoteRequestState,
   RowGroupingState,
+  PivotState,
   SortDirection,
   SortRule,
 } from "./types.ts";
@@ -23,6 +26,16 @@ export function createGridState(state: GridState = {}): GridState {
           columnIds: [...state.rowGrouping.columnIds],
           collapsedGroupIds: state.rowGrouping.collapsedGroupIds
             ? [...state.rowGrouping.collapsedGroupIds]
+            : undefined,
+        }
+      : undefined,
+    pivot: state.pivot ? clonePivotState(state.pivot) : undefined,
+    formula: state.formula
+      ? {
+          ...state.formula,
+          cells: state.formula.cells.map((cell) => ({ ...cell })),
+          namedExpressions: state.formula.namedExpressions
+            ? { ...state.formula.namedExpressions }
             : undefined,
         }
       : undefined,
@@ -217,6 +230,69 @@ export function toggleRowGroupExpanded(state: GridState, groupId: string): GridS
   };
 }
 
+export function setPivot(state: GridState, pivot: PivotState | undefined): GridState {
+  return {
+    ...state,
+    pivot: pivot ? clonePivotState(pivot) : undefined,
+    remoteCache: markRemoteCacheStale(state.remoteCache),
+  };
+}
+
+export function togglePivotRowExpanded(state: GridState, rowId: string): GridState {
+  if (!state.pivot) return state;
+  const collapsed = new Set(state.pivot.collapsedRowGroupIds ?? []);
+  if (collapsed.has(rowId)) collapsed.delete(rowId);
+  else collapsed.add(rowId);
+  return setPivot(state, {
+    ...state.pivot,
+    collapsedRowGroupIds: collapsed.size > 0 ? [...collapsed] : undefined,
+  });
+}
+
+export function setFormulaCell(state: GridState, cell: FormulaCell): GridState {
+  const cells = (state.formula?.cells ?? []).filter((item) =>
+    item.rowId !== cell.rowId || item.columnId !== cell.columnId);
+  return {
+    ...state,
+    formula: { ...state.formula, cells: [...cells, { ...cell }] },
+  };
+}
+
+export function clearFormulaCell(state: GridState, rowId: GridRowId, columnId: string): GridState {
+  return {
+    ...state,
+    formula: {
+      ...state.formula,
+      cells: (state.formula?.cells ?? []).filter((cell) =>
+        cell.rowId !== rowId || cell.columnId !== columnId),
+    },
+  };
+}
+
+export function setNamedExpression(state: GridState, name: string, value: FormulaScalar): GridState {
+  return {
+    ...state,
+    formula: {
+      ...state.formula,
+      cells: state.formula?.cells ?? [],
+      namedExpressions: { ...state.formula?.namedExpressions, [name]: value },
+    },
+  };
+}
+
+export function clearNamedExpression(state: GridState, name: string): GridState {
+  const namedExpressions = { ...state.formula?.namedExpressions };
+  delete namedExpressions[name];
+  return {
+    ...state,
+    formula: {
+      ...state.formula,
+      cells: state.formula?.cells ?? [],
+      namedExpressions: Object.keys(namedExpressions).length > 0 ? namedExpressions : undefined,
+    },
+  };
+}
+
 export function setTreeExpandedRows(state: GridState, rowIds: readonly GridRowId[]): GridState {
   const expandedRowIds = [...new Set(rowIds)];
 
@@ -299,6 +375,7 @@ export function createRemoteCacheKey(state: GridState): string {
     filters: state.filters ?? [],
     aggregation: state.aggregation ?? [],
     rowGrouping: state.rowGrouping,
+    pivot: state.pivot,
     treeData: state.treeData,
     pagination: state.pagination,
     cursorPagination: state.cursorPagination,
@@ -406,4 +483,16 @@ function normalizeRemoteCache(remoteCache?: RemoteCacheState): RemoteCacheState 
 
 function addUniqueKey(keys: string[] | undefined, key: string): string[] {
   return [...new Set([...(keys ?? []), key])];
+}
+
+function clonePivotState(pivot: PivotState): PivotState {
+  return {
+    ...pivot,
+    rows: pivot.rows.map((dimension) => ({ ...dimension })),
+    columns: pivot.columns.map((dimension) => ({ ...dimension })),
+    values: pivot.values.map((value) => ({ ...value })),
+    collapsedRowGroupIds: pivot.collapsedRowGroupIds
+      ? [...pivot.collapsedRowGroupIds]
+      : undefined,
+  };
 }

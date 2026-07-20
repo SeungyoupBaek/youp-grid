@@ -1,4 +1,4 @@
-import type { FilterRule, GridState, SortRule } from "./types.ts";
+import type { FilterRule, GridState, PivotModel, PivotState, SortRule } from "./types.ts";
 
 export type ServerRowsQuery = {
   startRow: number;
@@ -6,6 +6,7 @@ export type ServerRowsQuery = {
   sort?: readonly SortRule[];
   filters?: readonly FilterRule[];
   groupBy?: readonly string[];
+  pivot?: PivotState;
   cursor?: string;
 };
 
@@ -15,6 +16,7 @@ export type ServerRowsResult<TRow> = {
   filteredRowCount?: number;
   nextCursor?: string;
   previousCursor?: string;
+  pivot?: PivotModel;
 };
 
 export type ServerDataSource<TRow> = {
@@ -68,6 +70,7 @@ export function createServerRowsQuery(
     sort: state.sort,
     filters: state.filters,
     groupBy: state.rowGrouping?.columnIds,
+    ...(state.pivot ? { pivot: state.pivot } : {}),
     cursor: state.cursorPagination?.cursor,
   };
 }

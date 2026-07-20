@@ -9,6 +9,7 @@ export {
 export { sizeColumnsToFit } from "./column-sizing.ts";
 export type { SizeColumnsToFitOptions } from "./column-sizing.ts";
 export { applyAggregation } from "./aggregation.ts";
+export { buildGridChartDataset } from "./chart.ts";
 export {
   isCellInRange,
   getClipboardPasteCells,
@@ -39,8 +40,24 @@ export type {
   ImportGridDelimitedTextRowResult,
 } from "./import.ts";
 export { applyFilters, defaultFilterPredicate } from "./filtering.ts";
+export {
+  applyFormulaEngine,
+  columnIndexToName,
+  getFormulaCell,
+  getFormulaCellKey,
+  getFormulaCellResult,
+  getRowNodeValue,
+  shiftFormulaReferences,
+} from "./formula.ts";
 export { getInfiniteScrollTrigger } from "./infinite-scroll.ts";
 export { applyPagination } from "./pagination.ts";
+export {
+  buildPivotModel,
+  createPivotColumnId,
+  createPivotRowId,
+  getPivotDisplayRows,
+  getPivotDrilldownRows,
+} from "./pivot.ts";
 export { buildRowModel } from "./row-model.ts";
 export { applyRowGrouping, isRowGroupNode } from "./row-grouping.ts";
 export { reorderRows } from "./row-reorder.ts";
@@ -51,6 +68,8 @@ export type { ApplyTreeDataOptions } from "./tree-data.ts";
 export { clearSelection, setRowSelected, setSelectedRows, toggleRowSelected } from "./selection.ts";
 export {
   clearFilter,
+  clearFormulaCell,
+  clearNamedExpression,
   clearSort,
   acknowledgeRemoteCache,
   cancelRemoteRequest,
@@ -65,13 +84,17 @@ export {
   setCursorPagination,
   setAggregation,
   setFilter,
+  setFormulaCell,
+  setNamedExpression,
   setPagination,
   setRemoteCache,
   setRowGrouping,
+  setPivot,
   setSort,
   setTreeExpandedRows,
   startRemoteRequest,
   toggleRowGroupExpanded,
+  togglePivotRowExpanded,
   toggleTreeRowExpanded,
   toggleSort,
 } from "./state.ts";
@@ -133,12 +156,35 @@ export type {
   CursorPaginationState,
   FilterOperator,
   FilterRule,
+  FormulaCell,
+  FormulaCellResult,
+  FormulaEngine,
+  FormulaEngineInput,
+  FormulaErrorCode,
+  FormulaModel,
+  FormulaScalar,
+  FormulaState,
+  GridChartDataset,
+  GridChartDatasetSeries,
+  GridChartSeries,
+  GridChartSource,
+  GridChartSpec,
+  GridChartType,
   GridRowId,
   GridRowModelType,
   GridState,
   InfiniteScrollTrigger,
   InfiniteScrollTriggerOptions,
   PaginationState,
+  PivotBucket,
+  PivotDimension,
+  PivotKey,
+  PivotModel,
+  PivotResultColumn,
+  PivotResultColumnGroup,
+  PivotResultRow,
+  PivotState,
+  PivotTotalsPosition,
   ResolvedColumnDef,
   RemoteCacheState,
   RemoteRequestState,

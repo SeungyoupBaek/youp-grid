@@ -2,6 +2,60 @@
 
 This page documents the shared contracts added after `0.4.4`. Package-specific usage remains in each package README.
 
+## Pivot
+
+`GridState.pivot` defines row dimensions, dynamic column dimensions, date buckets, value aggregations, totals, and collapsed row groups. `buildPivotModel` returns generated columns, grouped headers, subtotal rows, a grand-total row, truncation warnings, and source-row counts. `getPivotDrilldownRows` resolves any result cell back to application-owned rows.
+
+```ts
+const state: GridState = {
+  pivot: {
+    enabled: true,
+    rows: [{ columnId: "desk" }],
+    columns: [{ columnId: "settlement", bucket: "quarter" }],
+    values: [{ columnId: "notional", function: "sum" }],
+    rowTotals: "after",
+    columnTotals: "after",
+  },
+};
+```
+
+Remote row requests include the same `pivot` object. A server may return a `PivotModel` in `ServerRowsResult.pivot` when aggregation must run against the full remote dataset.
+
+## Formula engine
+
+Install `@youp-grid/formula` and pass `createFormulaEngine()` to the adapter. Formulas support A1 references, ranges, structured references such as `=[quantity]*[price]`, named scalar expressions, custom synchronous functions, dependency tracking, fill-reference shifting, and typed errors. Formula values participate in filtering, sorting, grouping, aggregation, clipboard copy, CSV export, and Excel export.
+
+```ts
+import { createFormulaEngine } from "@youp-grid/formula";
+
+const formulaEngine = createFormulaEngine({
+  functions: { DOUBLE: (value) => Number(value) * 2 },
+});
+```
+
+## Charts
+
+`buildGridChartDataset` creates serializable datasets from filtered rows, the selected cell range, or pivot results. It supports bar, line, area, pie, and scatter specs; category grouping; numeric aggregation; stacking; dual axes; and a configurable data limit. The React chart panel exposes these settings along with legend, X-axis, and image-download controls.
+
+```ts
+import { createEChartsRenderer } from "@youp-grid/charts-echarts";
+
+const chartRenderer = createEChartsRenderer({ renderer: "canvas" });
+
+<YoupGrid
+  showChartPanel
+  chartRenderer={chartRenderer}
+  defaultChartSpec={{
+    type: "bar",
+    source: "selection",
+    categoryColumnId: "desk",
+    series: [{ columnId: "notional", aggregation: "sum" }],
+  }}
+/>
+```
+
+The ECharts adapter registers only the required chart types, components, and canvas/SVG renderers. `mountYoupGridECharts` exposes resize, data-URL export, update, and destroy methods. `createEChartsRenderer` returns a render handle so the React panel can download the current chart as PNG.
+
 ## Cell validation and asynchronous saving
 
 Columns accept synchronous or asynchronous validators:

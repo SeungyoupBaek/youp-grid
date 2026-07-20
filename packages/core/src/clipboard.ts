@@ -1,4 +1,5 @@
 import type { ResolvedColumnDef, RowNode } from "./types.ts";
+import { getRowNodeValue } from "./formula.ts";
 
 export type GridCellCoordinate = {
   rowIndex: number;
@@ -64,7 +65,7 @@ export function serializeGridRange<TRow>(options: {
 
     for (let columnIndex = range.startColumnIndex; columnIndex <= range.endColumnIndex; columnIndex += 1) {
       const column = options.columns[columnIndex];
-      const value = column ? column.accessor(row.original) : "";
+      const value = column ? getRowNodeValue(row, column) : "";
 
       values.push(escapeClipboardCell(formatClipboardValue(value)));
     }

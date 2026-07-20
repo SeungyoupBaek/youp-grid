@@ -6,11 +6,15 @@ import type {
   CursorPaginationState,
   FilterOperator,
   FilterRule,
+  FormulaCell,
+  FormulaEngine,
   GridCellRange,
   GridRowId,
   GridRowModelType,
   GridState,
   RemoteCacheState,
+  PivotModel,
+  PivotState,
   ResolvedColumnDef,
   RowGroupingState,
   RowNode,
@@ -36,6 +40,8 @@ export type YoupGridOptions<TRow> = {
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;
+  serverPivotModel?: PivotModel;
+  formulaEngine?: FormulaEngine;
   rowHeight?: number;
   getRowHeight?: (context: YoupGridRowHeightContext<TRow>) => number;
   overscan?: number;
@@ -135,6 +141,7 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   onColumnPresetApply?: (preset: YoupGridColumnPreset) => void;
   onCellValueSave?: (change: YoupGridCellValueChange<TRow>, signal: AbortSignal) => Promise<void>;
   onCellValueSaveError?: (error: unknown, change: YoupGridCellValueChange<TRow>) => void;
+  onFormulaChange?: (cell: FormulaCell | undefined) => void;
   locale?: string | readonly string[];
   localeText?: Partial<YoupGridLocaleText>;
 };
@@ -317,6 +324,10 @@ export type YoupGridController<TRow> = {
   setAggregation: (aggregation: readonly AggregationRule[]) => void;
   setRowGrouping: (rowGrouping: RowGroupingState | undefined) => void;
   toggleRowGroupExpanded: (groupId: string) => void;
+  setPivot: (pivot: PivotState | undefined) => void;
+  togglePivotRowExpanded: (rowId: string) => void;
+  setFormulaCell: (cell: FormulaCell) => void;
+  clearFormulaCell: (rowId: GridRowId, columnId: string) => void;
   startRemoteRequest: (requestId: string) => void;
   finishRemoteRequest: (requestId: string) => void;
   failRemoteRequest: (requestId: string, error?: string) => void;

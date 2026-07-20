@@ -2,6 +2,8 @@
 
 Framework-free DOM adapter for Youp Grid.
 
+The returned API includes `setPivot`, `setFormulaCell`, `clearFormulaCell`, and `getChartDataset`. Enabled pivot state renders a hierarchical result table; pass `formulaEngine` to evaluate computed columns and cell formulas.
+
 ```sh
 npm install @youp-grid/core @youp-grid/vanilla
 ```

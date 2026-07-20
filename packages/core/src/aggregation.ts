@@ -1,4 +1,5 @@
 import { getColumnById } from "./columns.ts";
+import { getRowNodeValue } from "./formula.ts";
 import type {
   AggregationFunctionName,
   AggregationResult,
@@ -47,7 +48,7 @@ function getNumericValues<TRow>(
   column: ResolvedColumnDef<TRow>,
 ): number[] {
   return rows
-    .map((row) => column.accessor(row.original))
+    .map((row) => getRowNodeValue(row, column))
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
 }
 

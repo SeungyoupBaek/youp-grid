@@ -3,6 +3,7 @@ import {
   buildRowModel,
   cancelRemoteRequest as cancelCoreRemoteRequest,
   clearFilter as clearCoreFilter,
+  clearFormulaCell as clearCoreFormulaCell,
   clearSort as clearCoreSort,
   createGridState,
   failRemoteRequest as failCoreRemoteRequest,
@@ -17,6 +18,8 @@ import {
   setCursorPagination as setCoreCursorPagination,
   setAggregation as setCoreAggregation,
   setFilter as setCoreFilter,
+  setFormulaCell as setCoreFormulaCell,
+  setPivot as setCorePivot,
   setPagination,
   setRemoteCache as setCoreRemoteCache,
   setRowGrouping as setCoreRowGrouping,
@@ -26,6 +29,7 @@ import {
   setTreeExpandedRows as setCoreTreeExpandedRows,
   startRemoteRequest as startCoreRemoteRequest,
   toggleRowGroupExpanded as toggleCoreRowGroupExpanded,
+  togglePivotRowExpanded as toggleCorePivotRowExpanded,
   toggleRowSelected as toggleCoreRowSelected,
   toggleSort as toggleCoreSort,
   toggleTreeRowExpanded as toggleCoreTreeRowExpanded,
@@ -55,6 +59,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
       rowModelType: options.rowModelType,
       serverRowCount: options.serverRowCount,
       serverFilteredRowCount: options.serverFilteredRowCount,
+      serverPivotModel: options.serverPivotModel,
+      formulaEngine: options.formulaEngine,
     });
   }, [
     options.rows,
@@ -67,6 +73,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     options.rowModelType,
     options.serverRowCount,
     options.serverFilteredRowCount,
+    options.serverPivotModel,
+    options.formulaEngine,
     state,
   ]);
 
@@ -84,6 +92,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
         rowModelType: options.rowModelType,
         serverRowCount: options.serverRowCount,
         serverFilteredRowCount: options.serverFilteredRowCount,
+        serverPivotModel: options.serverPivotModel,
+        formulaEngine: options.formulaEngine,
       });
 
       if (!isControlled) {
@@ -142,6 +152,10 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     setAggregation: (aggregation) => commitState(setCoreAggregation(state, aggregation)),
     setRowGrouping: (rowGrouping) => commitState(setCoreRowGrouping(state, rowGrouping)),
     toggleRowGroupExpanded: (groupId) => commitState(toggleCoreRowGroupExpanded(state, groupId)),
+    setPivot: (pivot) => commitState(setCorePivot(state, pivot)),
+    togglePivotRowExpanded: (rowId) => commitState(toggleCorePivotRowExpanded(state, rowId)),
+    setFormulaCell: (cell) => commitState(setCoreFormulaCell(state, cell)),
+    clearFormulaCell: (rowId, columnId) => commitState(clearCoreFormulaCell(state, rowId, columnId)),
     startRemoteRequest: (requestId) => commitState(startCoreRemoteRequest(state, requestId)),
     finishRemoteRequest: (requestId) => commitState(finishCoreRemoteRequest(state, requestId)),
     failRemoteRequest: (requestId, error) => commitState(failCoreRemoteRequest(state, requestId, error)),

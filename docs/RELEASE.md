@@ -30,15 +30,19 @@ Update the root workspace version and all package versions together:
 
 - `package.json`
 - `packages/core/package.json`
+- `packages/formula/package.json`
+- `packages/charts-echarts/package.json`
 - `packages/react/package.json`
 - `packages/vue/package.json`
 - `packages/vanilla/package.json`
 - `package-lock.json`
 
-`@youp-grid/react`, `@youp-grid/vue`, and `@youp-grid/vanilla` must depend on the same `@youp-grid/core` version.
+All adapter packages must depend on the same `@youp-grid/core` version.
 
 ```sh
 npm version 0.0.0 --workspaces --include-workspace-root --no-git-tag-version
+npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/formula
+npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/charts-echarts
 npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/react
 npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/vue
 npm pkg set "dependencies.@youp-grid/core=0.0.0" -w @youp-grid/vanilla
@@ -52,6 +56,8 @@ Publish from core to adapters. Enter OTP only in the npm prompt when required; d
 
 ```sh
 npm publish -w @youp-grid/core --access public
+npm publish -w @youp-grid/formula --access public
+npm publish -w @youp-grid/charts-echarts --access public
 npm publish -w @youp-grid/react --access public
 npm publish -w @youp-grid/vue --access public
 npm publish -w @youp-grid/vanilla --access public
@@ -61,6 +67,8 @@ If the local npm cache has permission issues, use the project release cache expl
 
 ```sh
 npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
+npm publish -w @youp-grid/formula --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
+npm publish -w @youp-grid/charts-echarts --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
 npm publish -w @youp-grid/vanilla --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache
@@ -70,6 +78,8 @@ npm publish -w @youp-grid/vanilla --access public --registry=https://registry.np
 
 ```sh
 npm view @youp-grid/core version
+npm view @youp-grid/formula version
+npm view @youp-grid/charts-echarts version
 npm view @youp-grid/react version
 npm view @youp-grid/vue version
 npm view @youp-grid/vanilla version

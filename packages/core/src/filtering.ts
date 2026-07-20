@@ -1,4 +1,5 @@
 import { getColumnById } from "./columns.ts";
+import { getRowNodeValue } from "./formula.ts";
 import type { FilterRule, ResolvedColumnDef, RowNode } from "./types.ts";
 
 export function applyFilters<TRow>(
@@ -20,7 +21,7 @@ export function applyFilters<TRow>(
         return true;
       }
 
-      const value = column.accessor(row.original);
+      const value = getRowNodeValue(row, column);
 
       if (column.filterPredicate) {
         return column.filterPredicate(value, filter, row.original);

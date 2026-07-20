@@ -258,6 +258,10 @@ Implemented now:
 - cache invalidation contract
 - remote block loading, status, retry, and cancellation controller
 - aggregation
+- pivot rows, dynamic columns, date buckets, totals, collapse, and drilldown
+- optional spreadsheet formula engine with computed columns and cycle detection
+- selection, filtered-row, and pivot chart datasets
+- optional ECharts renderer with bar, line, area, pie, and scatter charts
 - row grouping
 - tree data
 - expandable master-detail rows

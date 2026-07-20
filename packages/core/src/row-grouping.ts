@@ -1,4 +1,5 @@
 import { getColumnById } from "./columns.ts";
+import { getRowNodeValue } from "./formula.ts";
 import type {
   ResolvedColumnDef,
   RowDisplayNode,
@@ -46,7 +47,7 @@ function groupRows<TRow>(
   const grouped = new Map<string, { value: unknown; rows: RowNode<TRow>[] }>();
 
   for (const row of rows) {
-    const value = column.accessor(row.original);
+    const value = getRowNodeValue(row, column);
     const key = stringifyGroupValue(value);
     const existing = grouped.get(key);
 

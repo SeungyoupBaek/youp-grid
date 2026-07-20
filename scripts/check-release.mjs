@@ -14,11 +14,15 @@ const expectedVersion = rootPackage.version;
 
 const packagePaths = [
   "packages/core",
+  "packages/formula",
+  "packages/charts-echarts",
   "packages/react",
   "packages/vue",
   "packages/vanilla",
 ];
 const adapterPaths = [
+  "packages/formula",
+  "packages/charts-echarts",
   "packages/react",
   "packages/vue",
   "packages/vanilla",

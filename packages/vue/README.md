@@ -2,6 +2,8 @@
 
 Vue 3 adapter for Youp Grid.
 
+The controller exposes `setPivot`, `togglePivotRowExpanded`, `setFormulaCell`, and `clearFormulaCell`. Pass an optional `formulaEngine`; enabled pivot state renders a hierarchical pivot result table.
+
 This package exposes a basic editable `YoupGrid` component and `useYoupGrid`, a Vue composable that connects reactive Vue state to the framework-agnostic `@youp-grid/core` row model and state helpers.
 
 ## Installation

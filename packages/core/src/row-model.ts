@@ -6,12 +6,21 @@ import { applyPagination } from "./pagination.ts";
 import { applyRowGrouping } from "./row-grouping.ts";
 import { applySorting } from "./sorting.ts";
 import { applyTreeData } from "./tree-data.ts";
+import { applyFormulaEngine } from "./formula.ts";
+import { buildPivotModel } from "./pivot.ts";
 import type { BuildRowModelOptions, PaginationState, RowModel, RowNode } from "./types.ts";
 
 export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowModel<TRow> {
-  const columns = applyColumnState(normalizeColumns(options.columns), options.state?.columns);
+  const normalizedColumns = normalizeColumns(options.columns);
+  const columns = applyColumnState(normalizedColumns, options.state?.columns);
   const visibleColumns = getVisibleColumns(columns);
-  const allRows = createRowNodes(options.rows, options.getRowId);
+  const formulaResult = applyFormulaEngine({
+    rows: createRowNodes(options.rows, options.getRowId),
+    columns: normalizedColumns,
+    state: options.state?.formula,
+    engine: options.formulaEngine,
+  });
+  const allRows = formulaResult.rows;
   const pinnedTopRows = createRowNodes(options.pinnedTopRows ?? [], options.getRowId);
   const pinnedBottomRows = createRowNodes(options.pinnedBottomRows ?? [], options.getRowId);
 
@@ -27,6 +36,8 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
       getParentRowId: options.getParentRowId,
       serverRowCount: options.serverRowCount,
       serverFilteredRowCount: options.serverFilteredRowCount,
+      serverPivotModel: options.serverPivotModel,
+      formula: formulaResult.model,
     });
   }
 
@@ -40,6 +51,7 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
   const paginated = applyPagination(treeRows, options.state?.pagination);
   const aggregation = applyAggregation(filteredRows, columns, options.state?.aggregation);
   const displayRows = applyRowGrouping(paginated.rows, columns, options.state?.rowGrouping);
+  const pivot = buildPivotModel(filteredRows, columns, options.state?.pivot);
 
   return {
     columns,
@@ -52,6 +64,8 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
     pinnedTopRows,
     pinnedBottomRows,
     aggregation,
+    pivot,
+    formula: formulaResult.model,
     totalRowCount: allRows.length,
     filteredRowCount: filteredRows.length,
     visibleRowCount: paginated.rows.length,
@@ -70,6 +84,8 @@ function buildServerRowModel<TRow>(context: {
   getParentRowId?: BuildRowModelOptions<TRow>["getParentRowId"];
   serverRowCount?: number;
   serverFilteredRowCount?: number;
+  serverPivotModel?: RowModel<TRow>["pivot"];
+  formula?: RowModel<TRow>["formula"];
 }): RowModel<TRow> {
   const totalRowCount = context.serverRowCount ?? context.allRows.length;
   const filteredRowCount = context.serverFilteredRowCount ?? totalRowCount;
@@ -90,6 +106,8 @@ function buildServerRowModel<TRow>(context: {
     pinnedTopRows: context.pinnedTopRows,
     pinnedBottomRows: context.pinnedBottomRows,
     aggregation: applyAggregation(context.allRows, context.columns, context.state?.aggregation),
+    pivot: context.serverPivotModel ?? buildPivotModel(context.allRows, context.columns, context.state?.pivot),
+    formula: context.formula,
     totalRowCount,
     filteredRowCount,
     visibleRowCount: visibleRows.length,

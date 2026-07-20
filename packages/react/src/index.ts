@@ -1,7 +1,12 @@
 export { YoupGrid } from "./YoupGrid.ts";
+export { YoupChartPanel } from "./YoupChartPanel.ts";
+export { YoupPivotPanel } from "./YoupPivotPanel.ts";
+export { YoupPivotView } from "./YoupPivotView.ts";
 export { useYoupGrid } from "./useYoupGrid.ts";
 export type {
   YoupGridCanEditCellContext,
+  YoupGridChartRenderHandle,
+  YoupGridChartRenderer,
   YoupGridApi,
   YoupGridApiCell,
   YoupGridCellEditCommit,
@@ -23,6 +28,7 @@ export type {
   YoupGridLocaleText,
   YoupGridOptions,
   YoupGridProps,
+  YoupGridPivotDrilldownContext,
   YoupGridRowChange,
   YoupGridRowDeleteChange,
   YoupGridRowDetailContext,

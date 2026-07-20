@@ -28,6 +28,9 @@ const sharedProps = [
   "onCellValueSaveError",
   "locale",
   "localeText",
+  "formulaEngine",
+  "serverPivotModel",
+  "onFormulaChange",
 ];
 
 const sharedApiMethods = [
@@ -39,6 +42,10 @@ const sharedApiMethods = [
   "exportCsv",
   "exportExcel",
   "resetState",
+  "setPivot",
+  "togglePivotRowExpanded",
+  "setFormulaCell",
+  "clearFormulaCell",
 ];
 
 const missing = sharedProps.flatMap((prop) => {

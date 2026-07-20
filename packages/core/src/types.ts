@@ -104,6 +104,7 @@ export type ColumnDef<TRow, TValue = unknown> = {
   placeholder?: string;
   wrapText?: boolean;
   autoHeight?: boolean;
+  formula?: string;
 };
 
 export type ResolvedColumnDef<TRow, TValue = unknown> = Omit<
@@ -151,6 +152,77 @@ export type AggregationResult = {
   valueCount: number;
 };
 
+export type PivotBucket = "value" | "year" | "quarter" | "month" | "day";
+
+export type PivotDimension = {
+  columnId: string;
+  bucket?: PivotBucket;
+  label?: string;
+  sort?: SortDirection;
+};
+
+export type PivotTotalsPosition = false | "before" | "after";
+
+export type PivotState = {
+  enabled?: boolean;
+  rows: PivotDimension[];
+  columns: PivotDimension[];
+  values: AggregationRule[];
+  rowTotals?: PivotTotalsPosition;
+  columnTotals?: PivotTotalsPosition;
+  collapsedRowGroupIds?: string[];
+  maxGeneratedColumns?: number;
+  includeEmpty?: boolean;
+};
+
+export type PivotKey = {
+  columnId: string;
+  value: string;
+  label: string;
+  bucket: PivotBucket;
+};
+
+export type PivotResultColumn = {
+  id: string;
+  headerName: string;
+  path: PivotKey[];
+  valueColumnId: string;
+  function: AggregationFunctionName;
+  isTotal?: boolean;
+};
+
+export type PivotResultColumnGroup = {
+  id: string;
+  label: string;
+  path: PivotKey[];
+  children: PivotResultColumnGroup[];
+  columnIds: string[];
+};
+
+export type PivotResultRow = {
+  id: string;
+  depth: number;
+  path: PivotKey[];
+  label: string;
+  rowCount: number;
+  expanded: boolean;
+  isSubtotal: boolean;
+  isGrandTotal?: boolean;
+  values: Record<string, number | undefined>;
+};
+
+export type PivotModel = {
+  columns: PivotResultColumn[];
+  columnGroups: PivotResultColumnGroup[];
+  rows: PivotResultRow[];
+  grandTotalRow?: PivotResultRow;
+  grandTotalPosition?: "before" | "after";
+  sourceRowCount: number;
+  generatedColumnCount: number;
+  truncated: boolean;
+  warnings: string[];
+};
+
 export type RowGroupingState = {
   columnIds: string[];
   collapsedGroupIds?: string[];
@@ -190,12 +262,65 @@ export type RemoteCacheState = {
   invalidatedKeys?: string[];
 };
 
+export type FormulaScalar = string | number | boolean | null | undefined;
+
+export type FormulaCell = {
+  rowId: GridRowId;
+  columnId: string;
+  formula: string;
+};
+
+export type FormulaState = {
+  cells: FormulaCell[];
+  namedExpressions?: Record<string, FormulaScalar>;
+  locale?: string;
+};
+
+export type FormulaErrorCode =
+  | "ENGINE"
+  | "PARSE"
+  | "CYCLE"
+  | "REF"
+  | "VALUE"
+  | "NAME"
+  | "DIV_ZERO";
+
+export type FormulaCellResult = {
+  rowId: GridRowId;
+  columnId: string;
+  formula: string;
+  value: FormulaScalar | FormulaScalar[][];
+  error?: {
+    code: FormulaErrorCode;
+    message: string;
+  };
+  dependencies: string[];
+};
+
+export type FormulaModel = {
+  cells: Record<string, FormulaCellResult>;
+  errors: FormulaCellResult[];
+  recalculatedCellCount: number;
+};
+
+export type FormulaEngineInput<TRow> = {
+  rows: readonly RowNode<TRow>[];
+  columns: readonly ResolvedColumnDef<TRow>[];
+  state: FormulaState;
+};
+
+export type FormulaEngine = {
+  calculate: <TRow>(input: FormulaEngineInput<TRow>) => FormulaModel;
+};
+
 export type GridState = {
   columns?: ColumnState[];
   sort?: SortRule[];
   filters?: FilterRule[];
   aggregation?: AggregationRule[];
   rowGrouping?: RowGroupingState;
+  pivot?: PivotState;
+  formula?: FormulaState;
   treeData?: TreeDataState;
   pagination?: PaginationState;
   cursorPagination?: CursorPaginationState;
@@ -212,6 +337,7 @@ export type RowNode<TRow> = {
   parentId?: GridRowId;
   hasChildren?: boolean;
   expanded?: boolean;
+  formulaValues?: Record<string, FormulaScalar | FormulaScalar[][]>;
 };
 
 export type RowGroupNode = {
@@ -241,6 +367,8 @@ export type BuildRowModelOptions<TRow> = {
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;
+  serverPivotModel?: PivotModel;
+  formulaEngine?: FormulaEngine;
 };
 
 export type RowModel<TRow> = {
@@ -254,10 +382,53 @@ export type RowModel<TRow> = {
   pinnedTopRows: RowNode<TRow>[];
   pinnedBottomRows: RowNode<TRow>[];
   aggregation: AggregationResult[];
+  pivot?: PivotModel;
+  formula?: FormulaModel;
   totalRowCount: number;
   filteredRowCount: number;
   visibleRowCount: number;
   pageCount?: number;
+};
+
+export type GridChartType = "bar" | "line" | "area" | "pie" | "scatter";
+
+export type GridChartSource = "rows" | "selection" | "pivot";
+
+export type GridChartSeries = {
+  columnId: string;
+  label?: string;
+  aggregation?: AggregationFunctionName;
+  axis?: "left" | "right";
+};
+
+export type GridChartSpec = {
+  id?: string;
+  type: GridChartType;
+  title?: string;
+  source?: GridChartSource;
+  categoryColumnId?: string;
+  xColumnId?: string;
+  series: GridChartSeries[];
+  stacked?: boolean;
+  showLegend?: boolean;
+  dataLimit?: number;
+};
+
+export type GridChartDatasetSeries = {
+  columnId: string;
+  dataKey: string;
+  label: string;
+  axis: "left" | "right";
+};
+
+export type GridChartDataset = {
+  dimensions: string[];
+  source: Record<string, FormulaScalar>[];
+  categoryKey?: string;
+  xKey?: string;
+  series: GridChartDatasetSeries[];
+  sourceRowCount: number;
+  truncated: boolean;
 };
 
 export type VirtualRangeOptions = {

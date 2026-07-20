@@ -5,6 +5,10 @@ import type {
   CursorPaginationState,
   FilterOperator,
   FilterRule,
+  FormulaCell,
+  FormulaEngine,
+  GridChartDataset,
+  GridChartSpec,
   GridCellRange,
   GridRowId,
   GridRowModelType,
@@ -13,6 +17,10 @@ import type {
   ImportGridDelimitedTextIssue,
   ImportGridDelimitedTextRowResult,
   RemoteCacheState,
+  PivotResultColumn,
+  PivotResultRow,
+  PivotModel,
+  PivotState,
   ResolvedColumnDef,
   RowModel,
   RowGroupingState,
@@ -263,6 +271,8 @@ export type YoupGridOptions<TRow> = {
   rowModelType?: GridRowModelType;
   serverRowCount?: number;
   serverFilteredRowCount?: number;
+  serverPivotModel?: PivotModel;
+  formulaEngine?: FormulaEngine;
   rowHeight?: number;
   getRowHeight?: (context: YoupGridRowHeightContext<TRow>) => number;
   overscan?: number;
@@ -292,6 +302,10 @@ export type YoupGridController<TRow> = {
   setAggregation: (aggregation: readonly AggregationRule[]) => void;
   setRowGrouping: (rowGrouping: RowGroupingState | undefined) => void;
   toggleRowGroupExpanded: (groupId: string) => void;
+  setPivot: (pivot: PivotState | undefined) => void;
+  togglePivotRowExpanded: (rowId: string) => void;
+  setFormulaCell: (cell: FormulaCell) => void;
+  clearFormulaCell: (rowId: GridRowId, columnId: string) => void;
   startRemoteRequest: (requestId: string) => void;
   finishRemoteRequest: (requestId: string) => void;
   failRemoteRequest: (requestId: string, error?: string) => void;
@@ -329,6 +343,14 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   showFilters?: boolean;
   filterMode?: YoupGridFilterMode;
   showAggregationFooter?: boolean;
+  showPivotPanel?: boolean;
+  showChartPanel?: boolean;
+  chartSpec?: GridChartSpec;
+  defaultChartSpec?: GridChartSpec;
+  onChartSpecChange?: (spec: GridChartSpec) => void;
+  chartRenderer?: YoupGridChartRenderer;
+  onPivotDrilldown?: (context: YoupGridPivotDrilldownContext<TRow>) => void;
+  onFormulaChange?: (cell: FormulaCell | undefined) => void;
   showPagination?: boolean;
   showRowNumberColumn?: boolean;
   showRowSelectionColumn?: boolean;
@@ -378,6 +400,23 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   localeText?: Partial<YoupGridLocaleText>;
   columnVirtualization?: boolean;
   columnOverscan?: number;
+};
+
+export type YoupGridChartRenderHandle = {
+  destroy?: () => void;
+  exportImage?: () => string;
+};
+
+export type YoupGridChartRenderer = (
+  element: HTMLElement,
+  dataset: GridChartDataset,
+  spec: GridChartSpec,
+) => void | (() => void) | YoupGridChartRenderHandle;
+
+export type YoupGridPivotDrilldownContext<TRow> = {
+  pivotRow: PivotResultRow;
+  pivotColumn?: PivotResultColumn;
+  rows: TRow[];
 };
 
 export type YoupGridCellContext<TRow> = {

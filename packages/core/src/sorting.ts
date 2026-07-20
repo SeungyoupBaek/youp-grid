@@ -1,4 +1,5 @@
 import { getColumnById } from "./columns.ts";
+import { getRowNodeValue } from "./formula.ts";
 import type { ResolvedColumnDef, RowNode, SortRule } from "./types.ts";
 
 export function applySorting<TRow>(
@@ -36,8 +37,8 @@ function compareRows<TRow>(
   right: RowNode<TRow>,
   column: ResolvedColumnDef<TRow>,
 ): number {
-  const leftValue = column.accessor(left.original);
-  const rightValue = column.accessor(right.original);
+  const leftValue = getRowNodeValue(left, column);
+  const rightValue = getRowNodeValue(right, column);
 
   if (column.comparator) {
     return column.comparator(leftValue, rightValue, left.original, right.original);
