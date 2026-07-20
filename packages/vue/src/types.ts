@@ -6,6 +6,7 @@ import type {
   CursorPaginationState,
   FilterOperator,
   FilterRule,
+  GridCellRange,
   GridRowId,
   GridRowModelType,
   GridState,
@@ -36,6 +37,7 @@ export type YoupGridOptions<TRow> = {
   serverRowCount?: number;
   serverFilteredRowCount?: number;
   rowHeight?: number;
+  getRowHeight?: (context: YoupGridRowHeightContext<TRow>) => number;
   overscan?: number;
   pinnedTopRows?: readonly TRow[];
   pinnedBottomRows?: readonly TRow[];
@@ -47,6 +49,39 @@ export type YoupGridOptions<TRow> = {
 
 export type YoupGridDensity = "compact" | "standard" | "comfortable";
 export type YoupGridFilterMode = "text" | "advanced";
+
+export type YoupGridLocaleText = {
+  noRows: string;
+  loadingRows: string;
+  loadError: string;
+  previous: string;
+  next: string;
+  rows: string;
+};
+
+export type YoupGridRowHeightContext<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowId: GridRowId;
+  rowIndex: number;
+};
+
+export type YoupGridApiCell = {
+  rowIndex: number;
+  columnIndex?: number;
+  columnId?: string;
+};
+
+export type YoupGridApi = {
+  getState: () => GridState;
+  focusCell: (cell: YoupGridApiCell) => boolean;
+  startEditing: (cell: YoupGridApiCell) => boolean;
+  scrollToRow: (rowIndex: number) => boolean;
+  selectRange: (range: GridCellRange | undefined) => void;
+  exportCsv: () => string;
+  exportExcel: () => string;
+  resetState: () => void;
+};
 
 export type YoupGridColumnPreset = {
   id: string;
@@ -98,6 +133,10 @@ export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
   cellTooltip?: YoupGridCellTooltipOptions;
   columnPresets?: readonly YoupGridColumnPreset[];
   onColumnPresetApply?: (preset: YoupGridColumnPreset) => void;
+  onCellValueSave?: (change: YoupGridCellValueChange<TRow>, signal: AbortSignal) => Promise<void>;
+  onCellValueSaveError?: (error: unknown, change: YoupGridCellValueChange<TRow>) => void;
+  locale?: string | readonly string[];
+  localeText?: Partial<YoupGridLocaleText>;
 };
 
 export type YoupGridPaginationOptions = {
@@ -170,7 +209,7 @@ export type YoupGridCanEditCellContext<TRow> = {
   value: unknown;
 };
 
-export type YoupGridCellValueChangeSource = "edit" | "delete" | "paste" | "fill" | "undo" | "redo";
+export type YoupGridCellValueChangeSource = "edit" | "delete" | "paste" | "fill" | "undo" | "redo" | "rollback";
 
 export type YoupGridCellValueChange<TRow> = {
   row: TRow;

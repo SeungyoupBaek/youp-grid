@@ -29,6 +29,9 @@ import "@youp-grid/react/styles.css";
 - optional row number column and cell context menu
 - controlled row insert/delete and row copy/paste callbacks through `createRow` and `onRowsChange`
 - loading, empty, error, validation, pending, warning, and read-only states
+- synchronous/asynchronous column validation and `onCellValueSave` rollback events
+- `apiRef` methods for focus, editing, scrolling, range selection, export, and state reset
+- opt-in center-column virtualization, variable row heights, wrapped cells, and locale text
 
 The adapter emits changes through callbacks. Applications keep ownership of row data.
 Row insert and row paste require `createRow`; row paste keeps the newly created row ID while copying field-backed column values from the copied row. TSV paste also uses `createRow` and `onRowsChange` to append missing rows when pasted data runs past the last visible row.
@@ -49,7 +52,13 @@ type SqlColumn = {
 };
 
 const columns: ColumnDef<SqlColumn>[] = [
-  { field: "logicalName", headerName: "Logical", editable: true, editor: "text" },
+  {
+    field: "logicalName",
+    headerName: "Logical",
+    editable: true,
+    editor: "text",
+    validator: (value) => String(value).trim() ? true : "Logical name is required",
+  },
   { field: "physicalName", headerName: "Physical", editable: true, placeholder: "Auto suggestion" },
   { field: "length", headerName: "Length", editable: true, editor: "number", align: "right" },
   { field: "nullable", headerName: "Nullable", editable: true, editor: "checkbox", align: "center" },
@@ -73,6 +82,8 @@ const columns: ColumnDef<SqlColumn>[] = [
   onCellValueChange={({ rowId, columnId, value }) => {
     // Update application-owned row state.
   }}
+  onCellValueSave={(change, signal) => saveCell(change, signal)}
+  columnVirtualization
   createRow={() => ({
     id: crypto.randomUUID(),
     logicalName: "",

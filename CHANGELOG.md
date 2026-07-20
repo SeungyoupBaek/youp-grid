@@ -6,6 +6,14 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-20
+
+- Add synchronous and asynchronous cell validation with save status and rollback events.
+- Add cancellable server block loading with retry, scoped LRU caching, and invalidation.
+- Add imperative React and Vue Grid APIs, variable row heights, wrapped cells, locale text, and opt-in column virtualization.
+- Expand the Vanilla adapter with state, focus, selection, scrolling, and export APIs.
+- Add adapter parity checks, performance benchmarks, public API documentation, and migration guidance.
+
 ## [0.4.4] - 2026-07-13
 
 - Preserve the React editor input across consecutive Korean IME syllables so later consonants are not lost.

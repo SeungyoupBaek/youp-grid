@@ -167,6 +167,6 @@ grid.setSort("age", "desc");
 
 ## Boundary
 
-The Vue component currently provides row rendering, row number and selection columns, keyboard cell focus and range selection, a basic cell context menu, inline editing, header sorting, advanced filter operators, column drag reorder, column chooser search and presets, column order controls, fit-to-width sizing, expandable row detail slots, placeholder display, alignment, cell metadata, native/rich cell tooltips, pagination footer controls, grouping/tree expansion controls, row click events, and header/cell/editor slots.
+The Vue component provides row rendering, row number and selection columns, keyboard cell focus and range selection, a cell context menu, inline editing, synchronous/asynchronous validation and save rollback, header sorting, advanced filters, column controls, variable row heights, wrapped cells, locale text, expandable detail slots, metadata/tooltips, pagination, grouping/tree expansion, and header/cell/editor slots. Component refs expose focus, editing, scrolling, range, export, state, and reset methods.
 
 The headless composable provides state, row model, sorting, filtering, pagination, column state, row selection, tree expansion, grouping, aggregation, and remote-cache helpers through Vue `computed` refs.

@@ -12,6 +12,9 @@ import {
   createGridState,
   createHeaderColumnMappings,
   createRemoteCacheKey,
+  createServerBlockCache,
+  createServerDataController,
+  createServerRowsQuery,
   createValueHistoryState,
   exportGridCsv,
   exportGridExcel,
@@ -22,6 +25,7 @@ import {
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
+  getVariableVirtualRange,
   getVirtualRange,
   importGridDelimitedText,
   invertValueHistoryEntry,
@@ -61,6 +65,7 @@ import {
   toggleSort,
   undoValueHistory,
   loadGridState,
+  normalizeCellValidationResult,
   saveGridState,
   type ColumnDef,
   type GridState,
@@ -1082,4 +1087,92 @@ test("duplicate column ids fail fast", () => {
       columns: [{ field: "name" }, { field: "name" }],
     });
   }, /Duplicate grid column id/);
+});
+
+test("cell validation results normalize boolean, message, and object forms", () => {
+  assert.deepEqual(normalizeCellValidationResult(true), { valid: true });
+  assert.deepEqual(normalizeCellValidationResult("Required"), { valid: false, message: "Required" });
+  assert.deepEqual(normalizeCellValidationResult({ valid: false, message: "Too short" }), {
+    valid: false,
+    message: "Too short",
+  });
+});
+
+test("variable virtual range preserves item offsets and overscan", () => {
+  const range = getVariableVirtualRange({
+    itemCount: 5,
+    itemSize: (index) => [20, 30, 40, 50, 60][index],
+    viewportSize: 45,
+    scrollOffset: 25,
+    overscan: 1,
+  });
+
+  assert.equal(range.totalSize, 200);
+  assert.equal(range.startIndex, 0);
+  assert.equal(range.endIndex, 3);
+  assert.deepEqual(range.items.map((item) => [item.index, item.start, item.size]), [
+    [0, 0, 20],
+    [1, 20, 30],
+    [2, 50, 40],
+    [3, 90, 50],
+  ]);
+});
+
+test("server block cache uses LRU eviction and scoped invalidation", () => {
+  const cache = createServerBlockCache<string>({ blockSize: 50, maxBlocks: 2 });
+  cache.set("a", 0, { rows: ["a0"] });
+  cache.set("a", 1, { rows: ["a1"] });
+  cache.get("a", 0);
+  cache.set("b", 0, { rows: ["b0"] });
+
+  assert.equal(cache.get("a", 1), undefined);
+  assert.deepEqual(cache.get("a", 0)?.rows, ["a0"]);
+  assert.equal(cache.size(), 2);
+  cache.invalidate("a");
+  assert.equal(cache.get("a", 0), undefined);
+  assert.deepEqual(cache.get("b", 0)?.rows, ["b0"]);
+
+  assert.deepEqual(createServerRowsQuery({ sort: [{ columnId: "name", direction: "asc" }] }, 20, 50), {
+    startRow: 20,
+    endRow: 70,
+    sort: [{ columnId: "name", direction: "asc" }],
+    filters: undefined,
+    groupBy: undefined,
+    cursor: undefined,
+  });
+});
+
+test("server block cache keeps delimiter-like scope keys isolated", () => {
+  const cache = createServerBlockCache<{ id: number }>();
+  cache.set("orders", 0, { rows: [{ id: 1 }] });
+  cache.set("orders:archived", 0, { rows: [{ id: 2 }] });
+
+  cache.invalidate("orders");
+
+  assert.equal(cache.get("orders", 0), undefined);
+  assert.deepEqual(cache.get("orders:archived", 0)?.rows, [{ id: 2 }]);
+});
+
+test("server data controller deduplicates blocks and retries failures", async () => {
+  let calls = 0;
+  const controller = createServerDataController<string>({
+    getRows: async (query) => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("temporary");
+      }
+      return { rows: [`${query.startRow}-${query.endRow}`], rowCount: 100 };
+    },
+  }, { blockSize: 25 });
+
+  await assert.rejects(controller.load("query", 1, {}), /temporary/);
+  assert.deepEqual(controller.getStatus("query", 1), { status: "error", error: "temporary" });
+
+  const result = await controller.retry("query", 1);
+  assert.deepEqual(result.rows, ["25-50"]);
+  assert.deepEqual(controller.getStatus("query", 1), { status: "success" });
+  assert.equal(calls, 2);
+
+  await controller.load("query", 1, {});
+  assert.equal(calls, 2);
 });

@@ -18,6 +18,7 @@ import type {
 } from "@youp-grid/core";
 import {
   createRemoteCacheKey,
+  createGridState,
   exportGridCsv,
   exportGridExcel,
   getClipboardPasteCells,
@@ -25,6 +26,7 @@ import {
   getInfiniteScrollTrigger,
   isCellInRange,
   parseClipboardText,
+  normalizeCellValidationResult,
   setColumnHidden as setCoreColumnHidden,
   setColumnOrder as setCoreColumnOrder,
   setColumnWidth as setCoreColumnWidth,
@@ -35,6 +37,7 @@ import {
   defineComponent,
   h,
   nextTick,
+  onUnmounted,
   ref,
   Teleport,
   watch,
@@ -57,7 +60,10 @@ import type {
   YoupGridCellValueChange,
   YoupGridCreateRowContext,
   YoupGridDensity,
+  YoupGridApi,
+  YoupGridApiCell,
   YoupGridFilterMode,
+  YoupGridLocaleText,
   YoupGridHeaderSlotContext,
   YoupGridPaginationOptions,
   YoupGridRowDetailSlotContext,
@@ -79,6 +85,14 @@ const ROW_SELECTION_COLUMN_WIDTH = 44;
 const MIN_AUTOSIZE_COLUMN_WIDTH = 48;
 const MAX_AUTOSIZE_COLUMN_WIDTH = 640;
 const CONTEXT_MENU_VIEWPORT_PADDING = 8;
+const DEFAULT_LOCALE_TEXT: YoupGridLocaleText = {
+  noRows: "No rows",
+  loadingRows: "Loading rows",
+  loadError: "Unable to load rows",
+  previous: "Previous page",
+  next: "Next page",
+  rows: "Rows per page",
+};
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 
@@ -133,6 +147,8 @@ type NormalizedPaginationOptions = {
 };
 
 type PaginationRenderContext = {
+  localeText: YoupGridLocaleText;
+  formatNumber: (value: number) => string;
   pageIndex: number;
   pageSize: number;
   pageCount: number;
@@ -176,6 +192,15 @@ export const YoupGrid = defineComponent({
     },
     rowHeight: {
       type: Number,
+      default: undefined,
+    },
+    getRowHeight: {
+      type: Function as PropType<(context: {
+        row: unknown;
+        rowNode: RowNode<unknown>;
+        rowId: GridRowId;
+        rowIndex: number;
+      }) => number>,
       default: undefined,
     },
     overscan: {
@@ -234,7 +259,7 @@ export const YoupGrid = defineComponent({
     },
     emptyText: {
       type: String,
-      default: "No rows",
+      default: undefined,
     },
     emptyContent: {
       type: null as unknown as PropType<VNodeChild>,
@@ -394,6 +419,28 @@ export const YoupGrid = defineComponent({
       type: Function as PropType<(preset: { id: string; label: string; columnIds: readonly string[] }) => void>,
       default: undefined,
     },
+    onCellValueSave: {
+      type: Function as PropType<(
+        change: YoupGridCellValueChange<unknown>,
+        signal: AbortSignal,
+      ) => Promise<void>>,
+      default: undefined,
+    },
+    onCellValueSaveError: {
+      type: Function as PropType<(
+        error: unknown,
+        change: YoupGridCellValueChange<unknown>,
+      ) => void>,
+      default: undefined,
+    },
+    locale: {
+      type: [String, Array] as PropType<string | readonly string[]>,
+      default: undefined,
+    },
+    localeText: {
+      type: Object as PropType<Partial<YoupGridLocaleText>>,
+      default: undefined,
+    },
   },
   emits: {
     stateChange: (_change: YoupGridStateChange<unknown>) => true,
@@ -407,11 +454,13 @@ export const YoupGrid = defineComponent({
     detailExpandedRowsChange: (_rowIds: readonly GridRowId[]) => true,
     densityChange: (_density: YoupGridDensity) => true,
   },
-  setup(props, { emit, slots }) {
+  setup(props, { emit, expose, slots }) {
     const rootRef = ref<HTMLElement | null>(null);
     const cellContextMenuRef = ref<HTMLElement | null>(null);
     const activeEdit = ref<ActiveEdit>();
     const activeTooltipCellKey = ref<string>();
+    const internalCellMeta = ref<Record<string, YoupGridCellMeta | undefined>>({});
+    const cellOperationControllers = new Map<string, AbortController>();
     const activeCellContextMenu = ref<ActiveCellContextMenu>();
     const rowClipboard = ref<RowClipboardEntry[]>([]);
     const focusedCell = ref<FocusedCell>({ rowIndex: 0, columnIndex: 0 });
@@ -442,9 +491,19 @@ export const YoupGrid = defineComponent({
       onStateChange: (change) => emit("stateChange", change),
     }));
 
+    onUnmounted(() => {
+      cellOperationControllers.forEach((controller) => controller.abort());
+      cellOperationControllers.clear();
+    });
+
     const visibleColumns = computed(() => grid.rowModel.value.visibleColumns);
     const originalColumnIds = computed(() => getColumnDefIds(props.columns));
     const density = computed(() => props.density ?? internalDensity.value);
+    const localeText = computed<YoupGridLocaleText>(() => ({
+      ...DEFAULT_LOCALE_TEXT,
+      ...props.localeText,
+    }));
+    const numberFormatter = computed(() => new Intl.NumberFormat(props.locale ?? "en-US"));
     const gridEditable = computed(() => props.editable && !props.readOnly);
     const infiniteScrollLoading = computed(
       () => props.infiniteScrollLoading ?? props.loading,
@@ -672,9 +731,13 @@ export const YoupGrid = defineComponent({
     const getCellMeta = (
       rowNode: RowNode<unknown>,
       column: ResolvedColumnDef<unknown>,
-    ) =>
+    ) => {
+      const cellKey = getCellKey(rowNode.id, column.id);
+
+      return internalCellMeta.value[cellKey] ??
       props.getCellMeta?.(getCellEditContext(rowNode, column)) ??
-      props.cellMeta?.[getCellKey(rowNode.id, column.id)];
+      props.cellMeta?.[cellKey];
+    };
     const setActiveTooltipCellKey = (cellKey?: string) => {
       activeTooltipCellKey.value = cellKey;
     };
@@ -790,6 +853,10 @@ export const YoupGrid = defineComponent({
       }
 
       const value = column.accessor(rowNode.original);
+      internalCellMeta.value = {
+        ...internalCellMeta.value,
+        [getCellKey(rowNode.id, column.id)]: undefined,
+      };
       activeEdit.value = {
         rowId: rowNode.id,
         columnId: column.id,
@@ -815,6 +882,14 @@ export const YoupGrid = defineComponent({
       reason: YoupGridCellEditCommitReason,
       draft = activeEdit.value?.draft,
     ) => {
+      void commitCellEditAsync(rowNode, column, reason, draft);
+    };
+    async function commitCellEditAsync(
+      rowNode: RowNode<unknown>,
+      column: ResolvedColumnDef<unknown>,
+      reason: YoupGridCellEditCommitReason,
+      draft = activeEdit.value?.draft,
+    ) {
       if (activeEdit.value?.rowId !== rowNode.id || activeEdit.value.columnId !== column.id) {
         return;
       }
@@ -824,7 +899,45 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      const value = parseEditorValue(column, draft, rowNode.original);
+      const cellKey = getCellKey(rowNode.id, column.id);
+      let value: unknown;
+
+      try {
+        value = parseEditorValue(column, draft, rowNode.original);
+      } catch (error) {
+        internalCellMeta.value = {
+          ...internalCellMeta.value,
+          [cellKey]: { status: "error", message: getErrorMessage(error, "Invalid value") },
+        };
+        return;
+      }
+
+      if (column.validator) {
+        internalCellMeta.value = {
+          ...internalCellMeta.value,
+          [cellKey]: { status: "loading", message: "Validating" },
+        };
+
+        try {
+          const validation = normalizeCellValidationResult(
+            await column.validator(value, rowNode.original),
+          );
+          if (!validation.valid) {
+            internalCellMeta.value = {
+              ...internalCellMeta.value,
+              [cellKey]: { status: "error", message: validation.message ?? "Invalid value" },
+            };
+            return;
+          }
+        } catch (error) {
+          internalCellMeta.value = {
+            ...internalCellMeta.value,
+            [cellKey]: { status: "error", message: getErrorMessage(error, "Validation failed") },
+          };
+          return;
+        }
+      }
+
       const previousValue = column.accessor(rowNode.original);
       const change = createCellValueChange(rowNode, column, value, previousValue);
 
@@ -838,7 +951,43 @@ export const YoupGrid = defineComponent({
       }
 
       cancelCellEdit();
-    };
+
+      if (!props.onCellValueSave || Object.is(value, previousValue)) {
+        return;
+      }
+
+      cellOperationControllers.get(cellKey)?.abort();
+      const operationController = new AbortController();
+      cellOperationControllers.set(cellKey, operationController);
+      internalCellMeta.value = {
+        ...internalCellMeta.value,
+        [cellKey]: { status: "loading", message: "Saving" },
+      };
+
+      try {
+        await props.onCellValueSave(change, operationController.signal);
+        if (!operationController.signal.aborted) {
+          internalCellMeta.value = {
+            ...internalCellMeta.value,
+            [cellKey]: { status: "success", message: "Saved" },
+          };
+        }
+      } catch (error) {
+        if (!operationController.signal.aborted) {
+          const rollback = createCellValueChange(rowNode, column, previousValue, value, "rollback");
+          emit("cellValueChange", rollback);
+          internalCellMeta.value = {
+            ...internalCellMeta.value,
+            [cellKey]: { status: "error", message: getErrorMessage(error, "Save failed") },
+          };
+          props.onCellValueSaveError?.(error, change);
+        }
+      } finally {
+        if (cellOperationControllers.get(cellKey) === operationController) {
+          cellOperationControllers.delete(cellKey);
+        }
+      }
+    }
     const commitCheckboxEdit = (
       rowNode: RowNode<unknown>,
       column: ResolvedColumnDef<unknown>,
@@ -1007,24 +1156,26 @@ export const YoupGrid = defineComponent({
       props.onDensityChange?.(nextDensity);
       emit("densityChange", nextDensity);
     };
+    const getCsvText = () => exportGridCsv({
+      rows: grid.rowModel.value.visibleRows,
+      columns: visibleColumns.value,
+    });
+    const getExcelText = () => exportGridExcel({
+      rows: grid.rowModel.value.visibleRows,
+      columns: visibleColumns.value,
+    });
     const exportCsv = () => {
       downloadTextFile({
         fileName: props.csvFileName ?? "youp-grid.csv",
         mimeType: "text/csv;charset=utf-8",
-        text: exportGridCsv({
-          rows: grid.rowModel.value.visibleRows,
-          columns: visibleColumns.value,
-        }),
+        text: getCsvText(),
       });
     };
     const exportExcel = () => {
       downloadTextFile({
         fileName: props.excelFileName ?? "youp-grid.xls",
         mimeType: "application/vnd.ms-excel;charset=utf-8",
-        text: exportGridExcel({
-          rows: grid.rowModel.value.visibleRows,
-          columns: visibleColumns.value,
-        }),
+        text: getExcelText(),
       });
     };
     const closeCellContextMenu = () => {
@@ -1355,6 +1506,67 @@ export const YoupGrid = defineComponent({
       );
     };
 
+    const resolveApiCell = (cell: YoupGridApiCell): FocusedCell | undefined => {
+      const columnIndex = cell.columnId === undefined
+        ? cell.columnIndex
+        : visibleColumns.value.findIndex((column) => column.id === cell.columnId);
+
+      if (
+        !Number.isInteger(cell.rowIndex) ||
+        cell.rowIndex < 0 ||
+        cell.rowIndex >= grid.rowModel.value.visibleRows.length ||
+        columnIndex === undefined ||
+        !Number.isInteger(columnIndex) ||
+        columnIndex < 0 ||
+        columnIndex >= visibleColumns.value.length
+      ) {
+        return undefined;
+      }
+
+      return { rowIndex: cell.rowIndex, columnIndex };
+    };
+
+    expose({
+      getState: () => grid.state.value,
+      focusCell: (cell: YoupGridApiCell) => {
+        const resolvedCell = resolveApiCell(cell);
+        if (!resolvedCell) {
+          return false;
+        }
+        setFocusedCell(resolvedCell);
+        return true;
+      },
+      startEditing: (cell: YoupGridApiCell) => {
+        const resolvedCell = resolveApiCell(cell);
+        const rowNode = resolvedCell ? grid.rowModel.value.visibleRows[resolvedCell.rowIndex] : undefined;
+        const column = resolvedCell ? visibleColumns.value[resolvedCell.columnIndex] : undefined;
+        if (!resolvedCell || !rowNode || !column || !canEditCell(rowNode, column)) {
+          return false;
+        }
+        setFocusedCell(resolvedCell);
+        startCellEdit(rowNode, column);
+        return true;
+      },
+      scrollToRow: (rowIndex: number) => {
+        if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= grid.rowModel.value.visibleRows.length) {
+          return false;
+        }
+        rootRef.value
+          ?.querySelector<HTMLElement>(`[data-youp-row-index="${rowIndex}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+        return true;
+      },
+      selectRange: (range: GridCellRange | undefined) => {
+        selectionRange.value = range;
+        if (range) {
+          focusedCell.value = range.focus;
+        }
+      },
+      exportCsv: getCsvText,
+      exportExcel: getExcelText,
+      resetState: () => grid.setState(createGridState(props.defaultState)),
+    } satisfies YoupGridApi);
+
     return () => {
       const rowModel = grid.rowModel.value;
       const columns = visibleColumns.value;
@@ -1588,6 +1800,14 @@ export const YoupGrid = defineComponent({
                     showRowSelectionColumn: props.showRowSelectionColumn,
                     selectionColumnOffset: selectionColumnOffset.value,
                     detailRowHeight: props.detailRowHeight,
+                    rowHeight: isGroupNode(displayNode)
+                      ? props.rowHeight
+                      : props.getRowHeight?.({
+                          row: displayNode.original,
+                          rowNode: displayNode,
+                          rowId: displayNode.id,
+                          rowIndex: visibleRowIndexById.value.get(displayNode.id) ?? displayIndex,
+                        }) ?? props.rowHeight,
                     selectedRowIds: selectedRowIds.value,
                     visibleRowIndexById: visibleRowIndexById.value,
                     focusedCell: focusedCell.value,
@@ -1625,11 +1845,27 @@ export const YoupGrid = defineComponent({
                     class: "youp-grid-vue__empty",
                     role: "row",
                   },
-                  props.emptyText,
+                  props.emptyContent ?? props.emptyText ?? localeText.value.noRows,
                 ),
+            props.error
+              ? h(
+                  "div",
+                  { class: "youp-grid-vue__overlay", role: "alert" },
+                  props.errorContent ??
+                    (typeof props.error === "string" ? props.error : localeText.value.loadError),
+                )
+              : props.loading
+                ? h(
+                    "div",
+                    { class: "youp-grid-vue__overlay", role: "status" },
+                    props.loadingContent ?? localeText.value.loadingRows,
+                  )
+                : undefined,
           ]),
           pagination
             ? renderPaginationFooter({
+                localeText: localeText.value,
+                formatNumber: (value) => numberFormatter.value.format(value),
                 pageIndex,
                 pageSize,
                 pageCount,
@@ -1748,7 +1984,7 @@ function renderPaginationFooter(context: PaginationRenderContext) {
       h(
         "div",
         { class: "youp-grid-vue__pagination-status" },
-        `${rowRange.start}-${rowRange.end} / ${context.rowCount}`,
+        `${context.formatNumber(rowRange.start)}-${context.formatNumber(rowRange.end)} / ${context.formatNumber(context.rowCount)}`,
       ),
       h("div", { class: "youp-grid-vue__pagination-controls" }, [
         h(
@@ -1756,7 +1992,7 @@ function renderPaginationFooter(context: PaginationRenderContext) {
           {
             class: "youp-grid-vue__pagination-size",
             value: context.pageSize,
-            "aria-label": "Rows per page",
+            "aria-label": context.localeText.rows,
             onChange: (event: Event) => {
               const target = event.currentTarget as HTMLSelectElement | null;
               const pageSize = Number(target?.value);
@@ -1776,7 +2012,7 @@ function renderPaginationFooter(context: PaginationRenderContext) {
             type: "button",
             class: "youp-grid-vue__pagination-button",
             disabled: !canMovePrevious,
-            "aria-label": "Previous page",
+            "aria-label": context.localeText.previous,
             onClick: () => context.onPageChange(context.pageIndex - 1),
           },
           "<",
@@ -1784,7 +2020,7 @@ function renderPaginationFooter(context: PaginationRenderContext) {
         h(
           "span",
           { class: "youp-grid-vue__pagination-page" },
-          `${context.pageIndex + 1} / ${context.pageCount}`,
+          `${context.formatNumber(context.pageIndex + 1)} / ${context.formatNumber(context.pageCount)}`,
         ),
         h(
           "button",
@@ -1792,7 +2028,7 @@ function renderPaginationFooter(context: PaginationRenderContext) {
             type: "button",
             class: "youp-grid-vue__pagination-button",
             disabled: !canMoveNext,
-            "aria-label": "Next page",
+            "aria-label": context.localeText.next,
             onClick: () => context.onPageChange(context.pageIndex + 1),
           },
           ">",
@@ -2344,6 +2580,7 @@ function renderDisplayRow<TRow>(context: {
   showRowSelectionColumn: boolean;
   selectionColumnOffset: number;
   detailRowHeight: number;
+  rowHeight?: number;
   selectedRowIds: ReadonlySet<GridRowId>;
   visibleRowIndexById: Map<GridRowId, number>;
   focusedCell: FocusedCell;
@@ -2418,6 +2655,7 @@ function renderDisplayRow<TRow>(context: {
     rowNode: context.displayNode,
     displayIndex: context.displayIndex,
     rowIndex,
+    rowHeight: context.rowHeight,
     columns: context.columns,
     leadingColumnCount: context.leadingColumnCount,
     templateColumns: context.templateColumns,
@@ -2596,6 +2834,7 @@ function renderDataRow<TRow>(context: {
   rowNode: RowNode<TRow>;
   displayIndex: number;
   rowIndex: number;
+  rowHeight?: number;
   columns: readonly ResolvedColumnDef<TRow>[];
   leadingColumnCount: number;
   templateColumns: string;
@@ -2663,7 +2902,10 @@ function renderDataRow<TRow>(context: {
       ],
       role: "row",
       "aria-rowindex": context.displayIndex + 2,
-      style: { gridTemplateColumns: context.templateColumns },
+      style: {
+        gridTemplateColumns: context.templateColumns,
+        minHeight: context.rowHeight ? `${Math.max(1, context.rowHeight)}px` : undefined,
+      },
       onClick: (event: MouseEvent) =>
         context.onRowClick({
           row: context.rowNode.original,
@@ -2937,6 +3179,8 @@ function renderDataCell<TRow>(context: {
         focused ? "youp-grid-vue__cell--focused" : undefined,
         rangeSelected ? "youp-grid-vue__cell--range-selected" : undefined,
         editing ? "youp-grid-vue__cell--editing" : undefined,
+        context.column.wrapText ? "youp-grid-vue__cell--wrap-text" : undefined,
+        context.column.autoHeight ? "youp-grid-vue__cell--auto-height" : undefined,
         tooltipId ? "youp-grid-vue__cell--tooltip-open" : undefined,
         formattedValue.length === 0 && context.column.placeholder
           ? "youp-grid-vue__cell--placeholder"
@@ -4426,6 +4670,10 @@ function getTagInputValues(value: unknown): unknown[] {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function getColumnAlign<TRow>(column: ResolvedColumnDef<TRow>): ColumnAlign {

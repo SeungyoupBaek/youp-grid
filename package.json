@@ -1,6 +1,6 @@
 {
   "name": "youp-grid",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "private": true,
   "description": "Reusable TypeScript data grid core and UI adapters.",
   "license": "MIT",
@@ -28,13 +28,16 @@
   "scripts": {
     "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/react && npm run build -w @youp-grid/vue && npm run build -w @youp-grid/vanilla",
     "build:pages": "npm run build && npm run build --prefix examples/react-basic -- --base=/youp-grid/",
+    "benchmark": "npm run build -w @youp-grid/core && node scripts/benchmark.mjs",
+    "benchmark:check": "npm run build -w @youp-grid/core && node scripts/benchmark.mjs --assert",
     "clean": "rm -rf packages/core/dist packages/react/dist packages/vue/dist packages/vanilla/dist",
     "pack:dry-run": "npm pack --workspaces --dry-run --cache /private/tmp/youp-grid-npm-cache",
     "publish:dry-run": "npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vanilla --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run",
     "check:parity": "node scripts/check-adapter-parity.mjs",
     "release:check": "npm test && npm run check:parity && npm run build && npm run pack:dry-run && node scripts/check-release.mjs",
-    "test": "npm run test:core && npm run test:vue",
+    "test": "npm run test:core && npm run test:react && npm run test:vue",
     "test:core": "node --test packages/core/test/*.test.ts",
+    "test:react": "node --test packages/react/test/*.test.ts",
     "test:smoke": "playwright test --config tests/playwright.config.ts",
     "test:vue": "node --test packages/vue/test/*.test.ts"
   },

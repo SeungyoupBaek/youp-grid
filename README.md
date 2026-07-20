@@ -18,7 +18,8 @@ This repository starts with a reusable engine, React and Vue UI adapters, and a 
 - sorting
 - filtering
 - pagination
-- fixed-size virtualization range calculation
+- fixed and variable-size virtualization range calculation
+- cancellable server data source, block cache, and retry controller
 - serializable grid state helpers
 - reusable React editing, selection, tooltip, and row operation UI
 - reusable React CSV/TSV import callbacks and CSV/Excel export toolbar actions
@@ -213,6 +214,9 @@ Implemented now:
 - row, column, and selection state helpers
 - grid state persistence helpers
 - fixed-height and master-detail virtualized React body renderers
+- opt-in center-column virtualization and variable row heights
+- synchronous/asynchronous validation with save rollback events
+- imperative React/Vue Grid API and locale text overrides
 - built-in header filters
 - advanced filter operator UI
 - pagination controls
@@ -252,12 +256,14 @@ Implemented now:
 - infinite scrolling contract
 - request cancellation contract
 - cache invalidation contract
+- remote block loading, status, retry, and cancellation controller
 - aggregation
 - row grouping
 - tree data
 - expandable master-detail rows
 - pinned top and bottom rows
 - controlled row drag reorder
+- Vanilla state, selection, focus, range, scrolling, and export API
 - basic editable Vue grid component
 - Vue cell metadata and native/rich cell tooltips
 - Vite React demo

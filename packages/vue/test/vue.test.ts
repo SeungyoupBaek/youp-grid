@@ -162,6 +162,33 @@ test("YoupGrid renders optional pagination footer", async () => {
   assert.doesNotMatch(html, /Park/);
 });
 
+test("YoupGrid applies locale text, variable row height, and wrapped cells", async () => {
+  const localizedColumns: ColumnDef<User>[] = [
+    { field: "name", headerName: "Name", wrapText: true, autoHeight: true },
+  ];
+  const app = createSSRApp({
+    render: () =>
+      h(YoupGrid, {
+        rows,
+        columns: localizedColumns,
+        getRowId: (row: User) => row.id,
+        getRowHeight: ({ rowIndex }: { rowIndex: number }) => rowIndex === 0 ? 64 : 40,
+        localeText: { noRows: "데이터 없음" },
+      }),
+  });
+
+  const html = await renderToString(app);
+
+  assert.match(html, /min-height:64px/);
+  assert.match(html, /youp-grid-vue__cell--wrap-text/);
+  assert.match(html, /youp-grid-vue__cell--auto-height/);
+
+  const emptyApp = createSSRApp({
+    render: () => h(YoupGrid, { rows: [], columns: localizedColumns, localeText: { noRows: "데이터 없음" } }),
+  });
+  assert.match(await renderToString(emptyApp), /데이터 없음/);
+});
+
 test("YoupGrid renders optional row number and selection columns", async () => {
   const app = createSSRApp({
     render: () =>

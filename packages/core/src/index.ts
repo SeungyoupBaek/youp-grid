@@ -83,7 +83,24 @@ export {
   serializeGridState,
 } from "./state-persistence.ts";
 export type { GridStateStorage, PersistedGridState } from "./state-persistence.ts";
-export { getVirtualRange } from "./virtualizer.ts";
+export { getVariableVirtualRange, getVirtualRange } from "./virtualizer.ts";
+export { normalizeCellValidationResult } from "./validation.ts";
+export type { NormalizedCellValidationResult } from "./validation.ts";
+export {
+  createServerBlockCache,
+  createServerDataController,
+  createServerRowsQuery,
+} from "./server-data-source.ts";
+export type {
+  ServerBlockCache,
+  ServerBlockCacheOptions,
+  ServerDataSource,
+  ServerDataController,
+  ServerBlockState,
+  ServerBlockStatus,
+  ServerRowsQuery,
+  ServerRowsResult,
+} from "./server-data-source.ts";
 export {
   createValueHistoryState,
   invertValueHistoryEntry,
@@ -110,6 +127,8 @@ export type {
   ColumnEditor,
   ColumnEditorOption,
   ColumnEditorOptionValue,
+  CellValidationResult,
+  CellValidator,
   ColumnFilterPredicate,
   CursorPaginationState,
   FilterOperator,
@@ -137,4 +156,5 @@ export type {
   VirtualItem,
   VirtualRange,
   VirtualRangeOptions,
+  VariableVirtualRangeOptions,
 } from "./types.ts";

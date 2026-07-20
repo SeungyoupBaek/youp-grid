@@ -45,6 +45,16 @@ export type ValueParser<TValue = unknown, TRow = unknown> = (
   row: TRow,
 ) => TValue;
 
+export type CellValidationResult = boolean | string | {
+  valid: boolean;
+  message?: string;
+};
+
+export type CellValidator<TValue = unknown, TRow = unknown> = (
+  value: TValue,
+  row: TRow,
+) => CellValidationResult | Promise<CellValidationResult>;
+
 export type ColumnEditor =
   | "text"
   | "number"
@@ -87,10 +97,13 @@ export type ColumnDef<TRow, TValue = unknown> = {
   filterPredicate?: ColumnFilterPredicate<TValue, TRow>;
   valueFormatter?: ValueFormatter<TValue, TRow>;
   valueParser?: ValueParser<TValue, TRow>;
+  validator?: CellValidator<TValue, TRow>;
   editor?: ColumnEditor;
   align?: ColumnAlign;
   options?: readonly ColumnEditorOption[];
   placeholder?: string;
+  wrapText?: boolean;
+  autoHeight?: boolean;
 };
 
 export type ResolvedColumnDef<TRow, TValue = unknown> = Omit<
@@ -250,6 +263,14 @@ export type RowModel<TRow> = {
 export type VirtualRangeOptions = {
   itemCount: number;
   itemSize: number;
+  viewportSize: number;
+  scrollOffset: number;
+  overscan?: number;
+};
+
+export type VariableVirtualRangeOptions = {
+  itemCount: number;
+  itemSize: number | ((index: number) => number);
   viewportSize: number;
   scrollOffset: number;
   overscan?: number;

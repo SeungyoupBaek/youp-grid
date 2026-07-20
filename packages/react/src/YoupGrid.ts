@@ -1,11 +1,13 @@
 import {
   createRemoteCacheKey,
+  createGridState,
   createValueHistoryState,
   exportGridCsv,
   exportGridExcel,
   getFillHandleCells,
   getFillHandleTargetRange,
   getInfiniteScrollTrigger,
+  getVariableVirtualRange,
   getVirtualRange,
   getClipboardPasteCells,
   getClipboardPasteRowCount,
@@ -14,6 +16,7 @@ import {
   createHeaderColumnMappings,
   importGridDelimitedText,
   normalizeCellRange,
+  normalizeCellValidationResult,
   parseClipboardText,
   parseDelimitedText,
   pushValueHistoryEntry,
@@ -46,7 +49,7 @@ import {
   type RowNode,
 } from "@youp-grid/core";
 import { createPortal } from "react-dom";
-import { Fragment, createElement, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createElement, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ChangeEvent as ReactChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
@@ -73,8 +76,11 @@ import type {
   YoupGridCustomEditorContext,
   YoupGridDensity,
   YoupGridFilterMode,
+  YoupGridApi,
+  YoupGridApiCell,
   YoupGridHeaderContext,
   YoupGridProps,
+  YoupGridLocaleText,
   YoupGridRowDetailContext,
   YoupGridRowEvent,
   YoupGridRowInsertPosition,
@@ -90,6 +96,28 @@ const DENSITY_ROW_HEIGHTS: Record<YoupGridDensity, number> = {
   standard: 38,
   comfortable: 46,
 };
+const DEFAULT_LOCALE_TEXT: YoupGridLocaleText = {
+  noRows: "No rows",
+  loadingRows: "Loading rows",
+  loadError: "Unable to load rows",
+  columns: "Columns",
+  exportCsv: "Export CSV",
+  exportExcel: "Export Excel",
+  importFile: "Import",
+  fitColumns: "Fit columns",
+  density: "Density",
+  compact: "Compact",
+  standard: "Standard",
+  comfortable: "Comfortable",
+  previous: "Previous",
+  next: "Next",
+  rows: "Rows",
+  rowNumber: "Row number",
+  selectVisibleRows: "Select visible rows",
+  pageStatus: (page, pageCount, shown, matched) =>
+    `Page ${page} of ${pageCount} · ${shown} shown · ${matched} matched`,
+  cursorPageStatus: (shown, matched) => `Cursor page · ${shown} shown · ${matched} matched`,
+};
 const ROW_NUMBER_COLUMN_WIDTH = 44;
 const SELECTION_COLUMN_WIDTH = 44;
 const AUTOSIZE_CELL_EXTRA_WIDTH = 8;
@@ -103,6 +131,7 @@ const DECIMAL_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
 
 let autosizeMeasureCanvas: HTMLCanvasElement | undefined;
 const composingEditorInputs = new WeakSet<HTMLInputElement>();
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const controller = useYoupGrid(props);
@@ -112,6 +141,17 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   );
   const density = props.density ?? internalDensity;
   const rowHeight = props.rowHeight ?? DENSITY_ROW_HEIGHTS[density];
+  const localeText = useMemo(
+    () => ({ ...DEFAULT_LOCALE_TEXT, ...props.localeText }),
+    [props.localeText],
+  );
+  const numberFormatters = useMemo<NumberFormatters>(() => ({
+    integer: new Intl.NumberFormat(props.locale ?? "en-US", { maximumFractionDigits: 0 }),
+    decimal: new Intl.NumberFormat(props.locale ?? "en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+  }), [props.locale]);
   const viewportHeight = normalizeHeight(props.height) ?? 420;
   const loading = props.loading ?? controller.state.remoteRequest?.status === "loading";
   const infiniteScrollLoading = props.infiniteScrollLoading ?? loading;
@@ -123,9 +163,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const lastRowsEndReachedKeyRef = useRef<string | undefined>();
   const skipNextBlurCommitRef = useRef(false);
   const valueHistoryRef = useRef<GridValueHistoryState>(createValueHistoryState());
+  const cellOperationControllersRef = useRef(new Map<string, AbortController>());
   const cellSelectionDragRef = useRef<CellSelectionDragState | undefined>();
   const suppressNextCellClickRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [bodyViewportWidth, setBodyViewportWidth] = useState(0);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [focusedColumnIndex, setFocusedColumnIndex] = useState(0);
   const [selectionRange, setSelectionRange] = useState<GridCellRange | undefined>();
@@ -145,6 +188,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const [dragOverColumnPosition, setDragOverColumnPosition] = useState<ColumnDropPosition | undefined>();
   const [draggedRowId, setDraggedRowId] = useState<GridRowId | undefined>();
   const [activeTooltipCellKey, setActiveTooltipCellKey] = useState<string | undefined>();
+  const [internalCellMeta, setInternalCellMeta] = useState<Record<string, YoupGridCellMeta | undefined>>({});
   const showRowNumberColumn = props.showRowNumberColumn ?? false;
   const showRowSelectionColumn = props.showRowSelectionColumn ?? false;
   const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
@@ -165,19 +209,53 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     () => displayRows.filter((row): row is RowNode<TRow> => !isRowGroupNode(row)),
     [displayRows],
   );
+  const cellRowIndexById = useMemo(() => {
+    return new Map(cellRows.map((row, index) => [row.id, index]));
+  }, [cellRows]);
   const cellRowModel = useMemo<RowModel<TRow>>(
     () => ({ ...rowModel, visibleRows: cellRows }),
     [cellRows, rowModel],
   );
+  const displayRowHeights = useMemo(() => displayRows.map((row, displayIndex) => {
+    if (isRowGroupNode(row) || !props.getRowHeight) {
+      return rowHeight;
+    }
+
+    const rowIndex = cellRowIndexById.get(row.id) ?? displayIndex;
+    return Math.max(1, props.getRowHeight({
+      row: row.original,
+      rowNode: row,
+      rowId: row.id,
+      rowIndex,
+    }));
+  }), [cellRowIndexById, displayRows, props.getRowHeight, rowHeight]);
   const virtualRange = useMemo(() => {
-    return getVirtualRange({
+    if (!props.getRowHeight) {
+      return getVirtualRange({
+        itemCount: displayRows.length,
+        itemSize: rowHeight,
+        viewportSize: viewportHeight,
+        scrollOffset: scrollTop,
+        overscan: props.overscan,
+      });
+    }
+
+    return getVariableVirtualRange({
       itemCount: displayRows.length,
-      itemSize: rowHeight,
+      itemSize: (index) => displayRowHeights[index] ?? rowHeight,
       viewportSize: viewportHeight,
       scrollOffset: scrollTop,
       overscan: props.overscan,
     });
-  }, [displayRows.length, props.overscan, rowHeight, scrollTop, viewportHeight]);
+  }, [
+    displayRowHeights,
+    displayRows.length,
+    props.getRowHeight,
+    props.overscan,
+    rowHeight,
+    scrollTop,
+    viewportHeight,
+  ]);
   const lastVisibleRowIndex = useMemo(() => {
     if (rowModel.visibleRows.length === 0) {
       return -1;
@@ -185,9 +263,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     return Math.min(
       rowModel.visibleRows.length - 1,
-      Math.max(-1, Math.ceil((scrollTop + viewportHeight) / rowHeight) - 1),
+      Math.max(-1, virtualRange.endIndex),
     );
-  }, [rowHeight, rowModel.visibleRows.length, scrollTop, viewportHeight]);
+  }, [rowModel.visibleRows.length, virtualRange.endIndex]);
   const infiniteScrollTrigger = useMemo(() => {
     return getInfiniteScrollTrigger({
       rowCount: rowModel.visibleRows.length,
@@ -222,9 +300,6 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     });
   }, [pinnedColumnOffset, rowModel.visibleColumns]);
   const visibleColumns = useMemo(() => columnLayouts.map((layout) => layout.column), [columnLayouts]);
-  const cellRowIndexById = useMemo(() => {
-    return new Map(cellRows.map((row, index) => [row.id, index]));
-  }, [cellRows]);
   const displayIndexByCellRowIndex = useMemo(() => {
     const displayIndexByRowId = new Map<GridRowId, number>();
 
@@ -312,6 +387,23 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     controller.setColumnOrder(originalColumnIds);
   };
   const hasHeaderGroups = headerGroupLayouts.some((layout) => layout.headerGroup);
+  const columnVirtualizationActive =
+    (props.columnVirtualization ?? false) && !hasHeaderGroups && !detailRowsEnabled;
+  const columnRenderItems = useMemo(() => getColumnRenderItems(columnLayouts, {
+    enabled: columnVirtualizationActive,
+    viewportWidth: bodyViewportWidth,
+    scrollLeft,
+    overscan: props.columnOverscan,
+    leadingWidth: rowNumberColumnOffset + (showRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0),
+  }), [
+    bodyViewportWidth,
+    columnLayouts,
+    columnVirtualizationActive,
+    props.columnOverscan,
+    rowNumberColumnOffset,
+    scrollLeft,
+    showRowSelectionColumn,
+  ]);
   const showAggregationFooter = (props.showAggregationFooter ?? true) && rowModel.aggregation.length > 0;
   const focusedCell = {
     rowIndex: focusedRowIndex,
@@ -332,9 +424,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     .map((item) => {
       const row = displayRows[item.index];
 
-      return row ? { row, displayIndex: item.index } : undefined;
+      return row ? { row, displayIndex: item.index, rowHeight: item.size } : undefined;
     })
-    .filter((item): item is { row: RowDisplayNode<TRow>; displayIndex: number } => Boolean(item));
+    .filter((item): item is { row: RowDisplayNode<TRow>; displayIndex: number; rowHeight: number } => Boolean(item));
   const getCellEditContext = (
     row: RowNode<TRow>,
     rowIndex: number,
@@ -366,9 +458,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     rowIndex: number,
     column: ResolvedColumnDef<TRow>,
   ) => {
+    const cellKey = getCellKey(row.id, column.id);
+
     return (
+      internalCellMeta[cellKey] ??
       props.getCellMeta?.(getCellEditContext(row, rowIndex, column)) ??
-      props.cellMeta?.[getCellKey(row.id, column.id)]
+      props.cellMeta?.[cellKey]
     );
   };
   const createGridCellValueChange = (cell: CellRenderState<TRow>, value: unknown) => {
@@ -433,7 +528,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       displayRows,
       expandedDetailRowIdSet,
       isRowDetailAvailable,
-      rowHeight,
+      getRowHeight: (row, displayIndex) => {
+        return displayRowHeights[displayIndex] ?? rowHeight;
+      },
       detailRowHeight,
       overscan: props.overscan,
       scrollTop,
@@ -446,11 +543,19 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     displayRows,
     expandedDetailRowIdSet,
     props.overscan,
+    displayRowHeights,
     rowHeight,
     scrollTop,
     viewportHeight,
     cellRowIndexById,
   ]);
+
+  useEffect(() => {
+    return () => {
+      cellOperationControllersRef.current.forEach((controller) => controller.abort());
+      cellOperationControllersRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (focusedRowIndex >= cellRows.length) {
@@ -463,6 +568,23 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       setFocusedColumnIndex(Math.max(0, columnLayouts.length - 1));
     }
   }, [columnLayouts.length, focusedColumnIndex]);
+
+  useEffect(() => {
+    if (columnVirtualizationActive && bodyRef.current) {
+      scrollVirtualColumnIntoView(
+        bodyRef.current,
+        columnLayouts,
+        focusedColumnIndex,
+        rowNumberColumnOffset + (showRowSelectionColumn ? SELECTION_COLUMN_WIDTH : 0),
+      );
+    }
+  }, [
+    columnLayouts,
+    columnVirtualizationActive,
+    focusedColumnIndex,
+    rowNumberColumnOffset,
+    showRowSelectionColumn,
+  ]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -511,7 +633,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     };
   }, [cellContextMenu]);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!cellContextMenu || !cellContextMenuRef.current) {
       return;
     }
@@ -551,7 +673,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     });
   });
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const body = bodyRef.current;
 
     if (!body) {
@@ -561,6 +683,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     const updateScrollbarWidth = () => {
       const nextWidth = Math.max(0, body.offsetWidth - body.clientWidth);
       setBodyScrollbarWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth);
+      setBodyViewportWidth((currentWidth) => currentWidth === body.clientWidth ? currentWidth : body.clientWidth);
     };
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? undefined
@@ -638,6 +761,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
   const startEditingCell = (cell: EditingCell) => {
     skipNextBlurCommitRef.current = false;
+    setInternalCellMeta((current) => ({ ...current, [getCellKey(cell.rowId, cell.columnId)]: undefined }));
     setEditingCell(cell);
   };
   const cancelEditingCell = () => {
@@ -735,6 +859,12 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     cell: EditingCell,
     reason: YoupGridCellEditCommitReason = "enter",
   ) => {
+    void commitEditingValueAsync(cell, reason);
+  };
+  async function commitEditingValueAsync(
+    cell: EditingCell,
+    reason: YoupGridCellEditCommitReason,
+  ) {
     if (reason === "blur" && skipNextBlurCommitRef.current) {
       skipNextBlurCommitRef.current = false;
       return;
@@ -744,25 +874,106 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       skipNextBlurCommitRef.current = true;
     }
 
-    const change = commitEditingCell({
-      cell,
-      rowModel: cellRowModel,
-      canEditCell: canEditGridCell,
-    });
+    const cellKey = getCellKey(cell.rowId, cell.columnId);
+    let change: PendingCellValueChange<TRow> | undefined;
+
+    try {
+      change = commitEditingCell({
+        cell,
+        rowModel: cellRowModel,
+        canEditCell: canEditGridCell,
+      });
+    } catch (error) {
+      setInternalCellMeta((current) => ({
+        ...current,
+        [cellKey]: { status: "error", message: getErrorMessage(error, "Invalid value") },
+      }));
+      return;
+    }
 
     if (change) {
+      if (change.column.validator) {
+        const validation = change.column.validator(change.value, change.row);
+
+        if (isPromiseLike(validation)) {
+          setInternalCellMeta((current) => ({
+            ...current,
+            [cellKey]: { status: "loading", message: "Validating" },
+          }));
+        }
+
+        try {
+          const validationResult = normalizeCellValidationResult(await validation);
+          if (!validationResult.valid) {
+            setInternalCellMeta((current) => ({
+              ...current,
+              [cellKey]: { status: "error", message: validationResult.message ?? "Invalid value" },
+            }));
+            return;
+          }
+        } catch (error) {
+          setInternalCellMeta((current) => ({
+            ...current,
+            [cellKey]: { status: "error", message: getErrorMessage(error, "Validation failed") },
+          }));
+          return;
+        }
+      }
+
       if (!Object.is(change.value, change.previousValue)) {
         applyCellValueChanges([change], "edit");
       }
 
+      const emittedChange = { ...change, source: "edit" as const };
       props.onCellEditCommit?.({
         ...change,
         reason,
       });
+
+      setEditingCell(undefined);
+
+      if (props.onCellValueSave && !Object.is(change.value, change.previousValue)) {
+        cellOperationControllersRef.current.get(cellKey)?.abort();
+        const operationController = new AbortController();
+        cellOperationControllersRef.current.set(cellKey, operationController);
+        setInternalCellMeta((current) => ({
+          ...current,
+          [cellKey]: { status: "loading", message: "Saving" },
+        }));
+
+        try {
+          await props.onCellValueSave(emittedChange, operationController.signal);
+          if (!operationController.signal.aborted) {
+            setInternalCellMeta((current) => ({
+              ...current,
+              [cellKey]: { status: "success", message: "Saved" },
+            }));
+          }
+        } catch (error) {
+          if (!operationController.signal.aborted) {
+            applyCellValueChanges([{
+              ...change,
+              value: change.previousValue,
+              previousValue: change.value,
+            }], "rollback");
+            setInternalCellMeta((current) => ({
+              ...current,
+              [cellKey]: { status: "error", message: getErrorMessage(error, "Save failed") },
+            }));
+            props.onCellValueSaveError?.(error, emittedChange);
+          }
+        } finally {
+          if (cellOperationControllersRef.current.get(cellKey) === operationController) {
+            cellOperationControllersRef.current.delete(cellKey);
+          }
+        }
+
+        return;
+      }
     }
 
     setEditingCell(undefined);
-  };
+  }
   const setFocusedCell = (cell: FocusedCell, extendSelection = false, selectionAnchor?: FocusedCell) => {
     if (extendSelection) {
       setSelectionRange({
@@ -1316,6 +1527,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     return renderRow({
       row,
       columns: columnLayouts,
+      renderColumns: columnRenderItems,
       selected: false,
       showRowNumberColumn,
       showSelectionColumn: showRowSelectionColumn,
@@ -1418,6 +1630,81 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     void importGridFile(file);
   };
 
+  const resolveApiCell = (cell: YoupGridApiCell): FocusedCell | undefined => {
+    const columnIndex = cell.columnId === undefined
+      ? cell.columnIndex
+      : columnLayouts.findIndex((layout) => layout.column.id === cell.columnId);
+
+    if (
+      !Number.isInteger(cell.rowIndex) ||
+      cell.rowIndex < 0 ||
+      cell.rowIndex >= cellRows.length ||
+      columnIndex === undefined ||
+      !Number.isInteger(columnIndex) ||
+      columnIndex < 0 ||
+      columnIndex >= columnLayouts.length
+    ) {
+      return undefined;
+    }
+
+    return { rowIndex: cell.rowIndex, columnIndex };
+  };
+  const getCsvText = () => exportGridCsv({ rows: rowModel.visibleRows, columns: visibleColumns });
+  const getExcelText = () => exportGridExcel({ rows: rowModel.visibleRows, columns: visibleColumns });
+
+  useImperativeHandle(props.apiRef, (): YoupGridApi => ({
+    getState: () => controller.state,
+    focusCell: (cell) => {
+      const resolvedCell = resolveApiCell(cell);
+      if (!resolvedCell) {
+        return false;
+      }
+
+      setFocusedCell(resolvedCell);
+      ensureApiRowVisible(bodyRef.current, resolvedCell.rowIndex, cellRows, displayRows, displayRowHeights);
+      focusCellAfterRender({ bodyElement: bodyRef.current, cell: resolvedCell, attempts: 2 });
+      return true;
+    },
+    startEditing: (cell) => {
+      const resolvedCell = resolveApiCell(cell);
+      const row = resolvedCell ? cellRows[resolvedCell.rowIndex] : undefined;
+      const column = resolvedCell ? columnLayouts[resolvedCell.columnIndex]?.column : undefined;
+      if (!resolvedCell || !row || !column || !canEditGridCell(row, resolvedCell.rowIndex, column)) {
+        return false;
+      }
+
+      setFocusedCell(resolvedCell);
+      startEditingCell(createEditingCell({
+        row,
+        rowIndex: resolvedCell.rowIndex,
+        column,
+        columnIndex: resolvedCell.columnIndex,
+        value: column.accessor(row.original),
+        editable: true,
+      }, column.accessor(row.original)));
+      ensureApiRowVisible(bodyRef.current, resolvedCell.rowIndex, cellRows, displayRows, displayRowHeights);
+      return true;
+    },
+    scrollToRow: (rowIndex, align = "nearest") => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= cellRows.length || !bodyRef.current) {
+        return false;
+      }
+
+      scrollApiRowIntoView(bodyRef.current, rowIndex, align, cellRows, displayRows, displayRowHeights);
+      return true;
+    },
+    selectRange: (range) => {
+      setSelectionRange(range);
+      if (range) {
+        setFocusedRowIndex(range.focus.rowIndex);
+        setFocusedColumnIndex(range.focus.columnIndex);
+      }
+    },
+    exportCsv: getCsvText,
+    exportExcel: getExcelText,
+    resetState: () => controller.setState(createGridState(props.defaultState)),
+  }));
+
   return createElement(
     "div",
     {
@@ -1433,6 +1720,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       style: gridStyle,
     },
     renderColumnToolbar({
+      localeText,
       showColumnChooser: props.showColumnChooser ?? true,
       showCsvExport: props.showCsvExport ?? true,
       showDensityControl: props.showDensityControl ?? true,
@@ -1484,20 +1772,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         downloadTextFile({
           fileName: props.csvFileName ?? "youp-grid.csv",
           mimeType: "text/csv;charset=utf-8",
-          text: exportGridCsv({
-            rows: rowModel.visibleRows,
-            columns: visibleColumns,
-          }),
+          text: getCsvText(),
         });
       },
       exportExcel: () => {
         downloadTextFile({
           fileName: props.excelFileName ?? "youp-grid.xls",
           mimeType: "application/vnd.ms-excel;charset=utf-8",
-          text: exportGridExcel({
-            rows: rowModel.visibleRows,
-            columns: visibleColumns,
-          }),
+          text: getExcelText(),
         });
       },
       openImportFilePicker: () => importFileInputRef.current?.click(),
@@ -1579,7 +1861,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           "div",
           { className: "youp-grid__row youp-grid__row--header", role: "row" },
           showRowNumberColumn
-            ? renderRowNumberHeaderCell()
+            ? renderRowNumberHeaderCell(localeText.rowNumber)
             : undefined,
           showRowSelectionColumn
             ? renderSelectionHeaderCell({
@@ -1587,10 +1869,16 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                 indeterminate: someVisibleRowsSelected,
                 disabled: visibleRowIds.length === 0,
                 leftOffset: selectionColumnOffset,
+                label: localeText.selectVisibleRows,
                 toggleSelected: setVisibleRowsSelected,
               })
             : undefined,
-          columnLayouts.map((layout) => {
+          columnRenderItems.map((item) => {
+            if (item.type === "spacer") {
+              return renderVirtualColumnSpacer(item, true);
+            }
+
+            const layout = item.layout;
             const sorted = controller.state.sort?.find((rule) => rule.columnId === layout.column.id)?.direction;
 
             return renderHeaderCell({
@@ -1694,6 +1982,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
             }
 
             setScrollTop(event.currentTarget.scrollTop);
+            setScrollLeft(event.currentTarget.scrollLeft);
           },
         },
         rowModel.pinnedTopRows.length > 0
@@ -1708,7 +1997,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         rowModel.pinnedBottomRows.length === 0 &&
         !props.loading &&
         !props.error
-          ? createElement("div", { className: "youp-grid__empty" }, props.emptyContent ?? "No rows")
+          ? createElement("div", { className: "youp-grid__empty" }, props.emptyContent ?? localeText.noRows)
           : rowModel.visibleRows.length === 0
             ? undefined
             : detailRowsEnabled
@@ -1869,7 +2158,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                       className: "youp-grid__virtual-window",
                       style: { transform: `translateY(${virtualRange.beforeSize}px)` },
                     },
-                    renderedRows.map(({ row, displayIndex }) => {
+                    renderedRows.map(({ row, displayIndex, rowHeight: renderedRowHeight }) => {
                 if (isRowGroupNode(row)) {
                   return renderGroupRow({
                     row,
@@ -1877,7 +2166,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                     showRowNumberColumn,
                     showSelectionColumn: showRowSelectionColumn,
                     selectionColumnOffset,
-                    rowHeight,
+                    rowHeight: renderedRowHeight,
                     toggleExpanded: controller.toggleRowGroupExpanded,
                   });
                 }
@@ -1887,13 +2176,14 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                 return renderRow({
                   row,
                   columns: columnLayouts,
+                  renderColumns: columnRenderItems,
                   selected: selectedRowIds.has(row.id),
                   showRowNumberColumn,
                   showSelectionColumn: showRowSelectionColumn,
                   selectionColumnOffset,
                   displayIndex,
                   rowIndex,
-                  rowHeight,
+                  rowHeight: renderedRowHeight,
                   focusedCell: {
                     rowIndex: focusedRowIndex,
                     columnIndex: focusedColumnIndex,
@@ -2023,12 +2313,15 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           loadingContent: props.loadingContent,
           error: props.error,
           errorContent: props.errorContent,
+          localeText,
         }),
       ),
       renderAggregationFooter({
+        numberFormatters,
         enabled: showAggregationFooter,
         aggregation: rowModel.aggregation,
         columns: columnLayouts,
+        renderColumns: columnRenderItems,
         showRowNumberColumn,
         showSelectionColumn: showRowSelectionColumn,
         selectionColumnOffset,
@@ -2036,8 +2329,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       }),
     ),
     cellContextMenuPortal,
-    renderSelectionSummary(selectionSummary),
+    renderSelectionSummary(selectionSummary, numberFormatters),
     renderPagination({
+      localeText,
       enabled: props.showPagination ?? true,
       cursorPagination: controller.state.cursorPagination,
       pageCount: rowModel.pageCount,
@@ -2057,6 +2351,11 @@ type SelectionSummary = {
   rowCount: number;
   numericCount: number;
   sum: number;
+};
+
+type NumberFormatters = {
+  integer: Intl.NumberFormat;
+  decimal: Intl.NumberFormat;
 };
 
 function getSelectionSummary<TRow>(context: {
@@ -2136,20 +2435,20 @@ function getSummaryRowAtIndex<TRow>(context: {
   return context.rows[rowIndex];
 }
 
-function renderSelectionSummary(summary: SelectionSummary | undefined) {
+function renderSelectionSummary(summary: SelectionSummary | undefined, formatters: NumberFormatters) {
   if (!summary) {
     return undefined;
   }
 
   const items = [
-    createElement("span", { key: "cells" }, `Cells ${formatInteger(summary.cellCount)}`),
-    createElement("span", { key: "rows" }, `Rows ${formatInteger(summary.rowCount)}`),
+    createElement("span", { key: "cells" }, `Cells ${formatInteger(summary.cellCount, formatters)}`),
+    createElement("span", { key: "rows" }, `Rows ${formatInteger(summary.rowCount, formatters)}`),
   ];
 
   if (summary.numericCount > 0) {
     items.unshift(
-      createElement("span", { key: "sum" }, `Sum ${formatNumericSummaryValue(summary.sum)}`),
-      createElement("span", { key: "avg" }, `Avg ${formatNumericSummaryValue(summary.sum / summary.numericCount)}`),
+      createElement("span", { key: "sum" }, `Sum ${formatNumericSummaryValue(summary.sum, formatters)}`),
+      createElement("span", { key: "avg" }, `Avg ${formatNumericSummaryValue(summary.sum / summary.numericCount, formatters)}`),
     );
   }
 
@@ -2165,12 +2464,13 @@ function renderGridOverlay(context: {
   loadingContent?: ReactNode;
   error?: boolean;
   errorContent?: ReactNode;
+  localeText: YoupGridLocaleText;
 }) {
   if (context.error) {
     return createElement(
       "div",
       { className: "youp-grid__overlay youp-grid__overlay--error", role: "alert" },
-      createElement("div", { className: "youp-grid__overlay-content" }, context.errorContent ?? "Unable to load rows"),
+      createElement("div", { className: "youp-grid__overlay-content" }, context.errorContent ?? context.localeText.loadError),
     );
   }
 
@@ -2178,7 +2478,7 @@ function renderGridOverlay(context: {
     return createElement(
       "div",
       { className: "youp-grid__overlay youp-grid__overlay--loading", role: "status", "aria-live": "polite" },
-      createElement("div", { className: "youp-grid__overlay-content" }, context.loadingContent ?? "Loading rows"),
+      createElement("div", { className: "youp-grid__overlay-content" }, context.loadingContent ?? context.localeText.loadingRows),
     );
   }
 
@@ -2201,9 +2501,11 @@ function renderDisabledReason(context: {
 }
 
 function renderAggregationFooter<TRow>(context: {
+  numberFormatters: NumberFormatters;
   enabled: boolean;
   aggregation: readonly AggregationResult[];
   columns: readonly ColumnLayout<TRow>[];
+  renderColumns?: readonly ColumnRenderItem<TRow>[];
   showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
   selectionColumnOffset: number;
@@ -2223,7 +2525,16 @@ function renderAggregationFooter<TRow>(context: {
       { className: "youp-grid__row youp-grid__row--aggregation", role: "row" },
       context.showRowNumberColumn ? renderRowNumberAggregationCell() : undefined,
       context.showSelectionColumn ? renderSelectionAggregationCell(context.selectionColumnOffset) : undefined,
-      context.columns.map((layout) => {
+      (context.renderColumns ?? context.columns.map((layout, columnIndex) => ({
+        type: "column" as const,
+        layout,
+        columnIndex,
+      }))).map((item) => {
+        if (item.type === "spacer") {
+          return renderVirtualColumnSpacer(item, false);
+        }
+
+        const layout = item.layout;
         const results = aggregationByColumn.get(layout.column.id) ?? [];
 
         return createElement(
@@ -2234,7 +2545,7 @@ function renderAggregationFooter<TRow>(context: {
             role: "gridcell",
             style: getCellStyle(layout, { rightPinnedOffset: context.rightPinnedOffset }),
           },
-          results.map(formatAggregationResult).join(" · "),
+          results.map((result) => formatAggregationResult(result, context.numberFormatters)).join(" · "),
         );
       }),
     ),
@@ -2275,26 +2586,26 @@ function groupAggregationByColumn(results: readonly AggregationResult[]): Map<st
   return byColumn;
 }
 
-function formatAggregationResult(result: AggregationResult): string {
-  return `${result.label} ${formatAggregationValue(result.value)}`;
+function formatAggregationResult(result: AggregationResult, formatters: NumberFormatters): string {
+  return `${result.label} ${formatAggregationValue(result.value, formatters)}`;
 }
 
-function formatAggregationValue(value: number | undefined): string {
+function formatAggregationValue(value: number | undefined, formatters: NumberFormatters): string {
   if (value === undefined) {
     return "-";
   }
 
-  return formatNumericSummaryValue(value);
+  return formatNumericSummaryValue(value, formatters);
 }
 
-function formatNumericSummaryValue(value: number): string {
+function formatNumericSummaryValue(value: number, formatters?: NumberFormatters): string {
   return Number.isInteger(value)
-    ? formatInteger(value)
-    : DECIMAL_NUMBER_FORMATTER.format(value);
+    ? formatInteger(value, formatters)
+    : (formatters?.decimal ?? DECIMAL_NUMBER_FORMATTER).format(value);
 }
 
-function formatInteger(value: number): string {
-  return INTEGER_NUMBER_FORMATTER.format(value);
+function formatInteger(value: number, formatters?: NumberFormatters): string {
+  return (formatters?.integer ?? INTEGER_NUMBER_FORMATTER).format(value);
 }
 
 function renderHeaderGroupCell<TRow>(layout: HeaderGroupLayout<TRow>, rightPinnedOffset = 0) {
@@ -2322,14 +2633,14 @@ function renderRowNumberHeaderGroupCell() {
   });
 }
 
-function renderRowNumberHeaderCell() {
+function renderRowNumberHeaderCell(label: string) {
   return createElement(
     "div",
     {
       key: "__row-number",
       className: "youp-grid__cell youp-grid__cell--header youp-grid__row-number-cell youp-grid__row-number-cell--header",
       role: "columnheader",
-      "aria-label": "Row number",
+      "aria-label": label,
       style: getRowNumberCellStyle(),
     },
     "#",
@@ -2351,6 +2662,7 @@ function renderSelectionHeaderCell(context: {
   indeterminate: boolean;
   disabled: boolean;
   leftOffset: number;
+  label: string;
   toggleSelected: (selected: boolean) => void;
 }) {
   return createElement(
@@ -2370,10 +2682,11 @@ function SelectionHeaderCheckbox(context: {
   indeterminate: boolean;
   disabled: boolean;
   toggleSelected: (selected: boolean) => void;
+  label: string;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (inputRef.current) {
       inputRef.current.indeterminate = context.indeterminate;
     }
@@ -2384,7 +2697,7 @@ function SelectionHeaderCheckbox(context: {
     type: "checkbox",
     checked: context.checked,
     disabled: context.disabled,
-    "aria-label": "Select visible rows",
+    "aria-label": context.label,
     "aria-checked": context.indeterminate ? "mixed" : context.checked,
     ref: inputRef,
     onChange: (event: ReactChangeEvent<HTMLInputElement>) => {
@@ -2964,7 +3277,7 @@ function getDetailRenderModel<TRow>(context: {
   displayRows: readonly RowDisplayNode<TRow>[];
   expandedDetailRowIdSet: ReadonlySet<GridRowId>;
   isRowDetailAvailable: (row: RowNode<TRow>, rowIndex: number) => boolean;
-  rowHeight: number;
+  getRowHeight: (row: RowDisplayNode<TRow>, displayIndex: number) => number;
   detailRowHeight: number;
   overscan?: number;
   scrollTop: number;
@@ -2972,21 +3285,27 @@ function getDetailRenderModel<TRow>(context: {
   cellRowIndexById: Map<GridRowId, number>;
 }) {
   const entries: DetailRenderEntry<TRow>[] = [];
-  const overscanPx = (context.overscan ?? 3) * context.rowHeight;
+  const averageRowHeight = context.displayRows.length === 0
+    ? 1
+    : context.displayRows.reduce((sum, row, index) => sum + context.getRowHeight(row, index), 0) /
+      context.displayRows.length;
+  const overscanPx = (context.overscan ?? 3) * averageRowHeight;
   let offset = 0;
 
   context.displayRows.forEach((row, displayIndex) => {
-    if (isRenderEntryVisible(offset, context.rowHeight, context.scrollTop, context.viewportHeight, overscanPx)) {
+    const rowHeight = context.getRowHeight(row, displayIndex);
+
+    if (isRenderEntryVisible(offset, rowHeight, context.scrollTop, context.viewportHeight, overscanPx)) {
       entries.push({
         type: "row",
         row,
         displayIndex,
         offset,
-        height: context.rowHeight,
+        height: rowHeight,
       });
     }
 
-    offset += context.rowHeight;
+    offset += rowHeight;
 
     if (isRowGroupNode(row)) {
       return;
@@ -3255,6 +3574,7 @@ function renderDisplayRow<TRow>(context: {
 function renderRow<TRow>(context: {
   row: RowNode<TRow>;
   columns: readonly ColumnLayout<TRow>[];
+  renderColumns?: readonly ColumnRenderItem<TRow>[];
   selected: boolean;
   showRowNumberColumn: boolean;
   showSelectionColumn: boolean;
@@ -3373,7 +3693,16 @@ function renderRow<TRow>(context: {
           ariaColIndex: context.showRowNumberColumn ? 2 : 1,
         })
       : undefined,
-    context.columns.map((layout, columnIndex) => {
+    (context.renderColumns ?? context.columns.map((layout, columnIndex) => ({
+      type: "column" as const,
+      layout,
+      columnIndex,
+    }))).map((item) => {
+      if (item.type === "spacer") {
+        return renderVirtualColumnSpacer(item, false);
+      }
+
+      const { layout, columnIndex } = item;
       const focused = context.focusedCell.rowIndex === context.rowIndex && context.focusedCell.columnIndex === columnIndex;
       const editing = isEditingCell(context.editingCell, context.row, layout.column);
       const activeRange = normalizeCellRange(context.selectionRange ?? {
@@ -3678,6 +4007,8 @@ function renderCell<TRow>(context: {
           showDetailPrefix ? "youp-grid__cell--detail-toggle-cell" : "",
           tooltipId ? "youp-grid__cell--tooltip-open" : "",
           context.meta ? `youp-grid__cell--status-${context.meta.status}` : "",
+          column.wrapText ? "youp-grid__cell--wrap-text" : "",
+          column.autoHeight ? "youp-grid__cell--auto-height" : "",
         ].filter(Boolean).join(" "),
         context.layout,
       ),
@@ -4712,6 +5043,7 @@ function renderGridButtonIcon(icon: GridButtonIconName) {
 }
 
 function renderColumnToolbar<TRow>(context: {
+  localeText: YoupGridLocaleText;
   showColumnChooser: boolean;
   showCsvExport: boolean;
   showExcelExport: boolean;
@@ -4772,7 +5104,7 @@ function renderColumnToolbar<TRow>(context: {
             "aria-expanded": context.open,
             onClick: context.toggleOpen,
           },
-          renderGridButtonContent("columns", "Columns"),
+          renderGridButtonContent("columns", context.localeText.columns),
         )
       : undefined,
     context.showCsvExport
@@ -4783,7 +5115,7 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.exportCsv,
           },
-          renderGridButtonContent("csv", "Export CSV"),
+          renderGridButtonContent("csv", context.localeText.exportCsv),
         )
       : undefined,
     context.showExcelExport
@@ -4794,7 +5126,7 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.exportExcel,
           },
-          renderGridButtonContent("excel", "Export Excel"),
+          renderGridButtonContent("excel", context.localeText.exportExcel),
         )
       : undefined,
     context.showImport
@@ -4806,7 +5138,7 @@ function renderColumnToolbar<TRow>(context: {
             disabled: context.importDisabled,
             onClick: context.openImportFilePicker,
           },
-          renderGridButtonContent("import", "Import"),
+          renderGridButtonContent("import", context.localeText.importFile),
         )
       : undefined,
     context.showSizeColumnsToFit
@@ -4817,14 +5149,14 @@ function renderColumnToolbar<TRow>(context: {
             type: "button",
             onClick: context.sizeColumnsToFit,
           },
-          renderGridButtonContent("fit", "Fit columns"),
+          renderGridButtonContent("fit", context.localeText.fitColumns),
         )
       : undefined,
     context.showDensityControl
       ? createElement(
           "label",
           { className: "youp-grid__density-control" },
-          "Density",
+          context.localeText.density,
           createElement(
             "select",
             {
@@ -4833,9 +5165,9 @@ function renderColumnToolbar<TRow>(context: {
                 context.setDensity(event.currentTarget.value as YoupGridDensity);
               },
             },
-            renderDensityOption("compact", "Compact"),
-            renderDensityOption("standard", "Standard"),
-            renderDensityOption("comfortable", "Comfortable"),
+            renderDensityOption("compact", context.localeText.compact),
+            renderDensityOption("standard", context.localeText.standard),
+            renderDensityOption("comfortable", context.localeText.comfortable),
           ),
         )
       : undefined,
@@ -4968,6 +5300,10 @@ type ColumnLayout<TRow> = {
   pinnedEdge?: "left-last" | "right-first";
 };
 
+type ColumnRenderItem<TRow> =
+  | { type: "column"; layout: ColumnLayout<TRow>; columnIndex: number }
+  | { type: "spacer"; key: string; width: number };
+
 type HeaderGroupLayout<TRow> = {
   id: string;
   headerGroup?: string;
@@ -5007,6 +5343,76 @@ function getColumnLayouts<TRow>(
       pinnedEdge: index === 0 ? "right-first" as const : undefined,
     })),
   ];
+}
+
+function getColumnRenderItems<TRow>(
+  layouts: readonly ColumnLayout<TRow>[],
+  options: {
+    enabled: boolean;
+    viewportWidth: number;
+    scrollLeft: number;
+    overscan?: number;
+    leadingWidth: number;
+  },
+): ColumnRenderItem<TRow>[] {
+  if (!options.enabled || options.viewportWidth <= 0) {
+    return layouts.map((layout, columnIndex) => ({ type: "column", layout, columnIndex }));
+  }
+
+  const leftItems = layouts
+    .map((layout, columnIndex) => ({ layout, columnIndex }))
+    .filter((item) => item.layout.pinned === "left");
+  const centerItems = layouts
+    .map((layout, columnIndex) => ({ layout, columnIndex }))
+    .filter((item) => !item.layout.pinned);
+  const rightItems = layouts
+    .map((layout, columnIndex) => ({ layout, columnIndex }))
+    .filter((item) => item.layout.pinned === "right");
+  const pinnedWidth = [...leftItems, ...rightItems]
+    .reduce((sum, item) => sum + getColumnWidth(item.layout.column), options.leadingWidth);
+  const range = getVariableVirtualRange({
+    itemCount: centerItems.length,
+    itemSize: (index) => getColumnWidth(centerItems[index].layout.column),
+    viewportSize: Math.max(1, options.viewportWidth - pinnedWidth),
+    scrollOffset: options.scrollLeft,
+    overscan: options.overscan ?? 1,
+  });
+  const result: ColumnRenderItem<TRow>[] = leftItems.map((item) => ({ type: "column", ...item }));
+
+  if (range.beforeSize > 0) {
+    result.push({ type: "spacer", key: "center-before", width: range.beforeSize });
+  }
+
+  range.items.forEach((virtualItem) => {
+    const item = centerItems[virtualItem.index];
+    if (item) {
+      result.push({ type: "column", ...item });
+    }
+  });
+
+  if (range.afterSize > 0) {
+    result.push({ type: "spacer", key: "center-after", width: range.afterSize });
+  }
+
+  result.push(...rightItems.map((item) => ({ type: "column" as const, ...item })));
+  return result;
+}
+
+function renderVirtualColumnSpacer<TRow>(
+  item: Extract<ColumnRenderItem<TRow>, { type: "spacer" }>,
+  header: boolean,
+) {
+  return createElement("div", {
+    key: item.key,
+    className: [
+      "youp-grid__cell",
+      "youp-grid__column-virtual-spacer",
+      header ? "youp-grid__cell--header" : "",
+    ].filter(Boolean).join(" "),
+    role: "presentation",
+    "aria-hidden": true,
+    style: { width: item.width, flex: `0 0 ${item.width}px` },
+  });
 }
 
 function getHeaderGroupLayouts<TRow>(columns: readonly ColumnLayout<TRow>[]): HeaderGroupLayout<TRow>[] {
@@ -5290,6 +5696,7 @@ function rowKey(rowId: GridRowId): string {
 }
 
 function renderPagination(context: {
+  localeText: YoupGridLocaleText;
   enabled: boolean;
   cursorPagination?: CursorPaginationState;
   pageCount?: number;
@@ -5307,6 +5714,7 @@ function renderPagination(context: {
 
   if (context.cursorPagination) {
     return renderCursorPagination({
+      localeText: context.localeText,
       cursorPagination: context.cursorPagination,
       visibleRowCount: context.visibleRowCount,
       filteredRowCount: context.filteredRowCount,
@@ -5331,12 +5739,17 @@ function renderPagination(context: {
         disabled: context.pagination.pageIndex === 0,
         onClick: () => context.setPage(context.pagination!.pageIndex - 1),
       },
-      renderGridButtonContent("previous", "Previous"),
+      renderGridButtonContent("previous", context.localeText.previous),
     ),
     createElement(
       "span",
       { className: "youp-grid__page-status" },
-      `Page ${currentPage} of ${context.pageCount} · ${context.visibleRowCount} shown · ${context.filteredRowCount} matched`,
+      context.localeText.pageStatus(
+        currentPage,
+        context.pageCount,
+        context.visibleRowCount,
+        context.filteredRowCount,
+      ),
     ),
     createElement(
       "button",
@@ -5345,12 +5758,12 @@ function renderPagination(context: {
         disabled: currentPage >= context.pageCount,
         onClick: () => context.setPage(context.pagination!.pageIndex + 1),
       },
-      renderGridButtonContent("next", "Next"),
+      renderGridButtonContent("next", context.localeText.next),
     ),
     createElement(
       "label",
       { className: "youp-grid__page-size" },
-      "Rows",
+      context.localeText.rows,
       createElement(
         "select",
         {
@@ -5368,6 +5781,7 @@ function renderPagination(context: {
 }
 
 function renderCursorPagination(context: {
+  localeText: YoupGridLocaleText;
   cursorPagination: CursorPaginationState;
   visibleRowCount: number;
   filteredRowCount: number;
@@ -5384,12 +5798,12 @@ function renderCursorPagination(context: {
         disabled: !context.cursorPagination.hasPreviousPage,
         onClick: () => context.setCursorPage(context.cursorPagination.previousCursor),
       },
-      renderGridButtonContent("previous", "Previous"),
+      renderGridButtonContent("previous", context.localeText.previous),
     ),
     createElement(
       "span",
       { className: "youp-grid__page-status" },
-      `Cursor page · ${context.visibleRowCount} shown · ${context.filteredRowCount} matched`,
+      context.localeText.cursorPageStatus(context.visibleRowCount, context.filteredRowCount),
     ),
     createElement(
       "button",
@@ -5398,12 +5812,12 @@ function renderCursorPagination(context: {
         disabled: !context.cursorPagination.hasNextPage,
         onClick: () => context.setCursorPage(context.cursorPagination.nextCursor),
       },
-      renderGridButtonContent("next", "Next"),
+      renderGridButtonContent("next", context.localeText.next),
     ),
     createElement(
       "label",
       { className: "youp-grid__page-size" },
-      "Rows",
+      context.localeText.rows,
       createElement(
         "select",
         {
@@ -5947,6 +6361,57 @@ function ensureCellRowVisible(context: {
   }
 }
 
+function ensureApiRowVisible<TRow>(
+  bodyElement: HTMLDivElement | null,
+  rowIndex: number,
+  cellRows: readonly RowNode<TRow>[],
+  displayRows: readonly RowDisplayNode<TRow>[],
+  rowHeights: readonly number[],
+) {
+  if (!bodyElement) {
+    return;
+  }
+
+  scrollApiRowIntoView(bodyElement, rowIndex, "nearest", cellRows, displayRows, rowHeights);
+}
+
+function scrollApiRowIntoView<TRow>(
+  bodyElement: HTMLDivElement,
+  rowIndex: number,
+  align: "start" | "center" | "end" | "nearest",
+  cellRows: readonly RowNode<TRow>[],
+  displayRows: readonly RowDisplayNode<TRow>[],
+  rowHeights: readonly number[],
+) {
+  const row = cellRows[rowIndex];
+  const displayIndex = row
+    ? displayRows.findIndex((displayRow) => !isRowGroupNode(displayRow) && displayRow.id === row.id)
+    : -1;
+
+  if (displayIndex < 0) {
+    return;
+  }
+
+  const rowTop = rowHeights.slice(0, displayIndex).reduce((sum, height) => sum + height, 0);
+  const rowHeight = rowHeights[displayIndex] ?? 1;
+  const rowBottom = rowTop + rowHeight;
+  const viewportHeight = bodyElement.clientHeight;
+  const viewportTop = bodyElement.scrollTop;
+  const viewportBottom = viewportTop + viewportHeight;
+
+  if (align === "start") {
+    bodyElement.scrollTop = rowTop;
+  } else if (align === "center") {
+    bodyElement.scrollTop = Math.max(0, rowTop - (viewportHeight - rowHeight) / 2);
+  } else if (align === "end") {
+    bodyElement.scrollTop = Math.max(0, rowBottom - viewportHeight);
+  } else if (rowTop < viewportTop) {
+    bodyElement.scrollTop = rowTop;
+  } else if (rowBottom > viewportBottom) {
+    bodyElement.scrollTop = rowBottom - viewportHeight;
+  }
+}
+
 function ensureCellColumnVisible(bodyElement: HTMLDivElement, cellElement: HTMLElement) {
   if (cellElement.classList.contains("youp-grid__cell--pinned-left")) {
     return;
@@ -5970,6 +6435,37 @@ function ensureCellColumnVisible(bodyElement: HTMLDivElement, cellElement: HTMLE
 
   if (cellRight > viewportRight) {
     bodyElement.scrollLeft = cellRight - bodyElement.clientWidth + rightPinnedWidth;
+  }
+}
+
+function scrollVirtualColumnIntoView<TRow>(
+  bodyElement: HTMLDivElement,
+  layouts: readonly ColumnLayout<TRow>[],
+  columnIndex: number,
+  leadingWidth: number,
+) {
+  const layout = layouts[columnIndex];
+  if (!layout || layout.pinned) {
+    return;
+  }
+
+  const leftPinnedWidth = layouts
+    .filter((item) => item.pinned === "left")
+    .reduce((sum, item) => sum + getColumnWidth(item.column), leadingWidth);
+  const rightPinnedWidth = layouts
+    .filter((item) => item.pinned === "right")
+    .reduce((sum, item) => sum + getColumnWidth(item.column), 0);
+  const columnLeft = layouts
+    .slice(0, columnIndex)
+    .reduce((sum, item) => sum + getColumnWidth(item.column), leadingWidth);
+  const columnRight = columnLeft + getColumnWidth(layout.column);
+  const viewportLeft = bodyElement.scrollLeft + leftPinnedWidth;
+  const viewportRight = bodyElement.scrollLeft + bodyElement.clientWidth - rightPinnedWidth;
+
+  if (columnLeft < viewportLeft) {
+    bodyElement.scrollLeft = Math.max(0, columnLeft - leftPinnedWidth);
+  } else if (columnRight > viewportRight) {
+    bodyElement.scrollLeft = columnRight - bodyElement.clientWidth + rightPinnedWidth;
   }
 }
 
@@ -6139,6 +6635,14 @@ function isSameRowIdValue(value: unknown, rowId: GridRowId | undefined): boolean
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Promise<T>)?.then === "function";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function isEditingCell<TRow>(

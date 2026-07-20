@@ -2,6 +2,8 @@ export { YoupGrid } from "./YoupGrid.ts";
 export { useYoupGrid } from "./useYoupGrid.ts";
 export type {
   YoupGridCanEditCellContext,
+  YoupGridApi,
+  YoupGridApiCell,
   YoupGridCellEditCommit,
   YoupGridCellEditCommitReason,
   YoupGridCellContext,
@@ -18,6 +20,7 @@ export type {
   YoupGridCreateImportRowContext,
   YoupGridImportDelimiter,
   YoupGridImportRows,
+  YoupGridLocaleText,
   YoupGridOptions,
   YoupGridProps,
   YoupGridRowChange,
@@ -26,6 +29,7 @@ export type {
   YoupGridRowEvent,
   YoupGridRowInsertChange,
   YoupGridRowInsertPosition,
+  YoupGridRowHeightContext,
   YoupGridRowsChange,
   YoupGridRowsEndReachedEvent,
   YoupGridRowsChangeSource,

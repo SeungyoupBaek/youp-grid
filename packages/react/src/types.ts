@@ -5,6 +5,7 @@ import type {
   CursorPaginationState,
   FilterOperator,
   FilterRule,
+  GridCellRange,
   GridRowId,
   GridRowModelType,
   GridState,
@@ -17,7 +18,7 @@ import type {
   RowGroupingState,
   RowNode,
 } from "@youp-grid/core";
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, Ref } from "react";
 
 export type YoupGridStateChange<TRow> = {
   state: GridState;
@@ -35,7 +36,7 @@ export type YoupGridCellValueChange<TRow> = {
   source: YoupGridCellValueChangeSource;
 };
 
-export type YoupGridCellValueChangeSource = "edit" | "paste" | "fill" | "delete" | "undo" | "redo";
+export type YoupGridCellValueChangeSource = "edit" | "paste" | "fill" | "delete" | "undo" | "redo" | "rollback";
 
 export type YoupGridCellEditCommitReason = "enter" | "tab" | "blur";
 
@@ -157,6 +158,52 @@ export type YoupGridCanEditCellContext<TRow> = {
 export type YoupGridDensity = "compact" | "standard" | "comfortable";
 export type YoupGridFilterMode = "text" | "advanced";
 
+export type YoupGridLocaleText = {
+  noRows: string;
+  loadingRows: string;
+  loadError: string;
+  columns: string;
+  exportCsv: string;
+  exportExcel: string;
+  importFile: string;
+  fitColumns: string;
+  density: string;
+  compact: string;
+  standard: string;
+  comfortable: string;
+  previous: string;
+  next: string;
+  rows: string;
+  rowNumber: string;
+  selectVisibleRows: string;
+  pageStatus: (page: number, pageCount: number, shown: number, matched: number) => string;
+  cursorPageStatus: (shown: number, matched: number) => string;
+};
+
+export type YoupGridRowHeightContext<TRow> = {
+  row: TRow;
+  rowNode: RowNode<TRow>;
+  rowId: GridRowId;
+  rowIndex: number;
+};
+
+export type YoupGridApiCell = {
+  rowIndex: number;
+  columnIndex?: number;
+  columnId?: string;
+};
+
+export type YoupGridApi = {
+  getState: () => GridState;
+  focusCell: (cell: YoupGridApiCell) => boolean;
+  startEditing: (cell: YoupGridApiCell) => boolean;
+  scrollToRow: (rowIndex: number, align?: "start" | "center" | "end" | "nearest") => boolean;
+  selectRange: (range: GridCellRange | undefined) => void;
+  exportCsv: () => string;
+  exportExcel: () => string;
+  resetState: () => void;
+};
+
 export type YoupGridColumnPreset = {
   id: string;
   label: string;
@@ -217,6 +264,7 @@ export type YoupGridOptions<TRow> = {
   serverRowCount?: number;
   serverFilteredRowCount?: number;
   rowHeight?: number;
+  getRowHeight?: (context: YoupGridRowHeightContext<TRow>) => number;
   overscan?: number;
   pinnedTopRows?: readonly TRow[];
   pinnedBottomRows?: readonly TRow[];
@@ -263,6 +311,7 @@ export type YoupGridController<TRow> = {
 };
 
 export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
+  apiRef?: Ref<YoupGridApi>;
   className?: string;
   style?: CSSProperties;
   height?: number | string;
@@ -310,6 +359,8 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   renderRowDetail?: (context: YoupGridRowDetailContext<TRow>) => ReactNode;
   isRowDetailAvailable?: (context: YoupGridRowDetailContext<TRow>) => boolean;
   onCellValueChange?: (change: YoupGridCellValueChange<TRow>) => void;
+  onCellValueSave?: (change: YoupGridCellValueChange<TRow>, signal: AbortSignal) => Promise<void>;
+  onCellValueSaveError?: (error: unknown, change: YoupGridCellValueChange<TRow>) => void;
   onCellEditCommit?: (commit: YoupGridCellEditCommit<TRow>) => void;
   onCellsValueChange?: (change: YoupGridCellsValueChange<TRow>) => void;
   createRow?: (context: YoupGridCreateRowContext<TRow>) => TRow;
@@ -323,6 +374,10 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   columnPresets?: readonly YoupGridColumnPreset[];
   onColumnPresetApply?: (preset: YoupGridColumnPreset) => void;
   emptyContent?: ReactNode;
+  locale?: string | readonly string[];
+  localeText?: Partial<YoupGridLocaleText>;
+  columnVirtualization?: boolean;
+  columnOverscan?: number;
 };
 
 export type YoupGridCellContext<TRow> = {

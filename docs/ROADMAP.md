@@ -15,6 +15,9 @@ Status: implemented
 - filtering
 - pagination
 - fixed-size row virtualization
+- variable-size row and column virtualization helpers
+- cell validation contract
+- cancellable server data source and block cache controller
 - column visibility state
 - column width state
 - column order state
@@ -50,6 +53,10 @@ Status: implemented
 - clipboard copy/paste
 - keyboard row selection
 - controlled/uncontrolled state mode
+- imperative Grid API
+- opt-in center-column virtualization
+- variable row heights and wrapped cells
+- locale text overrides
 
 Exit criteria:
 
@@ -59,7 +66,7 @@ Exit criteria:
 
 ## Phase 3: Production Table UX
 
-Status: in progress
+Status: implemented
 
 - undo/redo
 - fill handle
@@ -75,6 +82,8 @@ Status: in progress
 - custom header renderer
 - checkbox selection column
 - row click and double-click events
+- synchronous and asynchronous cell validation
+- asynchronous save status and rollback events
 
 Exit criteria:
 
@@ -82,7 +91,7 @@ Exit criteria:
 
 ## Phase 4: Advanced Data
 
-Status: in progress
+Status: implemented
 
 - server-side row model
 - cursor pagination adapter
@@ -96,6 +105,7 @@ Status: in progress
 - master-detail rows
 - pinned top and bottom rows
 - controlled row drag reorder
+- standardized remote block loading, status, retry, and cancellation
 
 Exit criteria:
 
@@ -103,7 +113,7 @@ Exit criteria:
 
 ## Phase 5: Library Quality
 
-Status: in progress
+Status: implemented
 
 - TypeScript build
 - package exports for ESM
@@ -117,6 +127,8 @@ Status: in progress
 - docs site
 - semver release process
 - migration guide
+- React and Vue shared API contract checks
+- Vanilla state, selection, focus, scrolling, and export API
 
 Exit criteria:
 

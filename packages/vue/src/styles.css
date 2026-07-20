@@ -246,6 +246,16 @@
   border-right: 0;
 }
 
+.youp-grid-vue__cell--wrap-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.youp-grid-vue__cell--auto-height {
+  align-self: stretch;
+}
+
 .youp-grid-vue__cell--header {
   min-height: 38px;
   padding: 0;
@@ -781,6 +791,17 @@
   padding: 16px;
   color: var(--youp-grid-vue-muted);
   text-align: center;
+}
+
+.youp-grid-vue__overlay {
+  position: sticky;
+  left: 0;
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  padding: 16px;
+  color: var(--youp-grid-vue-text);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .youp-grid-vue__pagination {

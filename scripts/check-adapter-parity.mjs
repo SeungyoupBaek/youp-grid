@@ -9,6 +9,8 @@ const vueTypes = readFileSync(resolve(repoRoot, "packages/vue/src/types.ts"), "u
 const sharedProps = [
   "pinnedTopRows",
   "pinnedBottomRows",
+  "rowHeight",
+  "getRowHeight",
   "showColumnChooser",
   "showCsvExport",
   "showExcelExport",
@@ -22,6 +24,21 @@ const sharedProps = [
   "rowDragReorder",
   "columnPresets",
   "onColumnPresetApply",
+  "onCellValueSave",
+  "onCellValueSaveError",
+  "locale",
+  "localeText",
+];
+
+const sharedApiMethods = [
+  "getState",
+  "focusCell",
+  "startEditing",
+  "scrollToRow",
+  "selectRange",
+  "exportCsv",
+  "exportExcel",
+  "resetState",
 ];
 
 const missing = sharedProps.flatMap((prop) => {
@@ -38,9 +55,20 @@ const missing = sharedProps.flatMap((prop) => {
   return misses;
 });
 
+for (const method of sharedApiMethods) {
+  if (!reactTypes.includes(`${method}:`)) {
+    missing.push(`react-api:${method}`);
+  }
+  if (!vueTypes.includes(`${method}:`)) {
+    missing.push(`vue-api:${method}`);
+  }
+}
+
 if (missing.length > 0) {
   console.error(`Adapter parity check failed: ${missing.join(", ")}`);
   process.exit(1);
 }
 
-console.log(`Adapter parity check passed for ${sharedProps.length} shared props.`);
+console.log(
+  `Adapter parity check passed for ${sharedProps.length} shared props and ${sharedApiMethods.length} API methods.`,
+);

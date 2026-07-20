@@ -460,6 +460,13 @@ export function App() {
           </a>
           <a
             className="site-header__button"
+            href="#docs"
+          >
+            <DemoButtonIcon name="package" />
+            Docs
+          </a>
+          <a
+            className="site-header__button"
             href="https://github.com/SeungyoupBaek/youp-grid/releases"
             rel="noreferrer"
             target="_blank"
@@ -764,6 +771,9 @@ export function App() {
           "Pinned top and bottom rows",
           "Row drag reorder",
           "Selection summary with totals",
+          "Async validation and save rollback",
+          "Variable row and column virtualization",
+          "Imperative Grid API and locale text",
           "Column presets, search, and fit",
           "Custom editor extension point",
           "React, Vue, and Vanilla adapters",
@@ -772,6 +782,21 @@ export function App() {
             <strong>{feature}</strong>
           </article>
         ))}
+      </section>
+      <section className="docs-index" id="docs" aria-labelledby="docs-title">
+        <div>
+          <p className="docs-index__eyebrow">Documentation</p>
+          <h2 id="docs-title">Build against stable grid contracts</h2>
+          <p>
+            Start with the public API, then use the adapter guide and migration notes for framework-specific integration.
+          </p>
+        </div>
+        <nav className="docs-index__links" aria-label="Documentation links">
+          <a href="https://github.com/SeungyoupBaek/youp-grid/blob/main/docs/API.md">Public API</a>
+          <a href="https://github.com/SeungyoupBaek/youp-grid/blob/main/docs/REACT_ADAPTER.md">React guide</a>
+          <a href="https://github.com/SeungyoupBaek/youp-grid/blob/main/docs/MIGRATION.md">Migration</a>
+          <a href="https://github.com/SeungyoupBaek/youp-grid/blob/main/docs/ROADMAP.md">Roadmap</a>
+        </nav>
       </section>
     </main>
   );
