@@ -349,6 +349,9 @@ export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
   defaultChartSpec?: GridChartSpec;
   onChartSpecChange?: (spec: GridChartSpec) => void;
   chartRenderer?: YoupGridChartRenderer;
+  chartLoading?: boolean;
+  chartError?: string;
+  onChartRetry?: () => void;
   onPivotDrilldown?: (context: YoupGridPivotDrilldownContext<TRow>) => void;
   onFormulaChange?: (cell: FormulaCell | undefined) => void;
   showPagination?: boolean;

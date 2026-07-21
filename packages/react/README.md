@@ -40,6 +40,7 @@ import "@youp-grid/react/styles.css";
 - opt-in center-column virtualization, variable row heights, wrapped cells, and locale text
 - pivot builder, hierarchical pivot results, totals, collapse, and source-row drilldown
 - chart panel driven by selection, filtered rows, or pivot results, with aggregation, stacking, dual-axis, legend, data-limit, and PNG controls
+- chart renderer loading, error, and retry states through `chartLoading`, `chartError`, and `onChartRetry`
 - formula editing and computed-column rendering through an optional `FormulaEngine`
 
 The adapter emits changes through callbacks. Applications keep ownership of row data.

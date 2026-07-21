@@ -26,6 +26,7 @@ const formulaColumns = [
   { id: "price", accessor: (row) => row.id % 100 + 1 },
   { id: "notional", accessor: () => undefined, formula: "=[quantity]*[price]" },
 ];
+const formulaEngine = createFormulaEngine();
 
 const timings = {};
 timings.clientRowModelMs = measure(() => buildRowModel({ rows, columns }));
@@ -40,7 +41,13 @@ timings.filteredSortedModelMs = measure(() => buildRowModel({
 timings.formulaRowModelMs = measure(() => buildRowModel({
   rows: formulaRows,
   columns: formulaColumns,
-  formulaEngine: createFormulaEngine(),
+  formulaEngine,
+}));
+timings.formulaCachedStateChangeMs = measure(() => buildRowModel({
+  rows: formulaRows,
+  columns: formulaColumns,
+  formulaEngine,
+  state: { selectedRowIds: [0] },
 }));
 timings.variableVirtualRangeMs = measure(() => getVariableVirtualRange({
   itemCount: rowCount,
@@ -62,7 +69,8 @@ if (process.argv.includes("--assert")) {
   const limits = {
     clientRowModelMs: 2_500,
     filteredSortedModelMs: 3_500,
-    formulaRowModelMs: 1_500,
+    formulaRowModelMs: 750,
+    formulaCachedStateChangeMs: 250,
     variableVirtualRangeMs: 500,
     blockCacheWriteMs: 500,
   };

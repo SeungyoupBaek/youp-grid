@@ -83,3 +83,33 @@ test("YoupChartPanel exposes advanced chart controls", () => {
   assert.match(html, /aria-label="Chart data limit"/);
   assert.match(html, /value="500"/);
 });
+
+test("YoupChartPanel distinguishes renderer loading and failure states", () => {
+  const dataset: GridChartDataset = {
+    dimensions: ["category"],
+    source: [{ category: "A" }],
+    categoryKey: "category",
+    series: [],
+    sourceRowCount: 1,
+    truncated: false,
+  };
+  const spec = { type: "bar", source: "rows", series: [] } as const;
+
+  const loadingHtml = renderToString(createElement(YoupChartPanel, {
+    dataset,
+    spec,
+    loading: true,
+  }));
+  assert.match(loadingHtml, /role="status"/);
+  assert.match(loadingHtml, /Loading chart/);
+
+  const errorHtml = renderToString(createElement(YoupChartPanel, {
+    dataset,
+    spec,
+    error: "Chart renderer failed to load",
+    onRetry: () => undefined,
+  }));
+  assert.match(errorHtml, /role="alert"/);
+  assert.match(errorHtml, /Chart renderer failed to load/);
+  assert.match(errorHtml, />Retry</);
+});

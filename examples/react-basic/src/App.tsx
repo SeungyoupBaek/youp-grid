@@ -31,6 +31,8 @@ type TagOption = {
   color: string;
 };
 
+const getTradeRowId = (row: Trade) => row.id;
+
 type DemoButtonIconName =
   | "alert"
   | "cursor"
@@ -254,18 +256,30 @@ export function App() {
   const [showPivotPanel, setShowPivotPanel] = useState(false);
   const [showChartPanel, setShowChartPanel] = useState(false);
   const [chartRenderer, setChartRenderer] = useState<YoupGridChartRenderer>();
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string>();
+  const [chartLoadAttempt, setChartLoadAttempt] = useState(0);
   const [tagColors, setTagColors] = useState<Record<string, string>>(initialTagColors);
   const [rowEvent, setRowEvent] = useState("Idle");
   useEffect(() => {
     if (!showChartPanel || chartRenderer) return;
     let active = true;
-    void import("@youp-grid/charts-echarts").then(({ createEChartsRenderer }) => {
-      if (active) setChartRenderer(() => createEChartsRenderer({ renderer: "canvas" }));
-    });
+    setChartLoading(true);
+    setChartError(undefined);
+    void import("@youp-grid/charts-echarts")
+      .then(({ createEChartsRenderer }) => {
+        if (active) setChartRenderer(() => createEChartsRenderer({ renderer: "canvas" }));
+      })
+      .catch(() => {
+        if (active) setChartError("Chart renderer failed to load");
+      })
+      .finally(() => {
+        if (active) setChartLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [chartRenderer, showChartPanel]);
+  }, [chartLoadAttempt, chartRenderer, showChartPanel]);
   const [state, setState] = useState<GridState>({
     columns: [
       { columnId: "status", pinned: "right" },
@@ -675,7 +689,7 @@ export function App() {
           rows={gridRows}
           columns={columns}
           state={gridState}
-          getRowId={(row) => row.id}
+          getRowId={getTradeRowId}
           pinnedTopRows={pinnedTopRows}
           pinnedBottomRows={pinnedBottomRows}
           rowModelType={serverMode || cursorMode || infiniteMode ? "server" : "client"}
@@ -686,6 +700,9 @@ export function App() {
           showPivotPanel={showPivotPanel}
           showChartPanel={showChartPanel}
           chartRenderer={chartRenderer}
+          chartLoading={chartLoading}
+          chartError={chartError}
+          onChartRetry={() => setChartLoadAttempt((attempt) => attempt + 1)}
           defaultChartSpec={{
             type: "bar",
             source: "selection",

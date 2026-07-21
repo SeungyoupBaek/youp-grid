@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/charts-echarts",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Apache ECharts adapter for Youp Grid chart datasets.",
   "license": "MIT",
   "author": "SeungyoupBaek",
@@ -40,7 +40,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@youp-grid/core": "0.6.1",
+    "@youp-grid/core": "0.6.2",
     "echarts": "^6.1.0"
   }
 }

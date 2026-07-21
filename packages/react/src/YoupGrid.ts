@@ -1870,6 +1870,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
           dataset: chartDataset!,
           spec: chartSpec,
           renderer: props.chartRenderer,
+          loading: props.chartLoading,
+          error: props.chartError,
+          onRetry: props.onChartRetry,
           columns: rowModel.visibleColumns.map((column) => ({ id: column.id, label: column.headerName })),
           onSpecChange: (nextSpec) => {
             if (!props.chartSpec) setInternalChartSpec(nextSpec);

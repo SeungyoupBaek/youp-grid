@@ -56,6 +56,8 @@ const chartRenderer = createEChartsRenderer({ renderer: "canvas" });
 
 The ECharts adapter registers only the required chart types, components, and canvas/SVG renderers. `mountYoupGridECharts` exposes resize, data-URL export, update, and destroy methods. `createEChartsRenderer` returns a render handle so the React panel can download the current chart as PNG.
 
+Applications that load the chart renderer with `import()` can pass `chartLoading`, `chartError`, and `onChartRetry` to show an accurate loading or recovery state while `chartRenderer` is unavailable.
+
 ## Cell validation and asynchronous saving
 
 Columns accept synchronous or asynchronous validators:

@@ -8,18 +8,36 @@ import { applySorting } from "./sorting.ts";
 import { applyTreeData } from "./tree-data.ts";
 import { applyFormulaEngine } from "./formula.ts";
 import { buildPivotModel } from "./pivot.ts";
-import type { BuildRowModelOptions, PaginationState, RowModel, RowNode } from "./types.ts";
+import type {
+  BuildRowModelOptions,
+  FormulaEngine,
+  FormulaModel,
+  FormulaState,
+  PaginationState,
+  RowModel,
+  RowNode,
+} from "./types.ts";
+
+type FormulaApplicationResult<TRow> = {
+  rows: RowNode<TRow>[];
+  model?: FormulaModel;
+};
+
+type FormulaCacheEntry = {
+  columns: object;
+  getRowId: unknown;
+  formulaState?: FormulaState;
+  engine?: FormulaEngine;
+  result: FormulaApplicationResult<unknown>;
+};
+
+const formulaResultCache = new WeakMap<object, FormulaCacheEntry>();
 
 export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowModel<TRow> {
   const normalizedColumns = normalizeColumns(options.columns);
   const columns = applyColumnState(normalizedColumns, options.state?.columns);
   const visibleColumns = getVisibleColumns(columns);
-  const formulaResult = applyFormulaEngine({
-    rows: createRowNodes(options.rows, options.getRowId),
-    columns: normalizedColumns,
-    state: options.state?.formula,
-    engine: options.formulaEngine,
-  });
+  const formulaResult = getFormulaResult(options, normalizedColumns);
   const allRows = formulaResult.rows;
   const pinnedTopRows = createRowNodes(options.pinnedTopRows ?? [], options.getRowId);
   const pinnedBottomRows = createRowNodes(options.pinnedBottomRows ?? [], options.getRowId);
@@ -71,6 +89,37 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
     visibleRowCount: paginated.rows.length,
     pageCount: paginated.pageCount,
   };
+}
+
+function getFormulaResult<TRow>(
+  options: BuildRowModelOptions<TRow>,
+  columns: RowModel<TRow>["columns"],
+): FormulaApplicationResult<TRow> {
+  const cached = formulaResultCache.get(options.rows);
+  if (
+    cached
+    && cached.columns === options.columns
+    && cached.getRowId === options.getRowId
+    && cached.formulaState === options.state?.formula
+    && cached.engine === options.formulaEngine
+  ) {
+    return cached.result as FormulaApplicationResult<TRow>;
+  }
+
+  const result = applyFormulaEngine({
+    rows: createRowNodes(options.rows, options.getRowId),
+    columns,
+    state: options.state?.formula,
+    engine: options.formulaEngine,
+  });
+  formulaResultCache.set(options.rows, {
+    columns: options.columns,
+    getRowId: options.getRowId,
+    formulaState: options.state?.formula,
+    engine: options.formulaEngine,
+    result: result as FormulaApplicationResult<unknown>,
+  });
+  return result;
 }
 
 function buildServerRowModel<TRow>(context: {

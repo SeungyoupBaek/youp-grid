@@ -1692,7 +1692,13 @@
 .youp-grid__chart-empty {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 10px;
   color: #64748b;
+}
+
+.youp-grid__chart-empty--error {
+  color: #991b1b;
 }
 
 @media (max-width: 760px) {

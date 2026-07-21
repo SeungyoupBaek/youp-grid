@@ -13,6 +13,9 @@ export type YoupChartPanelProps = {
   dataset: GridChartDataset;
   spec: GridChartSpec;
   renderer?: YoupGridChartRenderer;
+  loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
   onSpecChange?: (spec: GridChartSpec) => void;
   height?: number | string;
   columns?: readonly { id: string; label: string }[];
@@ -147,11 +150,42 @@ export function YoupChartPanel(props: YoupChartPanelProps) {
       : undefined,
     props.renderer
       ? createElement("div", { ref: chartRef, className: "youp-grid__chart-canvas", style: { height: props.height ?? 320 } })
-      : createElement("div", { className: "youp-grid__chart-empty", style: { height: props.height ?? 320 } }, "Configure a chart renderer"),
+      : renderChartStatus(props),
     props.dataset.truncated
       ? createElement("div", { className: "youp-grid__chart-warning" }, `Showing the first ${props.dataset.source.length.toLocaleString()} points`)
       : undefined,
   );
+}
+
+function renderChartStatus(props: YoupChartPanelProps) {
+  const style = { height: props.height ?? 320 };
+  if (props.loading) {
+    return createElement("div", {
+      className: "youp-grid__chart-empty",
+      role: "status",
+      style,
+    }, "Loading chart...");
+  }
+  if (props.error) {
+    return createElement("div", {
+      className: "youp-grid__chart-empty youp-grid__chart-empty--error",
+      role: "alert",
+      style,
+    },
+      createElement("span", undefined, props.error),
+      props.onRetry
+        ? createElement("button", {
+            className: "youp-grid__button",
+            type: "button",
+            onClick: props.onRetry,
+          }, "Retry")
+        : undefined,
+    );
+  }
+  return createElement("div", {
+    className: "youp-grid__chart-empty",
+    style,
+  }, "Configure a chart renderer");
 }
 
 function renderSelect(

@@ -35,7 +35,7 @@ import {
   toggleTreeRowExpanded as toggleCoreTreeRowExpanded,
   type GridState,
 } from "@youp-grid/core";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { YoupGridController, YoupGridOptions } from "./types.ts";
 
@@ -44,28 +44,30 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
   const [internalState, setInternalState] = useState<GridState>(() => {
     return createGridState(options.defaultState);
   });
-  const controlledState = useMemo(
-    () => options.state === undefined ? undefined : createGridState(options.state),
-    [options.state],
-  );
+  const controlledState = useMemo(() => {
+    if (options.state === undefined) return undefined;
+    return {
+      ...createGridState(options.state),
+      formula: options.state.formula,
+    };
+  }, [options.state]);
   const state = controlledState ?? internalState;
+  const pendingRowModel = useRef<{
+    source: YoupGridOptions<TRow>;
+    state: GridState;
+    value: ReturnType<typeof buildRowModel<TRow>>;
+  }>();
 
   const rowModel = useMemo(() => {
-    return buildRowModel({
-      rows: options.rows,
-      columns: options.columns,
-      state,
-      getRowId: options.getRowId,
-      treeData: options.treeData,
-      getParentRowId: options.getParentRowId,
-      pinnedTopRows: options.pinnedTopRows,
-      pinnedBottomRows: options.pinnedBottomRows,
-      rowModelType: options.rowModelType,
-      serverRowCount: options.serverRowCount,
-      serverFilteredRowCount: options.serverFilteredRowCount,
-      serverPivotModel: options.serverPivotModel,
-      formulaEngine: options.formulaEngine,
-    });
+    const pending = pendingRowModel.current;
+    if (
+      pending
+      && (pending.state === state || pending.state === options.state)
+      && hasSameRowModelSource(pending.source, options)
+    ) {
+      return pending.value;
+    }
+    return buildControllerRowModel(options, state);
   }, [
     options.rows,
     options.columns,
@@ -84,21 +86,8 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
 
   const commitState = useCallback(
     (nextState: GridState) => {
-      const nextRowModel = buildRowModel({
-        rows: options.rows,
-        columns: options.columns,
-        state: nextState,
-        getRowId: options.getRowId,
-        treeData: options.treeData,
-        getParentRowId: options.getParentRowId,
-        pinnedTopRows: options.pinnedTopRows,
-        pinnedBottomRows: options.pinnedBottomRows,
-        rowModelType: options.rowModelType,
-        serverRowCount: options.serverRowCount,
-        serverFilteredRowCount: options.serverFilteredRowCount,
-        serverPivotModel: options.serverPivotModel,
-        formulaEngine: options.formulaEngine,
-      });
+      const nextRowModel = buildControllerRowModel(options, nextState);
+      pendingRowModel.current = { source: options, state: nextState, value: nextRowModel };
 
       if (!isControlled) {
         setInternalState(nextState);
@@ -185,4 +174,37 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
     setTreeExpandedRows: (rowIds) => commitState(setCoreTreeExpandedRows(state, rowIds)),
     toggleTreeRowExpanded: (rowId) => commitState(toggleCoreTreeRowExpanded(state, rowId)),
   };
+}
+
+function buildControllerRowModel<TRow>(options: YoupGridOptions<TRow>, state: GridState) {
+  return buildRowModel({
+    rows: options.rows,
+    columns: options.columns,
+    state,
+    getRowId: options.getRowId,
+    treeData: options.treeData,
+    getParentRowId: options.getParentRowId,
+    pinnedTopRows: options.pinnedTopRows,
+    pinnedBottomRows: options.pinnedBottomRows,
+    rowModelType: options.rowModelType,
+    serverRowCount: options.serverRowCount,
+    serverFilteredRowCount: options.serverFilteredRowCount,
+    serverPivotModel: options.serverPivotModel,
+    formulaEngine: options.formulaEngine,
+  });
+}
+
+function hasSameRowModelSource<TRow>(left: YoupGridOptions<TRow>, right: YoupGridOptions<TRow>) {
+  return left.rows === right.rows
+    && left.columns === right.columns
+    && left.getRowId === right.getRowId
+    && left.treeData === right.treeData
+    && left.getParentRowId === right.getParentRowId
+    && left.pinnedTopRows === right.pinnedTopRows
+    && left.pinnedBottomRows === right.pinnedBottomRows
+    && left.rowModelType === right.rowModelType
+    && left.serverRowCount === right.serverRowCount
+    && left.serverFilteredRowCount === right.serverFilteredRowCount
+    && left.serverPivotModel === right.serverPivotModel
+    && left.formulaEngine === right.formulaEngine;
 }
