@@ -237,13 +237,20 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     [cellRows, rowModel],
   );
   const chartSpec = props.chartSpec ?? internalChartSpec;
-  const chartDataset = useMemo(() => buildGridChartDataset({
+  const chartDataset = useMemo(() => props.showChartPanel ? buildGridChartDataset({
     rows: rowModel.filteredRows,
     columns: rowModel.visibleColumns,
     selectionRange,
     pivot: rowModel.pivot,
     spec: chartSpec,
-  }), [chartSpec, rowModel.filteredRows, rowModel.pivot, rowModel.visibleColumns, selectionRange]);
+  }) : undefined, [
+    chartSpec,
+    props.showChartPanel,
+    rowModel.filteredRows,
+    rowModel.pivot,
+    rowModel.visibleColumns,
+    selectionRange,
+  ]);
   const displayRowHeights = useMemo(() => displayRows.map((row, displayIndex) => {
     if (isRowGroupNode(row) || !props.getRowHeight) {
       return rowHeight;
@@ -1860,7 +1867,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       : undefined,
     props.showChartPanel
       ? createElement(YoupChartPanel, {
-          dataset: chartDataset,
+          dataset: chartDataset!,
           spec: chartSpec,
           renderer: props.chartRenderer,
           columns: rowModel.visibleColumns.map((column) => ({ id: column.id, label: column.headerName })),

@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/formula",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Spreadsheet formula engine adapter for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
@@ -40,7 +40,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@youp-grid/core": "0.6.0",
+    "@youp-grid/core": "0.6.1",
     "fast-formula-parser": "1.0.19"
   }
 }

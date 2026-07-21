@@ -6,6 +6,10 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-21
+
+- Reuse formula parsers across repeated cells and avoid redundant controlled-state and hidden-chart row-model work during React rendering.
+
 ## [0.6.0] - 2026-07-20
 
 - Add pivot tables with multiple aggregations, totals, date buckets, collapse, drilldown, and server-side pivot contracts.

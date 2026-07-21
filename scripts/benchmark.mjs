@@ -5,6 +5,7 @@ import {
   createServerBlockCache,
   getVariableVirtualRange,
 } from "../packages/core/dist/index.js";
+import { createFormulaEngine } from "../packages/formula/dist/index.js";
 
 const rowCount = 100_000;
 const columnCount = 12;
@@ -19,6 +20,12 @@ const columns = Array.from({ length: columnCount }, (_, index) => ({
   headerName: `Column ${index}`,
   accessor: (row) => index % 3 === 0 ? row.group : index % 3 === 1 ? row.value : row.label,
 }));
+const formulaRows = rows.slice(0, 10_000);
+const formulaColumns = [
+  { id: "quantity", accessor: (row) => row.value },
+  { id: "price", accessor: (row) => row.id % 100 + 1 },
+  { id: "notional", accessor: () => undefined, formula: "=[quantity]*[price]" },
+];
 
 const timings = {};
 timings.clientRowModelMs = measure(() => buildRowModel({ rows, columns }));
@@ -29,6 +36,11 @@ timings.filteredSortedModelMs = measure(() => buildRowModel({
     filters: [{ columnId: "column-0", operator: "contains", value: "group-4" }],
     sort: [{ columnId: "column-1", direction: "desc" }],
   },
+}));
+timings.formulaRowModelMs = measure(() => buildRowModel({
+  rows: formulaRows,
+  columns: formulaColumns,
+  formulaEngine: createFormulaEngine(),
 }));
 timings.variableVirtualRangeMs = measure(() => getVariableVirtualRange({
   itemCount: rowCount,
@@ -50,6 +62,7 @@ if (process.argv.includes("--assert")) {
   const limits = {
     clientRowModelMs: 2_500,
     filteredSortedModelMs: 3_500,
+    formulaRowModelMs: 1_500,
     variableVirtualRangeMs: 500,
     blockCacheWriteMs: 500,
   };

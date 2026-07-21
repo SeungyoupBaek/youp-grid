@@ -1,6 +1,6 @@
 {
   "name": "youp-grid",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Reusable TypeScript data grid core and UI adapters.",
   "license": "MIT",
@@ -28,8 +28,8 @@
   "scripts": {
     "build": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/formula && npm run build -w @youp-grid/charts-echarts && npm run build -w @youp-grid/react && npm run build -w @youp-grid/vue && npm run build -w @youp-grid/vanilla",
     "build:pages": "npm run build && npm run build --prefix examples/react-basic -- --base=/youp-grid/",
-    "benchmark": "npm run build -w @youp-grid/core && node scripts/benchmark.mjs",
-    "benchmark:check": "npm run build -w @youp-grid/core && node scripts/benchmark.mjs --assert",
+    "benchmark": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/formula && node scripts/benchmark.mjs",
+    "benchmark:check": "npm run build -w @youp-grid/core && npm run build -w @youp-grid/formula && node scripts/benchmark.mjs --assert",
     "clean": "rm -rf packages/core/dist packages/formula/dist packages/charts-echarts/dist packages/react/dist packages/vue/dist packages/vanilla/dist",
     "pack:dry-run": "npm pack --workspaces --dry-run --cache /private/tmp/youp-grid-npm-cache",
     "publish:dry-run": "npm publish -w @youp-grid/core --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/formula --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/charts-echarts --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/react --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vue --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run && npm publish -w @youp-grid/vanilla --access public --registry=https://registry.npmjs.org/ --cache /private/tmp/youp-grid-npm-cache --dry-run",

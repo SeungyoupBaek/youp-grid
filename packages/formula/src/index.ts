@@ -40,6 +40,13 @@ function calculateFormulaModel<TRow>(
   const visiting = new Set<string>();
   const rowIndexes = new Map(input.rows.map((row, index) => [row.id, index]));
   const columnIndexes = new Map(input.columns.map((column, index) => [column.id, index]));
+  const namedExpressionReplacements = Object.entries(input.state.namedExpressions ?? {})
+    .sort((left, right) => right[0].length - left[0].length)
+    .map(([name, value]) => ({
+      pattern: new RegExp(`\\b${escapeRegExp(name)}\\b`, "gi"),
+      value: formulaLiteral(value),
+    }));
+  const parserRuntimes: FormulaParserRuntime[] = [];
 
   const evaluate = (key: string): FormulaCellResult => {
     const cached = results.get(key);
@@ -57,16 +64,20 @@ function calculateFormulaModel<TRow>(
 
     visiting.add(key);
     const dependencies = new Set<string>();
+    const parserRuntime = getParserRuntime(visiting.size - 1);
+    parserRuntime.setDependencies(dependencies);
     try {
-      const parser = new FormulaParser(createParserConfig({
-        input,
-        options,
-        formulaCells,
-        evaluate,
-        dependencies,
-      }));
-      const formula = prepareFormula(cell.formula, input.columns.map((column) => column.id), rowIndex, input.state.namedExpressions);
-      const value = parser.parse(formula, { row: rowIndex + 1, col: columnIndex + 1, sheet: "Grid" }, true);
+      const formula = prepareFormula(
+        cell.formula,
+        columnIndexes,
+        rowIndex,
+        namedExpressionReplacements,
+      );
+      const value = parserRuntime.parser.parse(
+        formula,
+        { row: rowIndex + 1, col: columnIndex + 1, sheet: "Grid" },
+        true,
+      );
       const result: FormulaCellResult = {
         ...cell,
         value: normalizeFormulaValue(value),
@@ -84,6 +95,27 @@ function calculateFormulaModel<TRow>(
     }
   };
 
+  const getParserRuntime = (depth: number): FormulaParserRuntime => {
+    const existing = parserRuntimes[depth];
+    if (existing) return existing;
+
+    let currentDependencies = new Set<string>();
+    const runtime: FormulaParserRuntime = {
+      parser: new FormulaParser(createParserConfig({
+        input,
+        options,
+        formulaCells,
+        evaluate,
+        getDependencies: () => currentDependencies,
+      })),
+      setDependencies: (dependencies) => {
+        currentDependencies = dependencies;
+      },
+    };
+    parserRuntimes[depth] = runtime;
+    return runtime;
+  };
+
   for (const key of formulaCells.keys()) evaluate(key);
   const cells = Object.fromEntries(results);
   return {
@@ -98,7 +130,7 @@ function createParserConfig<TRow>(context: {
   options: CreateFormulaEngineOptions;
   formulaCells: ReadonlyMap<string, FormulaEngineInput<TRow>["state"]["cells"][number]>;
   evaluate: (key: string) => FormulaCellResult;
-  dependencies: Set<string>;
+  getDependencies: () => Set<string>;
 }): FormulaParserConfig {
   const readCell = (reference: FormulaReference): unknown => {
     const row = context.input.rows[reference.row - 1];
@@ -107,7 +139,7 @@ function createParserConfig<TRow>(context: {
     const key = getFormulaCellKey(row.id, column.id);
     const formulaCell = context.formulaCells.get(key);
     if (formulaCell) {
-      context.dependencies.add(key);
+      context.getDependencies().add(key);
       const result = context.evaluate(key);
       if (result.error) throw new FormulaEvaluationError(result.error.code, result.error.message);
       return result.value;
@@ -137,20 +169,30 @@ function createParserConfig<TRow>(context: {
 
 function prepareFormula(
   formula: string,
-  columnIds: readonly string[],
+  columnIndexes: ReadonlyMap<string, number>,
   rowIndex: number,
-  namedExpressions?: Record<string, FormulaScalar>,
+  namedExpressionReplacements: readonly NamedExpressionReplacement[],
 ): string {
   let prepared = formula.trim().replace(/^=/, "");
   prepared = prepared.replace(/\[([^\]]+)\]/g, (match, columnId: string) => {
-    const columnIndex = columnIds.indexOf(columnId.trim());
-    return columnIndex < 0 ? match : `${columnIndexToName(columnIndex)}${rowIndex + 1}`;
+    const columnIndex = columnIndexes.get(columnId.trim());
+    return columnIndex === undefined ? match : `${columnIndexToName(columnIndex)}${rowIndex + 1}`;
   });
-  for (const [name, value] of Object.entries(namedExpressions ?? {}).sort((left, right) => right[0].length - left[0].length)) {
-    prepared = prepared.replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, "gi"), formulaLiteral(value));
+  for (const replacement of namedExpressionReplacements) {
+    prepared = prepared.replace(replacement.pattern, replacement.value);
   }
   return prepared;
 }
+
+type FormulaParserRuntime = {
+  parser: FormulaParser;
+  setDependencies: (dependencies: Set<string>) => void;
+};
+
+type NamedExpressionReplacement = {
+  pattern: RegExp;
+  value: string;
+};
 
 function formulaLiteral(value: FormulaScalar): string {
   if (value === null || value === undefined) return "0";

@@ -44,7 +44,11 @@ export function useYoupGrid<TRow>(options: YoupGridOptions<TRow>): YoupGridContr
   const [internalState, setInternalState] = useState<GridState>(() => {
     return createGridState(options.defaultState);
   });
-  const state = isControlled ? createGridState(options.state) : internalState;
+  const controlledState = useMemo(
+    () => options.state === undefined ? undefined : createGridState(options.state),
+    [options.state],
+  );
+  const state = controlledState ?? internalState;
 
   const rowModel = useMemo(() => {
     return buildRowModel({
