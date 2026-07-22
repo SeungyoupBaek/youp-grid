@@ -99,6 +99,63 @@ test("react basic demo supports grid interactions", async ({ page }) => {
   await expect(page.getByRole("menuitem", { name: "Copy row" })).toBeVisible();
 });
 
+test("react basic demo increments a single numeric cell with the fill handle", async ({ page }) => {
+  await page.goto("/");
+
+  const firstQuantityCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="quantity"]');
+  const fourthQuantityCell = page.locator('[data-youp-row-index="3"][data-youp-column-id="quantity"]');
+
+  await firstQuantityCell.dblclick();
+  const editor = firstQuantityCell.locator("input.youp-grid__cell-editor");
+  await editor.fill("1");
+  await page.keyboard.press("Enter");
+  await firstQuantityCell.click();
+
+  const fillHandle = firstQuantityCell.locator(".youp-grid__fill-handle");
+  await expect(fillHandle).toBeVisible();
+  await fillHandle.hover();
+  await page.mouse.down();
+  await fourthQuantityCell.hover();
+  await expect(page.locator(".youp-grid__cell--fill-target")).toHaveCount(3);
+  await page.mouse.up();
+
+  await expect(page.locator('[data-youp-row-index="1"][data-youp-column-id="quantity"]')).toHaveText("2");
+  await expect(page.locator('[data-youp-row-index="2"][data-youp-column-id="quantity"]')).toHaveText("3");
+  await expect(fourthQuantityCell).toHaveText("4");
+});
+
+test("react basic demo continues a selected numeric series with the fill handle", async ({ page }) => {
+  await page.goto("/");
+
+  const firstQuantityCell = page.locator('[data-youp-row-index="0"][data-youp-column-id="quantity"]');
+  const secondQuantityCell = page.locator('[data-youp-row-index="1"][data-youp-column-id="quantity"]');
+  const fifthQuantityCell = page.locator('[data-youp-row-index="4"][data-youp-column-id="quantity"]');
+
+  for (const [cell, value] of [[firstQuantityCell, "1"], [secondQuantityCell, "2"]] as const) {
+    await cell.dblclick();
+    await cell.locator("input.youp-grid__cell-editor").fill(value);
+    await page.keyboard.press("Enter");
+  }
+
+  await firstQuantityCell.hover();
+  await page.mouse.down();
+  await secondQuantityCell.hover();
+  await page.mouse.up();
+  await expect(page.locator(".youp-grid__cell--range-selected[data-youp-column-id='quantity']")).toHaveCount(2);
+
+  const fillHandle = secondQuantityCell.locator(".youp-grid__fill-handle");
+  await expect(fillHandle).toBeVisible();
+  await fillHandle.hover();
+  await page.mouse.down();
+  await fifthQuantityCell.hover();
+  await expect(page.locator(".youp-grid__cell--fill-target")).toHaveCount(3);
+  await page.mouse.up();
+
+  await expect(page.locator('[data-youp-row-index="2"][data-youp-column-id="quantity"]')).toHaveText("3");
+  await expect(page.locator('[data-youp-row-index="3"][data-youp-column-id="quantity"]')).toHaveText("4");
+  await expect(fifthQuantityCell).toHaveText("5");
+});
+
 test("react basic demo keeps direct cell editing active through Korean IME composition", async ({ page }) => {
   await page.goto("/");
 

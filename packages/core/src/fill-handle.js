@@ -51,7 +51,7 @@ export function getFillHandleCells(options) {
         options.targetRange.endColumnIndex === options.sourceRange.endColumnIndex;
     const numericSeriesByLane = new Map();
     const cells = [];
-    if (isVerticalFill && sourceRowCount >= 2) {
+    if (isVerticalFill) {
         for (let columnIndex = options.sourceRange.startColumnIndex; columnIndex <= options.sourceRange.endColumnIndex; columnIndex += 1) {
             const series = getNumericSeries(Array.from({ length: sourceRowCount }, (_, offset) => options.getValue({
                 rowIndex: options.sourceRange.startRowIndex + offset,
@@ -62,7 +62,7 @@ export function getFillHandleCells(options) {
             }
         }
     }
-    else if (!isVerticalFill && sourceColumnCount >= 2) {
+    else {
         for (let rowIndex = options.sourceRange.startRowIndex; rowIndex <= options.sourceRange.endRowIndex; rowIndex += 1) {
             const series = getNumericSeries(Array.from({ length: sourceColumnCount }, (_, offset) => options.getValue({
                 rowIndex,
@@ -102,11 +102,11 @@ export function getFillHandleCells(options) {
     return cells;
 }
 function getNumericSeries(values) {
-    if (values.length < 2 || !values.every(isFiniteNumber)) {
+    if (values.length === 0 || !values.every(isFiniteNumber)) {
         return undefined;
     }
     const firstValue = values[0];
-    const step = values[1] - firstValue;
+    const step = values.length === 1 ? 1 : values[1] - firstValue;
     for (let index = 2; index < values.length; index += 1) {
         if (!areNumbersClose(values[index] - values[index - 1], step)) {
             return undefined;

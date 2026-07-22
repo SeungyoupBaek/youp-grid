@@ -943,7 +943,7 @@ test("fill handle continues numeric series in either direction", () => {
   );
 });
 
-test("fill handle repeats constant and non-series source values", () => {
+test("fill handle increments single numbers and repeats non-series source values", () => {
   const fillValues = (sourceValues: Array<number | string>) =>
     getFillHandleCells({
       sourceRange: {
@@ -961,9 +961,31 @@ test("fill handle repeats constant and non-series source values", () => {
       getValue: ({ rowIndex }) => sourceValues[rowIndex],
     }).map((cell) => cell.value);
 
+  assert.deepEqual(fillValues([1]), [2, 3, 4]);
   assert.deepEqual(fillValues([1, 1]), [1, 1, 1]);
   assert.deepEqual(fillValues([1, 2, 4]), [1, 2, 4]);
   assert.deepEqual(fillValues(["A", "B"]), ["A", "B", "A"]);
+});
+
+test("fill handle decrements a single numeric value when filled backward", () => {
+  assert.deepEqual(
+    getFillHandleCells({
+      sourceRange: {
+        startRowIndex: 3,
+        endRowIndex: 3,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      targetRange: {
+        startRowIndex: 0,
+        endRowIndex: 2,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      getValue: () => 4,
+    }).map((cell) => cell.value),
+    [1, 2, 3],
+  );
 });
 
 test("fill handle recognizes decimal numeric series", () => {

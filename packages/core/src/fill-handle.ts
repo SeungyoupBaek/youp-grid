@@ -85,7 +85,7 @@ export function getFillHandleCells<TValue>(options: {
   const numericSeriesByLane = new Map<number, NumericSeries>();
   const cells: GridFillHandleCell<TValue>[] = [];
 
-  if (isVerticalFill && sourceRowCount >= 2) {
+  if (isVerticalFill) {
     for (
       let columnIndex = options.sourceRange.startColumnIndex;
       columnIndex <= options.sourceRange.endColumnIndex;
@@ -103,7 +103,7 @@ export function getFillHandleCells<TValue>(options: {
         numericSeriesByLane.set(columnIndex, series);
       }
     }
-  } else if (!isVerticalFill && sourceColumnCount >= 2) {
+  } else {
     for (
       let rowIndex = options.sourceRange.startRowIndex;
       rowIndex <= options.sourceRange.endRowIndex;
@@ -167,7 +167,7 @@ export function getFillHandleCells<TValue>(options: {
 }
 
 function getNumericSeries<TValue>(values: TValue[]): NumericSeries | undefined {
-  if (values.length < 2) {
+  if (values.length === 0) {
     return undefined;
   }
 
@@ -180,7 +180,7 @@ function getNumericSeries<TValue>(values: TValue[]): NumericSeries | undefined {
   }
 
   const firstValue = numericValues[0]!;
-  const step = numericValues[1]! - firstValue;
+  const step = numericValues.length === 1 ? 1 : numericValues[1]! - firstValue;
   for (let index = 2; index < numericValues.length; index += 1) {
     if (!areNumbersClose(numericValues[index]! - numericValues[index - 1]!, step)) {
       return undefined;
