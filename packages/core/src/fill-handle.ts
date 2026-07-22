@@ -6,6 +6,11 @@ export type GridFillHandleCell<TValue = unknown> = GridCellCoordinate & {
   value: TValue;
 };
 
+type NumericSeries = {
+  firstValue: number;
+  step: number;
+};
+
 export function getFillHandleTargetRange(options: {
   sourceRange: NormalizedGridCellRange;
   targetCell: GridCellCoordinate;
@@ -74,7 +79,49 @@ export function getFillHandleCells<TValue>(options: {
 }): GridFillHandleCell<TValue>[] {
   const sourceRowCount = options.sourceRange.endRowIndex - options.sourceRange.startRowIndex + 1;
   const sourceColumnCount = options.sourceRange.endColumnIndex - options.sourceRange.startColumnIndex + 1;
+  const isVerticalFill =
+    options.targetRange.startColumnIndex === options.sourceRange.startColumnIndex &&
+    options.targetRange.endColumnIndex === options.sourceRange.endColumnIndex;
+  const numericSeriesByLane = new Map<number, NumericSeries>();
   const cells: GridFillHandleCell<TValue>[] = [];
+
+  if (isVerticalFill && sourceRowCount >= 2) {
+    for (
+      let columnIndex = options.sourceRange.startColumnIndex;
+      columnIndex <= options.sourceRange.endColumnIndex;
+      columnIndex += 1
+    ) {
+      const series = getNumericSeries(
+        Array.from({ length: sourceRowCount }, (_, offset) =>
+          options.getValue({
+            rowIndex: options.sourceRange.startRowIndex + offset,
+            columnIndex,
+          }),
+        ),
+      );
+      if (series) {
+        numericSeriesByLane.set(columnIndex, series);
+      }
+    }
+  } else if (!isVerticalFill && sourceColumnCount >= 2) {
+    for (
+      let rowIndex = options.sourceRange.startRowIndex;
+      rowIndex <= options.sourceRange.endRowIndex;
+      rowIndex += 1
+    ) {
+      const series = getNumericSeries(
+        Array.from({ length: sourceColumnCount }, (_, offset) =>
+          options.getValue({
+            rowIndex,
+            columnIndex: options.sourceRange.startColumnIndex + offset,
+          }),
+        ),
+      );
+      if (series) {
+        numericSeriesByLane.set(rowIndex, series);
+      }
+    }
+  }
 
   for (
     let rowIndex = options.targetRange.startRowIndex;
@@ -94,20 +141,62 @@ export function getFillHandleCells<TValue>(options: {
         options.sourceRange.startColumnIndex +
         ((columnIndex - options.targetRange.startColumnIndex) % sourceColumnCount);
 
+      const series = numericSeriesByLane.get(isVerticalFill ? columnIndex : rowIndex);
+      const value = series
+        ? (series.firstValue +
+            series.step *
+              (isVerticalFill
+                ? rowIndex - options.sourceRange.startRowIndex
+                : columnIndex - options.sourceRange.startColumnIndex)) as TValue
+        : options.getValue({
+            rowIndex: sourceRowIndex,
+            columnIndex: sourceColumnIndex,
+          });
+
       cells.push({
         rowIndex,
         columnIndex,
         sourceRowIndex,
         sourceColumnIndex,
-        value: options.getValue({
-          rowIndex: sourceRowIndex,
-          columnIndex: sourceColumnIndex,
-        }),
+        value,
       });
     }
   }
 
   return cells;
+}
+
+function getNumericSeries<TValue>(values: TValue[]): NumericSeries | undefined {
+  if (values.length < 2) {
+    return undefined;
+  }
+
+  const numericValues: number[] = [];
+  for (const value of values) {
+    if (!isFiniteNumber(value)) {
+      return undefined;
+    }
+    numericValues.push(value);
+  }
+
+  const firstValue = numericValues[0]!;
+  const step = numericValues[1]! - firstValue;
+  for (let index = 2; index < numericValues.length; index += 1) {
+    if (!areNumbersClose(numericValues[index]! - numericValues[index - 1]!, step)) {
+      return undefined;
+    }
+  }
+
+  return { firstValue, step };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function areNumbersClose(left: number, right: number): boolean {
+  const scale = Math.max(1, Math.abs(left), Math.abs(right));
+  return Math.abs(left - right) <= Number.EPSILON * scale * 16;
 }
 
 function clamp(value: number, min: number, max: number): number {

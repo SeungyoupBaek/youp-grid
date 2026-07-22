@@ -300,7 +300,7 @@ Implemented now:
 - range selection
 - TSV clipboard copy/paste
 - TSV paste auto-appends missing rows with `createRow`
-- fill handle for repeated cell values
+- fill handle for repeated cell values and numeric series
 - undo/redo for cell value changes
 - CSV and Excel export
 - delimited CSV/TSV import helper

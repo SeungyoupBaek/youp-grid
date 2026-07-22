@@ -587,8 +587,9 @@ The adapter copies and pastes tab-separated values:
 
 The focused cell or active range shows a small fill handle in the bottom-right corner.
 
-- Dragging down repeats source values into the same columns below the range.
-- Dragging right repeats source values into columns to the right.
+- Dragging vertically fills the same columns above or below the range; dragging horizontally fills the same rows to the left or right.
+- Two or more finite numbers with a constant interval continue as an arithmetic series in the drag direction.
+- A single value, equal numeric values, non-numeric values, and irregular numeric patterns repeat the source pattern.
 - Fill writes through `onCellValueChange` with `source: "fill"`.
 - A fill operation is stored as one undoable history entry.
 

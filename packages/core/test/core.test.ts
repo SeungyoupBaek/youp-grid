@@ -888,6 +888,104 @@ test("fill handle utilities calculate target ranges and repeated cells", () => {
   );
 });
 
+test("fill handle continues numeric series in either direction", () => {
+  const verticalSourceRange = {
+    startRowIndex: 2,
+    endRowIndex: 3,
+    startColumnIndex: 0,
+    endColumnIndex: 0,
+  };
+  const verticalValues = [5, 7];
+
+  assert.deepEqual(
+    getFillHandleCells({
+      sourceRange: verticalSourceRange,
+      targetRange: {
+        startRowIndex: 4,
+        endRowIndex: 6,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      getValue: ({ rowIndex }) => verticalValues[rowIndex - 2],
+    }).map((cell) => cell.value),
+    [9, 11, 13],
+  );
+  assert.deepEqual(
+    getFillHandleCells({
+      sourceRange: verticalSourceRange,
+      targetRange: {
+        startRowIndex: 0,
+        endRowIndex: 1,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      getValue: ({ rowIndex }) => verticalValues[rowIndex - 2],
+    }).map((cell) => cell.value),
+    [1, 3],
+  );
+  assert.deepEqual(
+    getFillHandleCells({
+      sourceRange: {
+        startRowIndex: 0,
+        endRowIndex: 0,
+        startColumnIndex: 1,
+        endColumnIndex: 2,
+      },
+      targetRange: {
+        startRowIndex: 0,
+        endRowIndex: 0,
+        startColumnIndex: 3,
+        endColumnIndex: 5,
+      },
+      getValue: ({ columnIndex }) => [10, 8][columnIndex - 1],
+    }).map((cell) => cell.value),
+    [6, 4, 2],
+  );
+});
+
+test("fill handle repeats constant and non-series source values", () => {
+  const fillValues = (sourceValues: Array<number | string>) =>
+    getFillHandleCells({
+      sourceRange: {
+        startRowIndex: 0,
+        endRowIndex: sourceValues.length - 1,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      targetRange: {
+        startRowIndex: sourceValues.length,
+        endRowIndex: sourceValues.length + 2,
+        startColumnIndex: 0,
+        endColumnIndex: 0,
+      },
+      getValue: ({ rowIndex }) => sourceValues[rowIndex],
+    }).map((cell) => cell.value);
+
+  assert.deepEqual(fillValues([1, 1]), [1, 1, 1]);
+  assert.deepEqual(fillValues([1, 2, 4]), [1, 2, 4]);
+  assert.deepEqual(fillValues(["A", "B"]), ["A", "B", "A"]);
+});
+
+test("fill handle recognizes decimal numeric series", () => {
+  const values = getFillHandleCells({
+    sourceRange: {
+      startRowIndex: 0,
+      endRowIndex: 2,
+      startColumnIndex: 0,
+      endColumnIndex: 0,
+    },
+    targetRange: {
+      startRowIndex: 3,
+      endRowIndex: 3,
+      startColumnIndex: 0,
+      endColumnIndex: 0,
+    },
+    getValue: ({ rowIndex }) => [0.1, 0.2, 0.3][rowIndex],
+  });
+
+  assert.ok(Math.abs(values[0].value - 0.4) < Number.EPSILON * 4);
+});
+
 test("CSV and Excel export serialize visible rows and columns", () => {
   const model = buildRowModel({
     rows: [

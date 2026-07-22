@@ -47,26 +47,79 @@ export function getFillHandleTargetRange(options) {
 export function getFillHandleCells(options) {
     const sourceRowCount = options.sourceRange.endRowIndex - options.sourceRange.startRowIndex + 1;
     const sourceColumnCount = options.sourceRange.endColumnIndex - options.sourceRange.startColumnIndex + 1;
+    const isVerticalFill = options.targetRange.startColumnIndex === options.sourceRange.startColumnIndex &&
+        options.targetRange.endColumnIndex === options.sourceRange.endColumnIndex;
+    const numericSeriesByLane = new Map();
     const cells = [];
+    if (isVerticalFill && sourceRowCount >= 2) {
+        for (let columnIndex = options.sourceRange.startColumnIndex; columnIndex <= options.sourceRange.endColumnIndex; columnIndex += 1) {
+            const series = getNumericSeries(Array.from({ length: sourceRowCount }, (_, offset) => options.getValue({
+                rowIndex: options.sourceRange.startRowIndex + offset,
+                columnIndex,
+            })));
+            if (series) {
+                numericSeriesByLane.set(columnIndex, series);
+            }
+        }
+    }
+    else if (!isVerticalFill && sourceColumnCount >= 2) {
+        for (let rowIndex = options.sourceRange.startRowIndex; rowIndex <= options.sourceRange.endRowIndex; rowIndex += 1) {
+            const series = getNumericSeries(Array.from({ length: sourceColumnCount }, (_, offset) => options.getValue({
+                rowIndex,
+                columnIndex: options.sourceRange.startColumnIndex + offset,
+            })));
+            if (series) {
+                numericSeriesByLane.set(rowIndex, series);
+            }
+        }
+    }
     for (let rowIndex = options.targetRange.startRowIndex; rowIndex <= options.targetRange.endRowIndex; rowIndex += 1) {
         const sourceRowIndex = options.sourceRange.startRowIndex +
             ((rowIndex - options.targetRange.startRowIndex) % sourceRowCount);
         for (let columnIndex = options.targetRange.startColumnIndex; columnIndex <= options.targetRange.endColumnIndex; columnIndex += 1) {
             const sourceColumnIndex = options.sourceRange.startColumnIndex +
                 ((columnIndex - options.targetRange.startColumnIndex) % sourceColumnCount);
+            const series = numericSeriesByLane.get(isVerticalFill ? columnIndex : rowIndex);
+            const value = series
+                ? series.firstValue +
+                    series.step *
+                        (isVerticalFill
+                            ? rowIndex - options.sourceRange.startRowIndex
+                            : columnIndex - options.sourceRange.startColumnIndex)
+                : options.getValue({
+                    rowIndex: sourceRowIndex,
+                    columnIndex: sourceColumnIndex,
+                });
             cells.push({
                 rowIndex,
                 columnIndex,
                 sourceRowIndex,
                 sourceColumnIndex,
-                value: options.getValue({
-                    rowIndex: sourceRowIndex,
-                    columnIndex: sourceColumnIndex,
-                }),
+                value,
             });
         }
     }
     return cells;
+}
+function getNumericSeries(values) {
+    if (values.length < 2 || !values.every(isFiniteNumber)) {
+        return undefined;
+    }
+    const firstValue = values[0];
+    const step = values[1] - firstValue;
+    for (let index = 2; index < values.length; index += 1) {
+        if (!areNumbersClose(values[index] - values[index - 1], step)) {
+            return undefined;
+        }
+    }
+    return { firstValue, step };
+}
+function isFiniteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value);
+}
+function areNumbersClose(left, right) {
+    const scale = Math.max(1, Math.abs(left), Math.abs(right));
+    return Math.abs(left - right) <= Number.EPSILON * scale * 16;
 }
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
