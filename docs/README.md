@@ -2,6 +2,7 @@
 
 - [Public API](./API.md)
 - [React adapter](./REACT_ADAPTER.md)
+- [AI grid commands](./AI.md)
 - [Examples](./EXAMPLES.md)
 - [Migration guide](./MIGRATION.md)
 - [Release process](./RELEASE.md)

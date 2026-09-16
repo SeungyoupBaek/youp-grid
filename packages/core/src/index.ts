@@ -1,3 +1,5 @@
+export { applyGridAiResponse, createGridAiRequest } from "./ai.ts";
+export type { GridAiAction, GridAiProvider, GridAiRequest, GridAiResponse } from "./ai.ts";
 export {
   applyColumnState,
   getVisibleColumns,

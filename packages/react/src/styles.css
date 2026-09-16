@@ -1,3 +1,35 @@
+.youp-grid-ai {
+  padding: 12px;
+  color: var(--youp-grid-text, #172033);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+.youp-grid-ai__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.youp-grid-ai input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.youp-grid-ai input,
+.youp-grid-ai button {
+  padding: 8px 12px;
+  border: 1px solid var(--youp-grid-border, #d8dee8);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.youp-grid-ai button { cursor: pointer; }
+.youp-grid-ai :disabled { opacity: 0.6; cursor: default; }
+.youp-grid-ai p { margin: 8px 0 0; }
+.youp-grid-ai [role="alert"] { color: #b91c1c; }
+
 .youp-grid {
   --youp-grid-border: #d8dee8;
   --youp-grid-header: #f5f7fb;

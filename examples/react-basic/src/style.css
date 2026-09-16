@@ -618,3 +618,14 @@ body {
     grid-column: auto;
   }
 }
+.demo-ai {
+  padding: 12px 16px;
+  border-top: 1px solid #d8dee8;
+  font-size: 13px;
+}
+
+.demo-ai summary { cursor: pointer; font-weight: 600; }
+.demo-ai[open] summary { margin-bottom: 12px; }
+.demo-ai input, .demo-ai select { max-width: 100%; }
+.demo-ai ul { padding-left: 20px; line-height: 1.8; }
+.demo-ai .youp-grid-ai { padding: 12px 0 0; }

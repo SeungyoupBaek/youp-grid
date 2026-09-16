@@ -1,4 +1,6 @@
 export { YoupGrid } from "./YoupGrid.ts";
+export { YoupGridAiPanel } from "./YoupGridAiPanel.ts";
+export type { YoupGridAiPanelProps } from "./YoupGridAiPanel.ts";
 export { YoupChartPanel } from "./YoupChartPanel.ts";
 export { YoupPivotPanel } from "./YoupPivotPanel.ts";
 export { YoupPivotView } from "./YoupPivotView.ts";

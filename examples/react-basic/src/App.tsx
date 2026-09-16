@@ -10,6 +10,7 @@ import { YoupGrid, type YoupGridChartRenderer } from "@youp-grid/react";
 import { createFormulaEngine } from "@youp-grid/formula";
 import "@youp-grid/react/styles.css";
 import rootPackage from "../../../package.json";
+import { AiDemo } from "./AiDemo";
 import "./style.css";
 
 type Trade = {
@@ -685,6 +686,7 @@ export function App() {
             </div>
           ))}
         </div>
+        <AiDemo columns={columns} state={gridState} onStateChange={setState} disabled={serverMode || cursorMode || infiniteMode} />
         <YoupGrid
           rows={gridRows}
           columns={columns}

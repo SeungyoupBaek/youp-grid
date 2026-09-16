@@ -30,6 +30,7 @@ This repository includes a reusable engine, React and Vue UI adapters, a small V
 - reusable React CSV/TSV import callbacks and CSV/Excel export toolbar actions
 - reusable Vue 3 component and composable for grid editing, state, and row-model integration
 - reusable Vanilla DOM renderer for framework-free screens
+- model-independent AI commands for sorting, filtering, and column visibility, with an optional React input panel
 
 The first goal is not to copy every AG Grid feature. The goal is to keep reusable grid behavior small and stable so application screens can adopt it incrementally.
 
@@ -80,6 +81,8 @@ npm install @youp-grid/formula @youp-grid/charts-echarts echarts
 ```
 
 ## Core API
+
+For natural-language control through your own model/server, see [AI grid commands](./docs/AI.md). The core provides request/schema generation and response validation; React provides `YoupGridAiPanel`.
 
 ```ts
 import {
