@@ -492,6 +492,8 @@
 
 .youp-grid__cell {
   position: relative;
+  /* Keep cell adornments below adjacent pinned cells. */
+  isolation: isolate;
   flex: 1 1 160px;
   min-width: 80px;
   padding: var(--youp-grid-cell-block-padding) var(--youp-grid-cell-inline-padding);

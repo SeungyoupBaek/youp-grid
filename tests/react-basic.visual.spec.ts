@@ -62,6 +62,76 @@ test("react basic demo keeps header filters and pinned status column aligned", a
   expect(Math.abs(statusRects!.headerRight - statusRects!.bodyRight)).toBeLessThanOrEqual(1);
 });
 
+for (const side of ["left", "right"] as const) {
+  test(`react basic demo keeps selection handles behind ${side} pinned columns`, async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 1400 });
+    await page.goto("/");
+
+    if (side === "left") {
+      await page.getByRole("button", { name: "Status column menu" }).click();
+      await page.getByRole("menuitem", { name: "Pin left", exact: true }).click();
+    }
+
+    const columnId = side === "left" ? "desk" : "tags";
+    const cell = page.locator(`[data-youp-row-index="0"][data-youp-column-id="${columnId}"]`);
+    await cell.click();
+    const handle = cell.getByRole("button", { name: "Fill selection" });
+    await expect(handle).toBeVisible();
+
+    await handle.evaluate((element, side) => {
+      const body = element.closest(".youp-grid__body")!;
+      const pinned = element.closest(".youp-grid__row")!.querySelector('[data-youp-column-id="status"]')!;
+      if (side === "left") body.scrollLeft = body.scrollWidth;
+      const handleRect = element.getBoundingClientRect();
+      const pinnedRect = pinned.getBoundingClientRect();
+      const targetX = side === "left" ? pinnedRect.right - 12 : pinnedRect.left + 12;
+      body.scrollLeft += handleRect.left + handleRect.width / 2 - targetX;
+    }, side);
+
+    await expect.poll(() => handle.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return hit?.closest("[data-youp-column-id]")?.getAttribute("data-youp-column-id");
+    })).toBe("status");
+
+    await page.locator(".youp-grid__body").evaluate((body, side) => {
+      body.scrollLeft = side === "left" ? 0 : body.scrollWidth;
+    }, side);
+    await expect(cell).toHaveClass(/youp-grid__cell--focused/);
+    await handle.hover();
+  });
+}
+
+for (const edge of ["top", "bottom"] as const) {
+  test(`react basic demo keeps selection handles behind ${edge} pinned rows`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1400 });
+    await page.goto("/");
+
+    if (edge === "bottom") {
+      await page.locator(".youp-grid__body").evaluate((body) => { body.scrollTop = 300; });
+    }
+    const rowIndex = edge === "top" ? 0 : 16;
+    const cell = page.locator(`[data-youp-row-index="${rowIndex}"][data-youp-column-id="quantity"]`);
+    await cell.click();
+    const handle = cell.getByRole("button", { name: "Fill selection" });
+    await expect(handle).toBeVisible();
+
+    await handle.evaluate((element, edge) => {
+      const body = element.closest(".youp-grid__body")!;
+      const pinned = body.querySelector(`.youp-grid__pinned-rows--${edge}`)!;
+      const handleRect = element.getBoundingClientRect();
+      const pinnedRect = pinned.getBoundingClientRect();
+      body.scrollTop += handleRect.top + handleRect.height / 2 - pinnedRect.top - pinnedRect.height / 2;
+    }, edge);
+
+    await expect.poll(() => handle.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return hit?.closest(".youp-grid__pinned-rows")?.className;
+    })).toContain(`youp-grid__pinned-rows--${edge}`);
+  });
+}
+
 test("react basic demo formats numeric totals and selected ranges", async ({ page }) => {
   await page.goto("/");
 
