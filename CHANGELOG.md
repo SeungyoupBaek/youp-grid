@@ -6,6 +6,13 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-16
+
+- Add model-independent AI request/schema generation and atomic response validation for sorting, filtering, and column visibility.
+- Add the React `YoupGridAiPanel` with cancellation, retry, and protection against applying responses after relevant grid state changes.
+- Add AI integration documentation and a demo with explicit example responses and a configurable application server endpoint.
+- Align all workspace packages and demo lockfile metadata to v0.7.0. Model calls remain the consuming application's responsibility.
+
 ## [0.6.1] - 2026-07-21
 
 - Reuse formula parsers across repeated cells and avoid redundant controlled-state and hidden-chart row-model work during React rendering.
