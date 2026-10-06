@@ -6,6 +6,16 @@ The project follows semantic versioning while the public API stabilizes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-06
+
+- Add named saved views and a default view, global search, and nested AND/OR filters.
+- Add batch editing with save, discard, undo/redo, row validation, retry after failed saves, and protection against row identity changes or stale source data.
+- Add the optional `@youp-grid/xlsx` package for true XLSX export and multi-sheet imports, plus CSV/XLSX previews with column mapping and validation before applying rows.
+- Add conditional cell colors, icons, and data bars.
+- Add AI command preview, apply, and undo, including the Vue AI panel and protection against stale grid state.
+- Add React/Vue workbench components, a shared Vanilla workbench, workflow documentation, and matching browser regression coverage.
+- Align all seven workspace packages, internal dependencies, and demo lockfile metadata to v0.8.0.
+
 ## [0.7.0] - 2026-09-16
 
 - Add model-independent AI request/schema generation and atomic response validation for sorting, filtering, and column visibility.

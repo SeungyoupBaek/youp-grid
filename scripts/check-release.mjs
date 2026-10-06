@@ -10,6 +10,7 @@ function readJson(path) {
 
 const rootPackage = readJson("package.json");
 const lockfile = readJson("package-lock.json");
+const demoLockfile = readJson("examples/react-basic/package-lock.json");
 const expectedVersion = rootPackage.version;
 
 const packagePaths = [
@@ -21,14 +22,7 @@ const packagePaths = [
   "packages/vue",
   "packages/vanilla",
 ];
-const adapterPaths = [
-  "packages/formula",
-  "packages/xlsx",
-  "packages/charts-echarts",
-  "packages/react",
-  "packages/vue",
-  "packages/vanilla",
-];
+const internalPackageNames = new Set(packagePaths.map((path) => readJson(`${path}/package.json`).name));
 const errors = [];
 
 function expectEqual(label, actual, expected) {
@@ -46,14 +40,17 @@ for (const packagePath of packagePaths) {
 
   expectEqual(`${packagePath}/package.json version`, manifest.version, expectedVersion);
   expectEqual(`package-lock ${packagePath} version`, lockPackage?.version, expectedVersion);
-}
+  const demoLockPackage = demoLockfile.packages?.[`../../${packagePath}`];
+  expectEqual(`demo package-lock ${packagePath} version`, demoLockPackage?.version, expectedVersion);
 
-for (const adapterPath of adapterPaths) {
-  const manifest = readJson(`${adapterPath}/package.json`);
-  const lockPackage = lockfile.packages?.[adapterPath];
-
-  expectEqual(`${adapterPath} dependency @youp-grid/core`, manifest.dependencies?.["@youp-grid/core"], expectedVersion);
-  expectEqual(`package-lock ${adapterPath} dependency @youp-grid/core`, lockPackage?.dependencies?.["@youp-grid/core"], expectedVersion);
+  const internalDependencies = new Set(Object.keys(manifest.dependencies ?? {}).filter((name) => internalPackageNames.has(name)));
+  if (manifest.name !== "@youp-grid/core") internalDependencies.add("@youp-grid/core");
+  if (["@youp-grid/react", "@youp-grid/vue"].includes(manifest.name)) internalDependencies.add("@youp-grid/vanilla");
+  for (const name of internalDependencies) {
+    expectEqual(`${packagePath} dependency ${name}`, manifest.dependencies?.[name], expectedVersion);
+    expectEqual(`package-lock ${packagePath} dependency ${name}`, lockPackage?.dependencies?.[name], expectedVersion);
+    expectEqual(`demo package-lock ${packagePath} dependency ${name}`, demoLockPackage?.dependencies?.[name], expectedVersion);
+  }
 }
 
 if (errors.length > 0) {

@@ -1,6 +1,6 @@
 {
   "name": "@youp-grid/vanilla",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Vanilla DOM adapter for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
@@ -42,6 +42,6 @@
     "build": "tsc -p tsconfig.build.json && cat src/styles.css src/workbench.css > dist/styles.css"
   },
   "dependencies": {
-    "@youp-grid/core": "0.7.0"
+    "@youp-grid/core": "0.8.0"
   }
 }
