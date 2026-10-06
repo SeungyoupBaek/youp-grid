@@ -7,6 +7,8 @@ const reactTypes = readFileSync(resolve(repoRoot, "packages/react/src/types.ts")
 const vueTypes = readFileSync(resolve(repoRoot, "packages/vue/src/types.ts"), "utf8");
 
 const sharedProps = [
+  "editSession",
+  "conditionalFormats",
   "pinnedTopRows",
   "pinnedBottomRows",
   "rowHeight",

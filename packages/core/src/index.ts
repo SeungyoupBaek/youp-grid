@@ -14,6 +14,7 @@ export { applyAggregation } from "./aggregation.ts";
 export { buildGridChartDataset } from "./chart.ts";
 export {
   isCellInRange,
+  isCellInNormalizedRange,
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   normalizeCellRange,
@@ -206,3 +207,18 @@ export type {
   VirtualRangeOptions,
   VariableVirtualRangeOptions,
 } from "./types.ts";
+
+export { setGridQuery, applyGridQuery, validateFilterExpression } from "./query.ts";
+export type { GridFilterExpression } from "./query.ts";
+export { captureGridView, applyGridView, updateGridView, deleteGridView, setDefaultGridView, loadGridViews, saveGridViews } from "./views.ts";
+export type { GridViewSettings, GridSavedView, GridViewCollection } from "./views.ts";
+export { createGridEditSession, getGridDraftKey } from "./edit-session.ts";
+export type { GridEditSession, GridEditSnapshot, GridDraftChange } from "./edit-session.ts";
+export { getGridCellAppearance } from "./conditional-format.ts";
+export type { GridConditionalFormat, GridCellAppearance } from "./conditional-format.ts";
+export { createGridImportPreview, matchGridImportHeaders } from "./import-preview.ts";
+export type { GridWorkbookAdapter, GridImportTable, GridImportPreview } from "./import-preview.ts";
+
+export { createGridAiPreview, applyGridAiPreview, undoGridAiPreview } from "./ai-preview.ts";
+export type { GridAiPreview } from "./ai-preview.ts";
+export { getEmptyGridCellValue } from "./field-value.ts";

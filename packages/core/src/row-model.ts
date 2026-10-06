@@ -1,3 +1,4 @@
+import { applyGridQuery } from "./query.ts";
 import { applyColumnState, getVisibleColumns } from "./column-state.ts";
 import { applyAggregation } from "./aggregation.ts";
 import { normalizeColumns } from "./columns.ts";
@@ -59,7 +60,7 @@ export function buildRowModel<TRow>(options: BuildRowModelOptions<TRow>): RowMod
     });
   }
 
-  const filteredRows = applyFilters(allRows, columns, options.state?.filters);
+  const filteredRows = applyGridQuery(applyFilters(allRows, columns, options.state?.filters), columns, options.state);
   const sortedRows = applySorting(filteredRows, columns, options.state?.sort);
   const treeRows = applyTreeData(sortedRows, {
     enabled: options.treeData,

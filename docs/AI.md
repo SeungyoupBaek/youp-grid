@@ -49,6 +49,10 @@ export function SalesGrid({ rows }: { rows: Sale[] }) {
 
 The panel provides loading, cancellation, errors, and retry by resubmitting. Cancelled requests cannot apply a late response, even when a provider ignores the abort signal. Changes to the relevant grid context or provider while a request is pending invalidate that response. Unrelated state, such as row selection, is preserved from the latest state.
 
+Pass `preview` to require confirmation before changing the grid. The panel shows the current settings, proposed actions, and resulting settings, followed by **Apply AI changes** and **Discard AI preview**. **Undo AI changes** restores the affected settings while keeping later row selection and column widths. Confirmation and undo reject changes when relevant sorting, filters, visibility, or column metadata have changed. Omitting `preview` keeps the existing immediate-apply behavior. The Vue `YoupGridAiPanel` uses the same props and core checks.
+
+Custom panels can use `createGridAiPreview(response, columns, state)`, `applyGridAiPreview(preview, columns, currentState)`, and `undoGridAiPreview(preview, columns, currentState)` from `@youp-grid/core`.
+
 ## Server contract
 
 The `/api/grid-ai` route above is implemented by the consuming application. Its job is to:

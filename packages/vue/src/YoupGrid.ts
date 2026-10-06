@@ -27,6 +27,17 @@ import {
   getFormulaCellResult,
   getPivotDisplayRows,
   getRowNodeValue,
+  getGridCellAppearance,
+  getGridDraftKey,
+  getEmptyGridCellValue,
+  getFillHandleCells,
+  getFillHandleTargetRange,
+  normalizeCellRange,
+  isCellInNormalizedRange,
+  type NormalizedGridCellRange,
+  type GridEditSession,
+  type GridEditSnapshot,
+  type GridConditionalFormat,
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   getInfiniteScrollTrigger,
@@ -45,6 +56,7 @@ import {
   nextTick,
   onUnmounted,
   ref,
+  shallowRef,
   Teleport,
   watch,
   type PropType,
@@ -168,6 +180,8 @@ type PaginationRenderContext = {
 export const YoupGrid = defineComponent({
   name: "YoupGrid",
   props: {
+    editSession: { type: Object as PropType<GridEditSession<unknown>>, default: undefined },
+    conditionalFormats: { type: Array as PropType<readonly GridConditionalFormat[]>, default: undefined },
     rows: {
       type: Array as PropType<readonly unknown[]>,
       required: true,
@@ -480,6 +494,7 @@ export const YoupGrid = defineComponent({
     const rowClipboard = ref<RowClipboardEntry[]>([]);
     const focusedCell = ref<FocusedCell>({ rowIndex: 0, columnIndex: 0 });
     const selectionRange = ref<GridCellRange>();
+    const fillRange = shallowRef<NormalizedGridCellRange>();
     const columnChooserOpen = ref(false);
     const columnChooserSearch = ref("");
     const internalExpandedDetailRowIds = ref<GridRowId[]>([
@@ -490,8 +505,16 @@ export const YoupGrid = defineComponent({
     const dragOverColumnPosition = ref<ColumnDropPosition>();
     const internalDensity = ref<YoupGridDensity>(props.defaultDensity);
     const lastRowsEndReachedKey = ref<string>();
+    const editSnapshot = shallowRef<GridEditSnapshot<unknown>>();
+    let unsubscribeEdits: (() => void) | undefined;
+    watch(() => props.editSession, (session) => {
+      unsubscribeEdits?.();
+      editSnapshot.value = session?.getSnapshot();
+      unsubscribeEdits = session?.subscribe(() => { editSnapshot.value = session.getSnapshot(); });
+    }, { immediate: true });
+    onUnmounted(() => unsubscribeEdits?.());
     const grid = useYoupGrid<unknown>(() => ({
-      rows: props.rows,
+      rows: editSnapshot.value?.rows ?? props.rows,
       columns: props.columns,
       state: withDefaultPagination(props.state, props.pagination),
       defaultState: withDefaultPagination(props.defaultState, props.pagination),
@@ -521,7 +544,7 @@ export const YoupGrid = defineComponent({
       ...props.localeText,
     }));
     const numberFormatter = computed(() => new Intl.NumberFormat(props.locale ?? "en-US"));
-    const gridEditable = computed(() => props.editable && !props.readOnly);
+    const gridEditable = computed(() => props.editable && !props.readOnly && !editSnapshot.value?.saving);
     const infiniteScrollLoading = computed(
       () => props.infiniteScrollLoading ?? props.loading,
     );
@@ -752,7 +775,9 @@ export const YoupGrid = defineComponent({
       const cellKey = getCellKey(rowNode.id, column.id);
       const formulaResult = getFormulaCellResult(grid.rowModel.value.formula, rowNode.id, column.id);
 
-      return internalCellMeta.value[cellKey] ??
+      return (editSnapshot.value?.errors[getGridDraftKey(rowNode.id, column.id)] ? { status: "error" as const, message: editSnapshot.value.errors[getGridDraftKey(rowNode.id, column.id)] } : undefined) ??
+      internalCellMeta.value[cellKey] ??
+      (editSnapshot.value?.changes.some((change) => change.rowId === rowNode.id && change.columnId === column.id) ? { status: "warning" as const, message: "Unsaved change" } : undefined) ??
       (formulaResult?.error ? { status: "error" as const, message: formulaResult.error.message } : undefined) ??
       props.getCellMeta?.(getCellEditContext(rowNode, column)) ??
       props.cellMeta?.[cellKey];
@@ -813,6 +838,13 @@ export const YoupGrid = defineComponent({
         return;
       }
 
+      if (props.editSession && (event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        if (!editSnapshot.value?.saving) {
+          if (event.key.toLowerCase() === "y" || event.shiftKey) props.editSession.redo(); else props.editSession.undo();
+        }
+        return;
+      }
       const rowIndex = visibleRowIndexById.value.get(rowNode.id) ?? rowNode.index;
       const currentCell = { rowIndex, columnIndex };
       let nextCell: FocusedCell | undefined;
@@ -848,6 +880,23 @@ export const YoupGrid = defineComponent({
             reverse: event.shiftKey,
           });
           break;
+        case "Delete":
+        case "Backspace": {
+          if (!gridEditable.value) return;
+          event.preventDefault();
+          const range = normalizeCellRange(selectionRange.value ?? { anchor: currentCell, focus: currentCell });
+          const changes: YoupGridCellValueChange<unknown>[] = [];
+          for (let rowIndex = range.startRowIndex; rowIndex <= range.endRowIndex; rowIndex++) {
+            for (let index = range.startColumnIndex; index <= range.endColumnIndex; index++) {
+              const row = grid.rowModel.value.visibleRows[rowIndex]; const column = visibleColumns.value[index];
+              if (!row || !column || column.formula || !canEditCell(row, column)) continue;
+              const previousValue = getRowNodeValue(row, column); const value = getEmptyGridCellValue(column, row.original);
+              if (!Object.is(value, previousValue)) changes.push(createCellValueChange(row, column, value, previousValue, "delete"));
+            }
+          }
+          emitCellValueChanges(changes, "delete");
+          return;
+        }
         case " ":
           event.preventDefault();
           grid.toggleRowSelected(rowNode.id);
@@ -945,7 +994,7 @@ export const YoupGrid = defineComponent({
         return;
       }
 
-      if (column.validator) {
+      if (column.validator && !props.editSession) {
         internalCellMeta.value = {
           ...internalCellMeta.value,
           [cellKey]: { status: "loading", message: "Validating" },
@@ -974,6 +1023,7 @@ export const YoupGrid = defineComponent({
       const previousValue = getRowNodeValue(rowNode, column);
       const change = createCellValueChange(rowNode, column, value, previousValue);
 
+      if (!Object.is(value, previousValue) && !stageCellValueChanges([change])) return;
       emit("cellEditCommit", {
         ...change,
         reason,
@@ -985,7 +1035,7 @@ export const YoupGrid = defineComponent({
 
       cancelCellEdit();
 
-      if (!props.onCellValueSave || Object.is(value, previousValue)) {
+      if (props.editSession || !props.onCellValueSave || Object.is(value, previousValue)) {
         return;
       }
 
@@ -1033,6 +1083,7 @@ export const YoupGrid = defineComponent({
       const previousValue = getRowNodeValue(rowNode, column);
       const change = createCellValueChange(rowNode, column, checked, previousValue);
 
+      if (!Object.is(checked, previousValue) && !stageCellValueChanges([change])) return;
       emit("cellEditCommit", {
         ...change,
         reason: "blur",
@@ -1044,6 +1095,13 @@ export const YoupGrid = defineComponent({
 
       emit("cellValueChange", change);
     };
+    const stageCellValueChanges = (changes: YoupGridCellValueChange<unknown>[]) => {
+      try { props.editSession?.stage(changes); return true; }
+      catch (cause) {
+        internalCellMeta.value = { ...internalCellMeta.value, ...Object.fromEntries(changes.map((change) => [getCellKey(change.rowId, change.columnId), { status: "error" as const, message: getErrorMessage(cause, "Unable to stage changes") }])) };
+        return false;
+      }
+    };
     const emitCellValueChanges = (
       changes: YoupGridCellValueChange<unknown>[],
       source: YoupGridCellValueChange<unknown>["source"],
@@ -1052,6 +1110,7 @@ export const YoupGrid = defineComponent({
         return;
       }
 
+      if (!stageCellValueChanges(changes)) return;
       for (const change of changes) {
         emit("cellValueChange", change);
       }
@@ -1180,6 +1239,36 @@ export const YoupGrid = defineComponent({
 
       emitCellValueChanges(changes, "paste");
       return true;
+    };
+    let stopFill: (() => void) | undefined;
+    onUnmounted(() => stopFill?.());
+    const startFill = (event: MouseEvent) => {
+      const handle = (event.target as Element).closest(".youp-grid-vue__fill-handle");
+      if (!handle || !gridEditable.value || activeEdit.value) return;
+      event.preventDefault(); event.stopPropagation(); stopFill?.();
+      const sourceRange = normalizeCellRange(selectionRange.value ?? { anchor: focusedCell.value, focus: focusedCell.value });
+      const model = grid.rowModel.value; const columns = visibleColumns.value;
+      const query = createRemoteCacheKey(grid.state.value);
+      const rangeAt = (event: MouseEvent) => {
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[role="gridcell"][data-youp-row-index]');
+        if (!target || !rootRef.value?.contains(target)) return undefined;
+        return getFillHandleTargetRange({ sourceRange, targetCell: { rowIndex: Number(target.dataset.youpRowIndex), columnIndex: columns.findIndex((column) => column.id === target.dataset.youpColumnId) }, rowCount: model.visibleRows.length, columnCount: columns.length });
+      };
+      const move = (event: MouseEvent) => { event.preventDefault(); fillRange.value = rangeAt(event); };
+      const finish = (event: MouseEvent) => {
+        const targetRange = rangeAt(event); stopFill?.();
+        if (!targetRange || !gridEditable.value || query !== createRemoteCacheKey(grid.state.value) || model !== grid.rowModel.value) return;
+        const changes: YoupGridCellValueChange<unknown>[] = [];
+        for (const cell of getFillHandleCells({ sourceRange, targetRange, getValue: ({ rowIndex, columnIndex }) => getRowNodeValue(model.visibleRows[rowIndex], columns[columnIndex]) })) {
+          const row = model.visibleRows[cell.rowIndex]; const column = columns[cell.columnIndex];
+          if (!canEditCell(row, column) || column.formula) continue;
+          const previousValue = getRowNodeValue(row, column);
+          if (!Object.is(previousValue, cell.value)) changes.push(createCellValueChange(row, column, cell.value, previousValue, "fill"));
+        }
+        emitCellValueChanges(changes, "fill");
+      };
+      stopFill = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", finish); fillRange.value = undefined; stopFill = undefined; };
+      document.addEventListener("mousemove", move); document.addEventListener("mouseup", finish);
     };
     const setDensity = (nextDensity: YoupGridDensity) => {
       if (props.density === undefined) {
@@ -1660,6 +1749,7 @@ export const YoupGrid = defineComponent({
           "aria-colcount": columns.length + leadingColumnCount.value,
           "aria-rowcount": rowModel.totalRowCount,
           onClick: closeCellContextMenu,
+          onMousedown: startFill,
           onKeydown: (event: KeyboardEvent) => {
             if (event.key === "Escape") {
               closeCellContextMenu();
@@ -1749,6 +1839,7 @@ export const YoupGrid = defineComponent({
                     ariaColumnOffset: leadingColumnCount.value,
                     sortDirection: getSortDirection(grid.state.value, column.id),
                     sortOnHeaderClick: props.sortOnHeaderClick,
+                    conditionalFormats: props.conditionalFormats,
                     slots,
                     onToggleSort: () => grid.toggleSort(column.id),
                     filterRule: getFilterRule(grid.state.value, column.id),
@@ -1847,7 +1938,9 @@ export const YoupGrid = defineComponent({
                     visibleRowIndexById: visibleRowIndexById.value,
                     focusedCell: focusedCell.value,
                     selectionRange: selectionRange.value,
+                    fillRange: fillRange.value,
                     expandedDetailRowIds: expandedDetailRowIdSet.value,
+                    conditionalFormats: props.conditionalFormats,
                     slots,
                     onToggleGroup: (groupId) => grid.toggleRowGroupExpanded(groupId),
                     onToggleTreeRow: (rowId) => grid.toggleTreeRowExpanded(rowId),
@@ -2449,6 +2542,7 @@ function renderHeaderCell<TRow>(context: {
   ariaColumnOffset: number;
   sortDirection?: SortDirection;
   sortOnHeaderClick: boolean;
+  conditionalFormats?: readonly GridConditionalFormat[];
   slots: Slots;
   onToggleSort: () => void;
   filterRule?: FilterRule;
@@ -2654,7 +2748,9 @@ function renderDisplayRow<TRow>(context: {
   visibleRowIndexById: Map<GridRowId, number>;
   focusedCell: FocusedCell;
   selectionRange?: GridCellRange;
+  fillRange?: NormalizedGridCellRange;
   expandedDetailRowIds: ReadonlySet<GridRowId>;
+  conditionalFormats?: readonly GridConditionalFormat[];
   slots: Slots;
   onToggleGroup: (groupId: string) => void;
   onToggleTreeRow: (rowId: GridRowId) => void;
@@ -2732,6 +2828,7 @@ function renderDisplayRow<TRow>(context: {
     showRowSelectionColumn: context.showRowSelectionColumn,
     selectionColumnOffset: context.selectionColumnOffset,
     selected: context.selectedRowIds.has(context.displayNode.id),
+    conditionalFormats: context.conditionalFormats,
     slots: context.slots,
     onToggleTreeRow: context.onToggleTreeRow,
     onToggleDetailRow: context.onToggleDetailRow,
@@ -2743,6 +2840,7 @@ function renderDisplayRow<TRow>(context: {
     activeEdit: context.activeEdit,
     focusedCell: context.focusedCell,
     selectionRange: context.selectionRange,
+    fillRange: context.fillRange,
     activeTooltipCellKey: context.activeTooltipCellKey,
     cellTooltipMode: context.cellTooltipMode,
     canEditCell: context.canEditCell,
@@ -2766,7 +2864,8 @@ function renderDisplayRow<TRow>(context: {
         columns: context.columns,
         leadingColumnCount: context.leadingColumnCount,
         templateColumns: context.templateColumns,
-        slots: context.slots,
+        conditionalFormats: context.conditionalFormats,
+    slots: context.slots,
         detailContext,
       })
     : undefined;
@@ -2781,6 +2880,7 @@ function renderDetailRow<TRow>(context: {
   columns: readonly ResolvedColumnDef<TRow>[];
   leadingColumnCount: number;
   templateColumns: string;
+  conditionalFormats?: readonly GridConditionalFormat[];
   slots: Slots;
   detailContext: YoupGridRowDetailSlotContext<TRow>;
 }) {
@@ -2911,6 +3011,7 @@ function renderDataRow<TRow>(context: {
   showRowSelectionColumn: boolean;
   selectionColumnOffset: number;
   selected: boolean;
+  conditionalFormats?: readonly GridConditionalFormat[];
   slots: Slots;
   onToggleTreeRow: (rowId: GridRowId) => void;
   onToggleDetailRow: (rowId: GridRowId) => void;
@@ -2926,6 +3027,7 @@ function renderDataRow<TRow>(context: {
   activeEdit?: ActiveEdit;
   focusedCell: FocusedCell;
   selectionRange?: GridCellRange;
+  fillRange?: NormalizedGridCellRange;
   activeTooltipCellKey?: string;
   cellTooltipMode: YoupGridCellTooltipMode;
   canEditCell: (rowNode: RowNode<TRow>, column: ResolvedColumnDef<TRow>) => boolean;
@@ -3015,7 +3117,8 @@ function renderDataRow<TRow>(context: {
           columnIndex,
           rowIndex: context.rowIndex,
           ariaColumnOffset: context.leadingColumnCount,
-          slots: context.slots,
+          conditionalFormats: context.conditionalFormats,
+    slots: context.slots,
           onToggleTreeRow: context.onToggleTreeRow,
           onToggleDetailRow: context.onToggleDetailRow,
           detailAvailable: context.detailAvailable && columnIndex === 0,
@@ -3023,6 +3126,7 @@ function renderDataRow<TRow>(context: {
           activeEdit: context.activeEdit,
           focusedCell: context.focusedCell,
           selectionRange: context.selectionRange,
+          fillRange: context.fillRange,
           activeTooltipCellKey: context.activeTooltipCellKey,
           cellTooltipMode: context.cellTooltipMode,
           editable: context.canEditCell(context.rowNode, column),
@@ -3107,6 +3211,7 @@ function renderDataCell<TRow>(context: {
   columnIndex: number;
   rowIndex: number;
   ariaColumnOffset: number;
+  conditionalFormats?: readonly GridConditionalFormat[];
   slots: Slots;
   onToggleTreeRow: (rowId: GridRowId) => void;
   onToggleDetailRow: (rowId: GridRowId) => void;
@@ -3115,6 +3220,7 @@ function renderDataCell<TRow>(context: {
   activeEdit?: ActiveEdit;
   focusedCell: FocusedCell;
   selectionRange?: GridCellRange;
+  fillRange?: NormalizedGridCellRange;
   activeTooltipCellKey?: string;
   cellTooltipMode: YoupGridCellTooltipMode;
   editable: boolean;
@@ -3153,6 +3259,7 @@ function renderDataCell<TRow>(context: {
   ) => void;
 }) {
   const value = getRowNodeValue(context.rowNode, context.column);
+  const { icon, ...appearance } = getGridCellAppearance(value, context.column.id, context.conditionalFormats ?? []);
   const formattedValue = formatCellValue(context.column, value, context.rowNode.original);
   const align = getColumnAlign(context.column);
   const editing =
@@ -3218,6 +3325,9 @@ function renderDataCell<TRow>(context: {
           context.commitCheckboxEdit(context.rowNode, context.column, checked),
       });
   const children = normalizeCellChildren(content);
+  if (!editing && focused && context.editable && !context.column.formula) {
+    children.push(h("span", { class: "youp-grid-vue__fill-handle", role: "button", "aria-label": "Fill selection" }));
+  }
   if (!editing && context.detailAvailable) {
     children.unshift(
       renderDetailToggle({
@@ -3230,6 +3340,7 @@ function renderDataCell<TRow>(context: {
   const status = renderCellStatus(context.meta, context.cellTooltipMode);
   const tooltip = renderCellTooltip(context.meta, tooltipId);
 
+  if (icon && !editing) children.unshift(h("span", { class: "youp-grid-format-icon", "aria-hidden": "true" }, icon));
   if (status) {
     children.push(status);
   }
@@ -3247,6 +3358,7 @@ function renderDataCell<TRow>(context: {
         context.editable ? "youp-grid-vue__cell--editable" : undefined,
         focused ? "youp-grid-vue__cell--focused" : undefined,
         rangeSelected ? "youp-grid-vue__cell--range-selected" : undefined,
+        context.fillRange && isCellInNormalizedRange(context.rowIndex, context.columnIndex, context.fillRange) ? "youp-grid-vue__cell--fill-target" : undefined,
         editing ? "youp-grid-vue__cell--editing" : undefined,
         context.column.wrapText ? "youp-grid-vue__cell--wrap-text" : undefined,
         context.column.autoHeight ? "youp-grid-vue__cell--auto-height" : undefined,
@@ -3255,6 +3367,7 @@ function renderDataCell<TRow>(context: {
           ? "youp-grid-vue__cell--placeholder"
           : undefined,
       ],
+      style: appearance,
       role: "gridcell",
       "aria-colindex": context.ariaColumnOffset + context.columnIndex + 1,
       "aria-describedby": tooltipId,

@@ -43,3 +43,6 @@ export type {
   YoupGridRowsChangeSource,
   YoupGridStateChange,
 } from "./types.ts";
+
+export { YoupGridWorkbench } from "./YoupGridWorkbench.ts";
+export type { YoupGridWorkbenchProps } from "./YoupGridWorkbench.ts";

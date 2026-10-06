@@ -629,3 +629,7 @@ body {
 .demo-ai input, .demo-ai select { max-width: 100%; }
 .demo-ai ul { padding-left: 20px; line-height: 1.8; }
 .demo-ai .youp-grid-ai { padding: 12px 0 0; }
+
+.workflow-page { max-width: 1200px; margin: 24px auto; padding: 16px; }
+.workflow-demo { margin: 24px 0; padding: 16px; background: white; border-radius: 12px; }
+.workflow-demo > button { margin: 8px; }

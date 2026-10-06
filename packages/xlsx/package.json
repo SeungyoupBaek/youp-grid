@@ -1,16 +1,15 @@
 {
-  "name": "@youp-grid/vanilla",
+  "name": "@youp-grid/xlsx",
   "version": "0.7.0",
-  "description": "Vanilla DOM adapter for Youp Grid.",
+  "description": "Optional XLSX workbook import and export adapter for Youp Grid.",
   "license": "MIT",
   "author": "SeungyoupBaek",
   "type": "module",
   "keywords": [
     "data-grid",
-    "grid",
-    "vanilla",
-    "typescript",
-    "table"
+    "xlsx",
+    "excel",
+    "typescript"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,8 +17,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./styles.css": "./dist/styles.css"
+    }
   },
   "files": [
     "dist",
@@ -29,7 +27,7 @@
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/SeungyoupBaek/youp-grid.git",
-    "directory": "packages/vanilla"
+    "directory": "packages/xlsx"
   },
   "bugs": {
     "url": "https://github.com/SeungyoupBaek/youp-grid/issues"
@@ -39,9 +37,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cat src/styles.css src/workbench.css > dist/styles.css"
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@youp-grid/core": "0.7.0"
+    "@youp-grid/core": "0.7.0",
+    "exceljs": "4.4.0"
   }
 }

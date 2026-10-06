@@ -686,6 +686,7 @@ export function App() {
             </div>
           ))}
         </div>
+        <a href="?workflows=1">Feature workflows: React / Vue</a>
         <AiDemo columns={columns} state={gridState} onStateChange={setState} disabled={serverMode || cursorMode || infiniteMode} />
         <YoupGrid
           rows={gridRows}

@@ -35,3 +35,6 @@ export type {
   YoupGridRowsEndReachedEvent,
   YoupGridStateChange,
 } from "./types.ts";
+
+export { YoupGridWorkbench } from "./YoupGridWorkbench.ts";
+export { YoupGridAiPanel } from "./YoupGridAiPanel.ts";

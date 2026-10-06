@@ -1,0 +1,15 @@
+.youp-grid-workbench { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font: 14px system-ui, sans-serif; color: #1f2937; background: #fff; }
+.youp-grid-workbench details { flex: 1 1 160px; }
+.youp-grid-workbench summary { cursor: pointer; padding: 6px; font-weight: 600; }
+.youp-grid-workbench__panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
+.youp-grid-workbench label { display: inline-flex; align-items: center; gap: 6px; }
+.youp-grid-workbench input, .youp-grid-workbench select, .youp-grid-workbench button { font: inherit; padding: 6px; max-width: 100%; }
+.youp-grid-workbench fieldset { border: 1px solid #d1d5db; padding: 8px; margin: 6px 0; }
+.youp-grid-workbench table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.youp-grid-workbench td, .youp-grid-workbench th { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; }
+.youp-grid-workbench [role="alert"] { color: #b91c1c; }
+.youp-grid-workbench button:disabled { opacity: .5; cursor: default; }
+.youp-grid-workbench > [role="status"], .youp-grid-workbench > [role="alert"] { flex-basis: 100%; margin: 0; }
+.youp-grid-format-icon { margin-right: 5px; }
+.youp-grid-ai__preview { border: 1px solid #93c5fd; padding: 10px; }
+.youp-grid-ai__preview pre { max-height: 220px; overflow: auto; white-space: pre-wrap; }

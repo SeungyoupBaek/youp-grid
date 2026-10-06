@@ -7,6 +7,8 @@ import {
   exportGridExcel,
   isCellInRange,
   getRowNodeValue,
+  getGridCellAppearance,
+  type GridConditionalFormat,
   getPivotDisplayRows,
   setFormulaCell,
   setPivot,
@@ -36,6 +38,7 @@ export type YoupVanillaGridLocaleText = {
 };
 
 export type YoupVanillaGridOptions<TRow> = {
+  conditionalFormats?: readonly GridConditionalFormat[];
   rows: readonly TRow[];
   columns: readonly ColumnDef<TRow>[];
   state?: GridState;
@@ -327,6 +330,9 @@ function renderRow<TRow>(
       : typeof value === "number"
         ? numberFormatter.format(value)
         : String(value ?? "");
+    const { icon, ...appearance } = getGridCellAppearance(value, column.id, options.conditionalFormats);
+    Object.assign(cell.style, appearance);
+    if (icon) { const marker = document.createElement("span"); marker.textContent = icon; marker.setAttribute("aria-hidden", "true"); marker.className = "youp-grid-format-icon"; cell.prepend(marker); }
     row.append(cell);
   });
 
@@ -397,3 +403,6 @@ function renderMessage(text: string, role: "status" | "alert"): HTMLElement {
 function setColumnWidth<TRow>(cell: HTMLElement, column: ResolvedColumnDef<TRow>) {
   cell.style.setProperty("--youp-grid-vanilla-column-width", `${column.width ?? 160}px`);
 }
+
+export { createGridWorkbench } from "./workbench.ts";
+export type { GridWorkbenchOptions } from "./workbench.ts";

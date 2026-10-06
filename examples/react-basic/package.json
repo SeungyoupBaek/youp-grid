@@ -16,7 +16,14 @@
     "@youp-grid/core": "file:../../packages/core",
     "@youp-grid/formula": "file:../../packages/formula",
     "@youp-grid/charts-echarts": "file:../../packages/charts-echarts",
-    "@youp-grid/react": "file:../../packages/react"
+    "@youp-grid/react": "file:../../packages/react",
+    "@youp-grid/vue": "file:../../packages/vue",
+    "@youp-grid/vanilla": "file:../../packages/vanilla",
+    "@youp-grid/xlsx": "file:../../packages/xlsx",
+    "vue": "3.5.35"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
 }

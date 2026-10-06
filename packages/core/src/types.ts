@@ -1,3 +1,4 @@
+import type { GridFilterExpression } from "./query.ts";
 export type GridRowId = string | number;
 
 export type GridRowModelType = "client" | "server";
@@ -317,6 +318,8 @@ export type GridState = {
   columns?: ColumnState[];
   sort?: SortRule[];
   filters?: FilterRule[];
+  quickFilter?: string;
+  filterExpression?: GridFilterExpression;
   aggregation?: AggregationRule[];
   rowGrouping?: RowGroupingState;
   pivot?: PivotState;

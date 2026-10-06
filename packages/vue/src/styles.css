@@ -204,6 +204,9 @@
   background: #dbeafe;
 }
 
+.youp-grid-vue__cell--fill-target { background: #bfdbfe; }
+.youp-grid-vue__fill-handle { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; background: var(--youp-grid-vue-accent); cursor: crosshair; z-index: 3; }
+
 .youp-grid-vue__cell--focused {
   z-index: 2;
   box-shadow: inset 0 0 0 2px var(--youp-grid-vue-accent);

@@ -15,6 +15,7 @@ const expectedVersion = rootPackage.version;
 const packagePaths = [
   "packages/core",
   "packages/formula",
+  "packages/xlsx",
   "packages/charts-echarts",
   "packages/react",
   "packages/vue",
@@ -22,6 +23,7 @@ const packagePaths = [
 ];
 const adapterPaths = [
   "packages/formula",
+  "packages/xlsx",
   "packages/charts-echarts",
   "packages/react",
   "packages/vue",

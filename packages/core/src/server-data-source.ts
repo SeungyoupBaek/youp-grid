@@ -1,3 +1,4 @@
+import type { GridFilterExpression } from "./query.ts";
 import type { FilterRule, GridState, PivotModel, PivotState, SortRule } from "./types.ts";
 
 export type ServerRowsQuery = {
@@ -5,6 +6,8 @@ export type ServerRowsQuery = {
   endRow: number;
   sort?: readonly SortRule[];
   filters?: readonly FilterRule[];
+  quickFilter?: string;
+  filterExpression?: GridFilterExpression;
   groupBy?: readonly string[];
   pivot?: PivotState;
   cursor?: string;
@@ -69,6 +72,8 @@ export function createServerRowsQuery(
     endRow: normalizedStart + normalizedBlockSize,
     sort: state.sort,
     filters: state.filters,
+    ...(state.quickFilter ? { quickFilter: state.quickFilter } : {}),
+    ...(state.filterExpression ? { filterExpression: state.filterExpression } : {}),
     groupBy: state.rowGrouping?.columnIds,
     ...(state.pivot ? { pivot: state.pivot } : {}),
     cursor: state.cursorPagination?.cursor,

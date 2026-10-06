@@ -20,6 +20,8 @@ export function createGridState(state: GridState = {}): GridState {
     columns: state.columns ? [...state.columns] : [],
     sort: state.sort ? [...state.sort] : [],
     filters: state.filters ? [...state.filters] : [],
+    quickFilter: state.quickFilter,
+    filterExpression: state.filterExpression ? JSON.parse(JSON.stringify(state.filterExpression)) : undefined,
     aggregation: state.aggregation ? [...state.aggregation] : [],
     rowGrouping: state.rowGrouping
       ? {
@@ -373,6 +375,8 @@ export function createRemoteCacheKey(state: GridState): string {
   return JSON.stringify({
     sort: state.sort ?? [],
     filters: state.filters ?? [],
+    ...(state.quickFilter ? { quickFilter: state.quickFilter } : {}),
+    ...(state.filterExpression ? { filterExpression: state.filterExpression } : {}),
     aggregation: state.aggregation ?? [],
     rowGrouping: state.rowGrouping,
     pivot: state.pivot,

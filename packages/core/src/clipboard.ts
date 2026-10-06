@@ -36,8 +36,14 @@ export function isCellInRange(
   columnIndex: number,
   range: GridCellRange,
 ): boolean {
-  const normalized = normalizeCellRange(range);
+  return isCellInNormalizedRange(rowIndex, columnIndex, normalizeCellRange(range));
+}
 
+export function isCellInNormalizedRange(
+  rowIndex: number,
+  columnIndex: number,
+  normalized: NormalizedGridCellRange,
+): boolean {
   return (
     rowIndex >= normalized.startRowIndex &&
     rowIndex <= normalized.endRowIndex &&

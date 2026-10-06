@@ -1,5 +1,9 @@
 import {
   buildGridChartDataset,
+  getGridCellAppearance,
+  getGridDraftKey,
+  getEmptyGridCellValue,
+  type GridConditionalFormat,
   clearFormulaCell as clearCoreFormulaCell,
   createRemoteCacheKey,
   createGridState,
@@ -20,6 +24,7 @@ import {
   getClipboardPasteCells,
   getClipboardPasteRowCount,
   isCellInRange,
+  isCellInNormalizedRange,
   isRowGroupNode,
   createHeaderColumnMappings,
   importGridDelimitedText,
@@ -60,7 +65,7 @@ import {
   type RowNode,
 } from "@youp-grid/core";
 import { createPortal } from "react-dom";
-import { Fragment, createElement, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createElement, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
   ChangeEvent as ReactChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
@@ -148,7 +153,12 @@ const composingEditorInputs = new WeakSet<HTMLInputElement>();
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
-  const controller = useYoupGrid(props);
+  const editSnapshot = useSyncExternalStore(
+    props.editSession?.subscribe ?? emptySubscribe,
+    props.editSession?.getSnapshot ?? emptySnapshot,
+    props.editSession?.getSnapshot ?? emptySnapshot,
+  );
+  const controller = useYoupGrid({ ...props, rows: editSnapshot?.rows ?? props.rows });
   const rowModel = controller.rowModel;
   const [internalDensity, setInternalDensity] = useState<YoupGridDensity>(
     props.defaultDensity ?? DEFAULT_DENSITY,
@@ -214,7 +224,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
   const pinRowSelectionColumn = props.pinRowSelectionColumn ?? false;
   const showCellContextMenu = props.showCellContextMenu ?? false;
   const cellTooltipMode = props.cellTooltip?.mode ?? "native";
-  const gridEditable = (props.editable ?? true) && !props.readOnly;
+  const gridEditable = (props.editable ?? true) && !props.readOnly && !editSnapshot?.saving;
   const filterMode = props.filterMode ?? "text";
   const detailRowHeight = props.detailRowHeight ?? DEFAULT_DETAIL_ROW_HEIGHT;
   const detailRowsEnabled = Boolean(props.renderRowDetail);
@@ -497,7 +507,9 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
     const formulaResult = getFormulaCellResult(rowModel.formula, row.id, column.id);
     return (
+      (editSnapshot?.errors[getGridDraftKey(row.id, column.id)] ? { status: "error" as const, message: editSnapshot.errors[getGridDraftKey(row.id, column.id)] } : undefined) ??
       internalCellMeta[cellKey] ??
+      (editSnapshot?.changes.some((change) => change.rowId === row.id && change.columnId === column.id) ? { status: "warning" as const, message: "Unsaved change" } : undefined) ??
       (formulaResult?.error ? { status: "error", message: formulaResult.error.message } : undefined) ??
       props.getCellMeta?.(getCellEditContext(row, rowIndex, column)) ??
       props.cellMeta?.[cellKey]
@@ -811,10 +823,15 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     source: YoupGridCellValueChangeSource,
   ) => {
     if (changes.length === 0) {
-      return;
+      return true;
     }
 
-    if (source === "edit" || source === "paste" || source === "fill" || source === "delete") {
+    try { props.editSession?.stage(changes); }
+    catch (cause) {
+      setInternalCellMeta((current) => ({ ...current, ...Object.fromEntries(changes.map((change) => [getCellKey(change.rowId, change.columnId), { status: "error" as const, message: getErrorMessage(cause, "Unable to stage changes") }])) }));
+      return false;
+    }
+    if (!props.editSession && (source === "edit" || source === "paste" || source === "fill" || source === "delete")) {
       valueHistoryRef.current = pushValueHistoryEntry(
         valueHistoryRef.current,
         {
@@ -845,6 +862,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
         source: source as YoupGridCellsValueChangeSource,
       });
     }
+    return true;
   };
   const applyFormulaChanges = (
     updates: readonly FormulaCell[],
@@ -886,6 +904,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     );
   };
   const undoCellValueChange = () => {
+    if (props.editSession) { if (!editSnapshot?.canUndo || editSnapshot.saving) return false; props.editSession.undo(); return true; }
     const result = undoValueHistory(valueHistoryRef.current);
 
     if (!result.entry) {
@@ -898,6 +917,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     return true;
   };
   const redoCellValueChange = () => {
+    if (props.editSession) { if (!editSnapshot?.canRedo || editSnapshot.saving) return false; props.editSession.redo(); return true; }
     const result = redoValueHistory(valueHistoryRef.current);
 
     if (!result.entry) {
@@ -959,7 +979,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
     }
 
     if (change) {
-      if (change.column.validator) {
+      if (change.column.validator && !props.editSession) {
         const validation = change.column.validator(change.value, change.row);
 
         if (isPromiseLike(validation)) {
@@ -988,7 +1008,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       }
 
       if (!Object.is(change.value, change.previousValue)) {
-        applyCellValueChanges([change], "edit");
+        if (!applyCellValueChanges([change], "edit")) return;
       }
 
       const emittedChange = { ...change, source: "edit" as const };
@@ -999,7 +1019,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
 
       setEditingCell(undefined);
 
-      if (props.onCellValueSave && !Object.is(change.value, change.previousValue)) {
+      if (props.onCellValueSave && !props.editSession && !Object.is(change.value, change.previousValue)) {
         cellOperationControllersRef.current.get(cellKey)?.abort();
         const operationController = new AbortController();
         cellOperationControllersRef.current.set(cellKey, operationController);
@@ -1649,6 +1669,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
       onRowDoubleClick: props.onRowDoubleClick,
       rowDragReorder: false,
       onCellKeyDown: () => undefined,
+      conditionalFormats: props.conditionalFormats,
       renderCell: props.renderCell,
       renderEditor: props.renderEditor,
     });
@@ -2259,6 +2280,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                                 toggleSelected: () => controller.toggleRowSelected(sourceRow.id),
                               });
                             },
+                            conditionalFormats: props.conditionalFormats,
                             renderCell: props.renderCell,
                             renderEditor: props.renderEditor,
                           }),
@@ -2416,6 +2438,7 @@ export function YoupGrid<TRow>(props: YoupGridProps<TRow>) {
                       toggleSelected: () => controller.toggleRowSelected(row.id),
                     });
                   },
+                  conditionalFormats: props.conditionalFormats,
                   renderCell: props.renderCell,
                   renderEditor: props.renderEditor,
                 });
@@ -3603,6 +3626,7 @@ function renderDisplayRow<TRow>(context: {
     cell: CellRenderState<TRow>,
     row: RowNode<TRow>,
   ) => void;
+  conditionalFormats?: readonly GridConditionalFormat[];
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
@@ -3748,6 +3772,7 @@ function renderRow<TRow>(context: {
   activeTooltipCellKey?: string;
   openCellTooltip: (cellKey: string) => void;
   closeCellTooltip: (cellKey: string) => void;
+  conditionalFormats?: readonly GridConditionalFormat[];
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
@@ -3847,6 +3872,7 @@ function renderRow<TRow>(context: {
       return renderCell({
         row: context.row,
         layout,
+        conditionalFormats: context.conditionalFormats,
         rowIndex: context.rowIndex,
         columnIndex,
         ariaColumnOffset: (context.showRowNumberColumn ? 1 : 0) + (context.showSelectionColumn ? 1 : 0),
@@ -4040,11 +4066,13 @@ function renderCell<TRow>(context: {
   activeTooltipCellKey?: string;
   openCellTooltip: (cellKey: string) => void;
   closeCellTooltip: (cellKey: string) => void;
+  conditionalFormats?: readonly GridConditionalFormat[];
   renderCell?: (context: YoupGridCellContext<TRow>) => ReactNode;
   renderEditor?: (context: YoupGridCustomEditorContext<TRow>) => ReactNode;
 }) {
   const column = context.layout.column;
   const value = getRowNodeValue(context.row, column);
+  const { icon, ...appearance } = getGridCellAppearance(value, column.id, context.conditionalFormats ?? []);
   const editable = context.editable;
   const cellAlign = getColumnAlign(column);
   const cellKey = getCellKey(context.row.id, column.id);
@@ -4142,7 +4170,7 @@ function renderCell<TRow>(context: {
       "data-youp-row-index": context.rowIndex,
       "data-youp-column-index": context.columnIndex,
       "data-youp-column-id": column.id,
-      style: getCellStyle(context.layout),
+      style: { ...getCellStyle(context.layout), ...appearance },
       onClick: (event: ReactMouseEvent<HTMLDivElement>) => {
         const cellElement = event.currentTarget;
         context.setFocusedCell(
@@ -4221,6 +4249,7 @@ function renderCell<TRow>(context: {
     createElement(
       Fragment,
       undefined,
+      !context.editing && icon ? createElement("span", { className: "youp-grid-format-icon", "aria-hidden": true }, icon) : undefined,
       context.editing ? undefined : renderedContent,
       context.editing
         ? renderCellEditor({
@@ -7159,7 +7188,7 @@ function deleteGridCellValues<TRow>(context: {
       }
 
       const previousValue = getRowNodeValue(row, column);
-      const value = getEmptyCellValue(column, row.original);
+      const value = getEmptyGridCellValue(column, row.original);
 
       if (Object.is(value, previousValue)) {
         continue;
@@ -7340,19 +7369,6 @@ function getCellCoordinateFromPoint(clientX: number, clientY: number): FocusedCe
   return { rowIndex, columnIndex };
 }
 
-function isCellInNormalizedRange(
-  rowIndex: number,
-  columnIndex: number,
-  range: NormalizedGridCellRange,
-): boolean {
-  return (
-    rowIndex >= range.startRowIndex &&
-    rowIndex <= range.endRowIndex &&
-    columnIndex >= range.startColumnIndex &&
-    columnIndex <= range.endColumnIndex
-  );
-}
-
 function downloadTextFile(options: {
   fileName: string;
   mimeType: string;
@@ -7492,26 +7508,6 @@ function parseDraftValue<TRow>(
   }
 
   return draftValue;
-}
-
-function getEmptyCellValue<TRow>(column: ResolvedColumnDef<TRow>, row: TRow): unknown {
-  if (column.valueParser) {
-    return column.valueParser("", row);
-  }
-
-  if (column.editor === "checkbox") {
-    return false;
-  }
-
-  if (column.editor === "number") {
-    return undefined;
-  }
-
-  if (column.editor === "tags") {
-    return [];
-  }
-
-  return "";
 }
 
 type NormalizedEditorOption = {
@@ -7782,3 +7778,6 @@ function countOccurrences(value: string, needle: string) {
   }
   return value.split(needle).length - 1;
 }
+
+const emptySubscribe = () => () => {};
+const emptySnapshot = () => undefined;

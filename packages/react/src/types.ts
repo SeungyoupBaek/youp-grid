@@ -13,6 +13,9 @@ import type {
   GridRowId,
   GridRowModelType,
   GridState,
+  GridFilterExpression,
+  GridEditSession,
+  GridConditionalFormat,
   ImportGridColumnMapping,
   ImportGridDelimitedTextIssue,
   ImportGridDelimitedTextRowResult,
@@ -291,6 +294,8 @@ export type YoupGridController<TRow> = {
   toggleSort: (columnId: string, multi?: boolean) => void;
   setSort: (columnId: string, direction: "asc" | "desc", multi?: boolean) => void;
   clearSort: (columnId: string) => void;
+  setQuickFilter: (value: string) => void;
+  setFilterExpression: (expression: GridFilterExpression | undefined) => void;
   setFilter: (columnId: string, value: unknown) => void;
   setFilterRule: (filter: FilterRule) => void;
   clearFilter: (columnId: string) => void;
@@ -325,6 +330,8 @@ export type YoupGridController<TRow> = {
 };
 
 export type YoupGridProps<TRow> = YoupGridOptions<TRow> & {
+  editSession?: GridEditSession<TRow>;
+  conditionalFormats?: readonly GridConditionalFormat[];
   apiRef?: Ref<YoupGridApi>;
   className?: string;
   style?: CSSProperties;

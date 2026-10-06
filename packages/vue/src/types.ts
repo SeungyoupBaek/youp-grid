@@ -12,6 +12,9 @@ import type {
   GridRowId,
   GridRowModelType,
   GridState,
+  GridEditSession,
+  GridConditionalFormat,
+  GridFilterExpression,
   RemoteCacheState,
   PivotModel,
   PivotState,
@@ -96,6 +99,8 @@ export type YoupGridColumnPreset = {
 };
 
 export type YoupGridComponentProps<TRow> = YoupGridOptions<TRow> & {
+  editSession?: GridEditSession<TRow>;
+  conditionalFormats?: readonly GridConditionalFormat[];
   className?: string;
   style?: StyleValue;
   height?: number | string;
@@ -313,6 +318,8 @@ export type YoupGridController<TRow> = {
   toggleSort: (columnId: string, multi?: boolean) => void;
   setSort: (columnId: string, direction: "asc" | "desc", multi?: boolean) => void;
   clearSort: (columnId: string) => void;
+  setQuickFilter: (value: string) => void;
+  setFilterExpression: (expression: GridFilterExpression | undefined) => void;
   setFilter: (columnId: string, value: unknown) => void;
   setFilterRule: (filter: FilterRule) => void;
   clearFilter: (columnId: string) => void;

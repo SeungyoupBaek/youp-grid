@@ -31,6 +31,11 @@ This repository includes a reusable engine, React and Vue UI adapters, a small V
 - reusable Vue 3 component and composable for grid editing, state, and row-model integration
 - reusable Vanilla DOM renderer for framework-free screens
 - model-independent AI commands for sorting, filtering, and column visibility, with an optional React input panel
+- named saved views, global search, and nested AND/OR filters
+- batch editing with change previews, atomic save callbacks, retry, discard, undo, and redo
+- conditional text/background colors, icons, and data bars in every renderer
+- CSV/TSV/XLSX import previews with sheet selection, column mapping, and row validation
+- optional real XLSX files and React/Vue AI confirmation and undo panels
 
 The first goal is not to copy every AG Grid feature. The goal is to keep reusable grid behavior small and stable so application screens can adopt it incrementally.
 
@@ -41,6 +46,7 @@ The first goal is not to copy every AG Grid feature. The goal is to keep reusabl
 | `@youp-grid/core` | Framework-agnostic grid state, row model, sorting, filtering, pagination, selection, tree data, and data helpers. |
 | `@youp-grid/formula` | Optional spreadsheet formula engine with A1 ranges, structured references, custom functions, and cycle detection. |
 | `@youp-grid/charts-echarts` | Optional Apache ECharts renderer for grid, selection, and pivot chart datasets. |
+| `@youp-grid/xlsx` | Optional ExcelJS adapter for binary XLSX import/export. |
 | `@youp-grid/react` | React adapter, virtualized grid UI, inline editing, keyboard behavior, row actions, tooltips, and bundled styles. |
 | `@youp-grid/vue` | Vue 3 adapter with a basic editable grid component plus reactive state, row model, sorting, filtering, pagination, selection, grouping, and tree helpers. |
 | `@youp-grid/vanilla` | Vanilla DOM adapter for framework-free rendering with the core row model. |
@@ -82,7 +88,9 @@ npm install @youp-grid/formula @youp-grid/charts-echarts echarts
 
 ## Core API
 
-For natural-language control through your own model/server, see [AI grid commands](./docs/AI.md). The core provides request/schema generation and response validation; React provides `YoupGridAiPanel`.
+For saved views, batch edits, import previews, conditional formatting, and advanced search, see [Grid workflows](./docs/WORKFLOWS.md). The companion `YoupGridWorkbench` is available in React and Vue; Vanilla exposes `createGridWorkbench`. Run the demo at `/?workflows=1` to compare both adapters.
+
+For natural-language control through your own model/server, see [AI grid commands](./docs/AI.md). The core provides request/schema generation and response validation; React and Vue provide `YoupGridAiPanel` with an optional `preview` confirmation flow.
 
 ```ts
 import {

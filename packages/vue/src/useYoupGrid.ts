@@ -6,6 +6,9 @@ import {
   clearFormulaCell as clearCoreFormulaCell,
   clearSort as clearCoreSort,
   createGridState,
+  setGridQuery,
+  validateFilterExpression,
+  normalizeColumns,
   failRemoteRequest as failCoreRemoteRequest,
   finishRemoteRequest as finishCoreRemoteRequest,
   invalidateRemoteCache as invalidateCoreRemoteCache,
@@ -75,6 +78,11 @@ export function useYoupGrid<TRow>(
       commitState(setCoreSort(state.value, columnId, direction, { multi }));
     },
     clearSort: (columnId) => commitState(clearCoreSort(state.value, columnId)),
+    setQuickFilter: (quickFilter) => commitState(setGridQuery(state.value, { quickFilter })),
+    setFilterExpression: (filterExpression) => {
+      if (filterExpression) validateFilterExpression(filterExpression, normalizeColumns(options.value.columns));
+      commitState(setGridQuery(state.value, { filterExpression }));
+    },
     setFilter: (columnId, value) => {
       commitState(setCoreFilter(state.value, { columnId, operator: "contains", value }));
     },
